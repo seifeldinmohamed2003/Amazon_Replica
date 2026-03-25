@@ -10,6 +10,12 @@ import com.team27.amazon.shipping.model.ShipmentStatus;
 import org.springframework.http.HttpStatus;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.web.server.ResponseStatusException;
+import com.team27.amazon.shipping.dto.NearbyShipmentDTO;
+import com.team27.amazon.shipping.model.ShipmentStatus;
+import java.util.Comparator;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.stream.Collectors;
 import java.util.List;
 
 @Service
@@ -78,5 +84,49 @@ public class ShipmentService {
         }
 
         return shipmentRepository.save(shipment);
+    }
+    public List<NearbyShipmentDTO> findNearbyOutForDelivery(Double lat, Double lon, Double radiusKm) {
+        List<Shipment> shipments = shipmentRepository
+                .findByStatusAndLatitudeIsNotNullAndLongitudeIsNotNull(ShipmentStatus.OUT_FOR_DELIVERY);
+
+        Map<Long, Shipment> latestPerOrder = new HashMap<>();
+
+        for (Shipment shipment : shipments) {
+            Shipment existing = latestPerOrder.get(shipment.getOrderId());
+
+            if (existing == null) {
+                latestPerOrder.put(shipment.getOrderId(), shipment);
+            } else {
+                if (shipment.getLastUpdate() != null && existing.getLastUpdate() != null) {
+                    if (shipment.getLastUpdate().isAfter(existing.getLastUpdate())) {
+                        latestPerOrder.put(shipment.getOrderId(), shipment);
+                    }
+                } else if (shipment.getCreatedAt() != null && existing.getCreatedAt() != null) {
+                    if (shipment.getCreatedAt().isAfter(existing.getCreatedAt())) {
+                        latestPerOrder.put(shipment.getOrderId(), shipment);
+                    }
+                }
+            }
+        }
+
+        return latestPerOrder.values().stream()
+                .map(shipment -> {
+                    double dx = shipment.getLatitude() - lat;
+                    double dy = shipment.getLongitude() - lon;
+                    double distanceKm = Math.sqrt(dx * dx + dy * dy) * 111.0;
+
+                    return new NearbyShipmentDTO(
+                            shipment.getId(),
+                            shipment.getOrderId(),
+                            shipment.getCarrier(),
+                            shipment.getTrackingNumber(),
+                            shipment.getLatitude(),
+                            shipment.getLongitude(),
+                            distanceKm
+                    );
+                })
+                .filter(dto -> dto.getDistanceKm() <= radiusKm)
+                .sorted(Comparator.comparing(NearbyShipmentDTO::getDistanceKm))
+                .collect(Collectors.toList());
     }
 }

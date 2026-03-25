@@ -6,7 +6,7 @@ import org.springframework.web.bind.annotation.*;
 import com.team27.amazon.shipping.dto.CreateShipmentRequest;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.HttpStatus;
-
+import com.team27.amazon.shipping.dto.NearbyShipmentDTO;
 import java.util.List;
 
 @RestController
@@ -54,6 +54,14 @@ public class ShipmentController {
     ) {
         Shipment shipment = shipmentService.createShipmentForOrder(orderId, request);
         return ResponseEntity.status(HttpStatus.CREATED).body(shipment);
+    }
+    @GetMapping("/nearby")
+    public List<NearbyShipmentDTO> findNearbyShipments(
+            @RequestParam Double lat,
+            @RequestParam Double lon,
+            @RequestParam Double radiusKm
+    ) {
+        return shipmentService.findNearbyOutForDelivery(lat, lon, radiusKm);
     }
 
 
