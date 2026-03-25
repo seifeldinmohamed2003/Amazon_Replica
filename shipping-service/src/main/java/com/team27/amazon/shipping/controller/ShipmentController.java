@@ -3,6 +3,9 @@ package com.team27.amazon.shipping.controller;
 import com.team27.amazon.shipping.model.Shipment;
 import com.team27.amazon.shipping.service.ShipmentService;
 import org.springframework.web.bind.annotation.*;
+import com.team27.amazon.shipping.dto.CreateShipmentRequest;
+import org.springframework.http.ResponseEntity;
+import org.springframework.http.HttpStatus;
 
 import java.util.List;
 
@@ -43,6 +46,14 @@ public class ShipmentController {
     @GetMapping("/order/{orderId}/latest")
     public Shipment getLatestShipmentByOrderId(@PathVariable Long orderId) {
         return shipmentService.getLatestShipmentByOrderId(orderId);
+    }
+    @PostMapping("/order/{orderId}")
+    public ResponseEntity<Shipment> createShipmentForOrder(
+            @PathVariable Long orderId,
+            @RequestBody CreateShipmentRequest request
+    ) {
+        Shipment shipment = shipmentService.createShipmentForOrder(orderId, request);
+        return ResponseEntity.status(HttpStatus.CREATED).body(shipment);
     }
 
 
