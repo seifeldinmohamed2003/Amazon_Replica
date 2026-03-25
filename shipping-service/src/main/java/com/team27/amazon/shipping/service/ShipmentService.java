@@ -11,7 +11,6 @@ import org.springframework.http.HttpStatus;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.web.server.ResponseStatusException;
 import com.team27.amazon.shipping.dto.NearbyShipmentDTO;
-import com.team27.amazon.shipping.model.ShipmentStatus;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.Map;
@@ -44,13 +43,13 @@ public class ShipmentService {
     }
 
     public Shipment getShipmentById(Long id) {
-        return shipmentRepository.findById(id).orElse(null);
+        return shipmentRepository.findById(id)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Shipment not found"));
     }
 
     public Shipment updateShipment(Long id, Shipment updatedShipment) {
-        Shipment existing = shipmentRepository.findById(id).orElse(null);
-
-        if (existing == null) return null;
+        Shipment existing = shipmentRepository.findById(id)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Shipment not found"));
 
         existing.setCarrier(updatedShipment.getCarrier());
         existing.setStatus(updatedShipment.getStatus());
