@@ -1,6 +1,6 @@
 [
   {"studentId":"55-25195","name":"AmrNegm","githubUsername":"AmrAhmedNegm","service":"user-service"},
-  {"studentId":"55-0428","name":"SeifeldinMohamed","githubUsername":"seifeldinmohamed2003","service":"shipping-service"}
+  {"studentId":"55-0428","name":"SeifeldinMohamed","githubUsername":"seifeldinmohamed2003","service":"billing-service"},
   {"studentId":"55-13686","name":"ahmedSamehHelmy","githubUsername":"odyjo","service":"shipping-service"}
 
 ]
