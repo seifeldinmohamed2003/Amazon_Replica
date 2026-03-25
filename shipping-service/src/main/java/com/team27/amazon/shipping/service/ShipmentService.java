@@ -42,4 +42,7 @@ public class ShipmentService {
     public void deleteShipment(Long id) {
         shipmentRepository.deleteById(id);
     }
+    public Shipment getLatestShipmentByOrderId(Long orderId) {
+        return shipmentRepository.findFirstByOrderIdOrderByCreatedAtDesc(orderId).orElse(null);
+    }
 }

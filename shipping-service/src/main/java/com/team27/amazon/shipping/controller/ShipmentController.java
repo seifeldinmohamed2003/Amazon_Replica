@@ -40,6 +40,10 @@ public class ShipmentController {
     public void deleteShipment(@PathVariable Long id) {
         shipmentService.deleteShipment(id);
     }
+    @GetMapping("/order/{orderId}/latest")
+    public Shipment getLatestShipmentByOrderId(@PathVariable Long orderId) {
+        return shipmentService.getLatestShipmentByOrderId(orderId);
+    }
 
 
 }
