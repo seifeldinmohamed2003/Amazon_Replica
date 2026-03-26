@@ -5,6 +5,7 @@ import com.team27.amazon.product.exception.ProductNotFoundException;
 import com.team27.amazon.product.model.Product;
 import com.team27.amazon.product.model.ProductStatus;
 import com.team27.amazon.product.repository.ProductRepository;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import java.util.HashMap;
@@ -14,11 +15,8 @@ import java.util.Map;
 @Service
 public class ProductService {
 
-    private final ProductRepository productRepository;
-
-    public ProductService(ProductRepository productRepository) {
-        this.productRepository = productRepository;
-    }
+    @Autowired
+    private ProductRepository productRepository;
 
     public Product createProduct(ProductRequest request) {
         Product product = new Product();
