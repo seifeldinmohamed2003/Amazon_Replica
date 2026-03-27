@@ -59,6 +59,23 @@ public class ProductService {
         return productRepository.save(existing);
     }
 
+    public Product updateSpecifications(Long id, Map<String, Object> newSpecifications) {
+        Product existing = getProductById(id);
+        
+        // Merge new specifications with existing ones
+        Map<String, Object> currentSpecifications = existing.getSpecifications();
+        if (currentSpecifications == null) {
+            currentSpecifications = new HashMap<>();
+        }
+        
+        if (newSpecifications != null) {
+            currentSpecifications.putAll(newSpecifications);
+        }
+        
+        existing.setSpecifications(currentSpecifications);
+        return productRepository.save(existing);
+    }
+
     public void deleteProduct(Long id) {
         Product existing = getProductById(id);
         productRepository.delete(existing);
