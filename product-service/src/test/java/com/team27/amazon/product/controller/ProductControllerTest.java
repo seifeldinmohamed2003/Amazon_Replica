@@ -1,7 +1,8 @@
-package com.team27.amazon.product.controller;
+﻿package com.team27.amazon.product.controller;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.team27.amazon.product.dto.ProductRequest;
+import com.team27.amazon.product.dto.ProductSalesDTO;
 import com.team27.amazon.product.exception.GlobalExceptionHandler;
 import com.team27.amazon.product.exception.ProductNotFoundException;
 import com.team27.amazon.product.model.Product;
@@ -17,18 +18,19 @@ import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.HashMap;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -110,8 +112,8 @@ class ProductControllerTest {
                 .andExpect(jsonPath("$.message").value("Product not found with id: 99"));
     }
 
-        @Test
-        void searchProductsByCategoryAndPriceRange() throws Exception {
+    @Test
+    void searchProductsByCategoryAndPriceRange() throws Exception {
         Product product1 = new Product();
         product1.setId(1L);
         product1.setName("Laptop");
@@ -176,9 +178,9 @@ class ProductControllerTest {
                         .param("maxPrice", "50"))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.message").exists());
-        }
+    }
 
-        @Test
+    @Test
     void updateSpecificationsMergesIncomingWithExisting() throws Exception {
         Map<String, Object> updatedSpecs = new HashMap<>();
         updatedSpecs.put("screenSize", "6.1in");
@@ -220,5 +222,35 @@ class ProductControllerTest {
                         .content(objectMapper.writeValueAsString(Map.of("color", "Black"))))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.message").value("Product not found with id: 99"));
+    }
+
+    @Test
+    void getProductSalesReturnsSummary() throws Exception {
+        ProductSalesDTO dto = new ProductSalesDTO(1L, "Phone", 9L, 899.91, 99.99);
+
+        when(productService.getProductSalesSummary(eq(1L), eq(java.time.LocalDate.parse("2026-03-01")), eq(java.time.LocalDate.parse("2026-03-31"))))
+                .thenReturn(dto);
+
+        mockMvc.perform(get("/api/products/1/sales")
+                        .param("startDate", "2026-03-01")
+                        .param("endDate", "2026-03-31"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.productId").value(1L))
+                .andExpect(jsonPath("$.name").value("Phone"))
+                .andExpect(jsonPath("$.totalUnitsSold").value(9))
+                .andExpect(jsonPath("$.totalRevenue").value(899.91))
+                .andExpect(jsonPath("$.averageSellingPrice").value(99.99));
+    }
+
+    @Test
+    void getProductSalesReturnsNotFoundWhenMissingProduct() throws Exception {
+        doThrow(new ProductNotFoundException(404L)).when(productService)
+                .getProductSalesSummary(eq(404L), eq(java.time.LocalDate.parse("2026-03-01")), eq(java.time.LocalDate.parse("2026-03-31")));
+
+        mockMvc.perform(get("/api/products/404/sales")
+                        .param("startDate", "2026-03-01")
+                        .param("endDate", "2026-03-31"))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.message").value("Product not found with id: 404"));
     }
 }
