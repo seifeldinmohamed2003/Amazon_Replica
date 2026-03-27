@@ -105,4 +105,72 @@ class ProductControllerTest {
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.message").value("Product not found with id: 99"));
     }
+
+    @Test
+    void searchProductsByCategoryAndPriceRange() throws Exception {
+        Product product1 = new Product();
+        product1.setId(1L);
+        product1.setName("Laptop");
+        product1.setDescription("High-end laptop");
+        product1.setPrice(99.99);
+        product1.setCategory("ELECTRONICS");
+        product1.setBrand("BrandX");
+        product1.setStockQuantity(5);
+        product1.setStatus(ProductStatus.ACTIVE);
+
+        Product product2 = new Product();
+        product2.setId(2L);
+        product2.setName("Monitor");
+        product2.setDescription("4K Monitor");
+        product2.setPrice(149.99);
+        product2.setCategory("ELECTRONICS");
+        product2.setBrand("BrandY");
+        product2.setStockQuantity(8);
+        product2.setStatus(ProductStatus.ACTIVE);
+
+        when(productService.searchProducts(50.0, 200.0, "ELECTRONICS"))
+                .thenReturn(List.of(product1, product2));
+
+        mockMvc.perform(get("/api/products/search")
+                        .param("category", "ELECTRONICS")
+                        .param("minPrice", "50")
+                        .param("maxPrice", "200"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].price").value(99.99))
+                .andExpect(jsonPath("$[1].price").value(149.99));
+    }
+
+    @Test
+    void searchProductsByPriceRangeNoCategoryFilter() throws Exception {
+        Product product1 = new Product();
+        product1.setId(1L);
+        product1.setName("Shirt");
+        product1.setDescription("Cotton shirt");
+        product1.setPrice(25.0);
+        product1.setCategory("CLOTHING");
+        product1.setBrand("BrandZ");
+        product1.setStockQuantity(20);
+        product1.setStatus(ProductStatus.ACTIVE);
+
+        when(productService.searchProducts(20.0, 30.0, null))
+                .thenReturn(List.of(product1));
+
+        mockMvc.perform(get("/api/products/search")
+                        .param("minPrice", "20")
+                        .param("maxPrice", "30"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].price").value(25.0));
+    }
+
+    @Test
+    void searchProductsInvalidPriceRangeThrowsBadRequest() throws Exception {
+        doThrow(new com.team27.amazon.product.exception.InvalidPriceRangeException(200.0, 50.0))
+                .when(productService).searchProducts(200.0, 50.0, null);
+
+        mockMvc.perform(get("/api/products/search")
+                        .param("minPrice", "200")
+                        .param("maxPrice", "50"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").exists());
+    }
 }
