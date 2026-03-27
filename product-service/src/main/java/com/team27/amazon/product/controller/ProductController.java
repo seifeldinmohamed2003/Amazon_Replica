@@ -20,6 +20,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/api/products")
@@ -52,6 +53,11 @@ public class ProductController {
     @PutMapping("/{id}")
     public ProductResponse updateProduct(@PathVariable Long id, @Valid @RequestBody ProductRequest request) {
         return ProductResponse.from(productService.updateProduct(id, request));
+    }
+
+    @PutMapping("/{id}/specifications")
+    public ProductResponse updateSpecifications(@PathVariable Long id, @RequestBody Map<String, Object> specifications) {
+        return ProductResponse.from(productService.updateSpecifications(id, specifications));
     }
 
     @DeleteMapping("/{id}")

@@ -18,12 +18,16 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
 import java.util.List;
+import java.util.Map;
+import java.util.HashMap;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -102,6 +106,50 @@ class ProductControllerTest {
         doThrow(new ProductNotFoundException(99L)).when(productService).deleteProduct(99L);
 
         mockMvc.perform(delete("/api/products/99"))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.message").value("Product not found with id: 99"));
+    }
+
+    @Test
+    void updateSpecificationsMergesIncomingWithExisting() throws Exception {
+        Map<String, Object> updatedSpecs = new HashMap<>();
+        updatedSpecs.put("screenSize", "6.1in");
+        updatedSpecs.put("RAM", "8GB");
+        updatedSpecs.put("color", "Silver");
+        updatedSpecs.put("storage", "256GB");
+
+        Product product = new Product();
+        product.setId(1L);
+        product.setName("iPhone");
+        product.setDescription("Latest model");
+        product.setPrice(999.0);
+        product.setCategory("ELECTRONICS");
+        product.setBrand("Apple");
+        product.setStockQuantity(10);
+        product.setStatus(ProductStatus.ACTIVE);
+        product.setSpecifications(updatedSpecs);
+
+        when(productService.updateSpecifications(anyLong(), any(Map.class)))
+                .thenReturn(product);
+
+        mockMvc.perform(put("/api/products/1/specifications")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(Map.of("color", "Silver", "storage", "256GB"))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.specifications.screenSize").value("6.1in"))
+                .andExpect(jsonPath("$.specifications.RAM").value("8GB"))
+                .andExpect(jsonPath("$.specifications.color").value("Silver"))
+                .andExpect(jsonPath("$.specifications.storage").value("256GB"));
+    }
+
+    @Test
+    void updateSpecificationsReturnsNotFoundWhenProductNotFound() throws Exception {
+        doThrow(new ProductNotFoundException(99L))
+                .when(productService).updateSpecifications(anyLong(), any(Map.class));
+
+        mockMvc.perform(put("/api/products/99/specifications")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(Map.of("color", "Black"))))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.message").value("Product not found with id: 99"));
     }
