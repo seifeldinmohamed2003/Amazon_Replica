@@ -1,6 +1,7 @@
 package com.team27.amazon.product.service;
 
 import com.team27.amazon.product.dto.ProductRequest;
+import com.team27.amazon.product.dto.ProductSalesDTO;
 import com.team27.amazon.product.exception.ProductNotFoundException;
 import com.team27.amazon.product.model.Product;
 import com.team27.amazon.product.model.ProductStatus;
@@ -12,6 +13,8 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -19,6 +22,7 @@ import java.util.Optional;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -89,6 +93,61 @@ class ProductServiceTest {
         productService.deleteProduct(2L);
 
         verify(productRepository).delete(existing);
+    }
+
+    @Test
+    void getProductSalesSummaryReturnsAggregatedValues() {
+        Product product = new Product();
+        product.setId(1L);
+        product.setName("Phone");
+
+        when(productRepository.findById(1L)).thenReturn(Optional.of(product));
+        when(productRepository.getProductSalesSummary(eq(1L), any(LocalDateTime.class), any(LocalDateTime.class)))
+                .thenReturn(new Object[]{9L, 899.91});
+
+        ProductSalesDTO result = productService.getProductSalesSummary(
+                1L,
+                LocalDate.parse("2026-03-01"),
+                LocalDate.parse("2026-03-31")
+        );
+
+        assertEquals(1L, result.getProductId());
+        assertEquals("Phone", result.getName());
+        assertEquals(9L, result.getTotalUnitsSold());
+        assertEquals(899.91, result.getTotalRevenue());
+        assertEquals(99.99, result.getAverageSellingPrice(), 0.000001);
+    }
+
+    @Test
+    void getProductSalesSummaryReturnsZeroesWhenNoOrders() {
+        Product product = new Product();
+        product.setId(3L);
+        product.setName("Tablet");
+
+        when(productRepository.findById(3L)).thenReturn(Optional.of(product));
+        when(productRepository.getProductSalesSummary(eq(3L), any(LocalDateTime.class), any(LocalDateTime.class)))
+                .thenReturn(new Object[]{0L, 0.0});
+
+        ProductSalesDTO result = productService.getProductSalesSummary(
+                3L,
+                LocalDate.parse("2026-04-01"),
+                LocalDate.parse("2026-04-30")
+        );
+
+        assertEquals(0L, result.getTotalUnitsSold());
+        assertEquals(0.0, result.getTotalRevenue());
+        assertEquals(0.0, result.getAverageSellingPrice());
+    }
+
+    @Test
+    void getProductSalesSummaryThrowsWhenProductMissing() {
+        when(productRepository.findById(404L)).thenReturn(Optional.empty());
+
+        assertThrows(ProductNotFoundException.class, () -> productService.getProductSalesSummary(
+                404L,
+                LocalDate.parse("2026-03-01"),
+                LocalDate.parse("2026-03-31")
+        ));
     }
 }
 

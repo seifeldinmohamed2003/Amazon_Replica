@@ -2,6 +2,7 @@ package com.team27.amazon.product.controller;
 
 import com.team27.amazon.product.dto.ProductRequest;
 import com.team27.amazon.product.dto.ProductResponse;
+import com.team27.amazon.product.dto.ProductSalesDTO;
 import com.team27.amazon.product.model.Product;
 import com.team27.amazon.product.model.ProductStatus;
 import com.team27.amazon.product.service.ProductService;
@@ -19,6 +20,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.time.LocalDate;
 import java.util.List;
 
 @RestController
@@ -47,6 +49,15 @@ public class ProductController {
     @GetMapping("/{id}")
     public ProductResponse getProductById(@PathVariable Long id) {
         return ProductResponse.from(productService.getProductById(id));
+    }
+
+    @GetMapping("/{id}/sales")
+    public ProductSalesDTO getProductSalesSummary(
+            @PathVariable Long id,
+            @RequestParam LocalDate startDate,
+            @RequestParam LocalDate endDate
+    ) {
+        return productService.getProductSalesSummary(id, startDate, endDate);
     }
 
     @PutMapping("/{id}")
