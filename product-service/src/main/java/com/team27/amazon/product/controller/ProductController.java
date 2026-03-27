@@ -44,6 +44,17 @@ public class ProductController {
                 .toList();
     }
 
+    @GetMapping("/search")
+    public List<ProductResponse> searchProducts(
+            @RequestParam(required = false) Double minPrice,
+            @RequestParam(required = false) Double maxPrice,
+            @RequestParam(required = false) String category
+    ) {
+        return productService.searchProducts(minPrice, maxPrice, category).stream()
+                .map(ProductResponse::from)
+                .toList();
+    }
+
     @GetMapping("/{id}")
     public ProductResponse getProductById(@PathVariable Long id) {
         return ProductResponse.from(productService.getProductById(id));

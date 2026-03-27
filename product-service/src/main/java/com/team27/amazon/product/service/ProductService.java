@@ -1,6 +1,7 @@
 package com.team27.amazon.product.service;
 
 import com.team27.amazon.product.dto.ProductRequest;
+import com.team27.amazon.product.exception.InvalidPriceRangeException;
 import com.team27.amazon.product.exception.ProductNotFoundException;
 import com.team27.amazon.product.model.Product;
 import com.team27.amazon.product.model.ProductStatus;
@@ -37,6 +38,19 @@ public class ProductService {
             return productRepository.findByCategoryIgnoreCase(category);
         }
         return productRepository.findAll();
+    }
+
+    public List<Product> searchProducts(Double minPrice, Double maxPrice, String category) {
+        // Validate price range
+        if (minPrice != null && maxPrice != null && minPrice > maxPrice) {
+            throw new InvalidPriceRangeException(minPrice, maxPrice);
+        }
+
+        // Set default values if not provided
+        Double min = minPrice != null ? minPrice : 0.0;
+        Double max = maxPrice != null ? maxPrice : Double.MAX_VALUE;
+
+        return productRepository.searchByPriceRange(min, max, category);
     }
 
     public Product updateProduct(Long id, ProductRequest request) {
