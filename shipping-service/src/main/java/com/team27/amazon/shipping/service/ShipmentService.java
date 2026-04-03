@@ -61,6 +61,18 @@ public class ShipmentService {
     }
     public Shipment createShipmentForOrder(Long orderId, CreateShipmentRequest request) {
 
+        //  STEP 1: Check if order exists
+        Integer orderCount = jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM orders WHERE id = ?",
+                Integer.class,
+                orderId
+        );
+
+        if (orderCount == null || orderCount == 0) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Order not found");
+        }
+
+        //  STEP 2: Create shipment
         Shipment shipment = new Shipment();
         shipment.setOrderId(orderId);
         shipment.setCarrier(request.getCarrier());
@@ -69,6 +81,7 @@ public class ShipmentService {
         shipment.setLongitude(request.getLongitude());
         shipment.setStatus(ShipmentStatus.PROCESSING);
 
+        //  STEP 3: Handle metadata safely
         try {
             if (request.getMetadata() != null) {
                 shipment.setMetadata(objectMapper.writeValueAsString(request.getMetadata()));

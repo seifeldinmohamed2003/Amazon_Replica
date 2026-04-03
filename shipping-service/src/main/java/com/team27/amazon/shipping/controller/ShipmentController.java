@@ -47,7 +47,7 @@ public class ShipmentController {
     public Shipment getLatestShipmentByOrderId(@PathVariable Long orderId) {
         return shipmentService.getLatestShipmentByOrderId(orderId);
     }
-    @PostMapping("/order/{orderId}")
+    @PostMapping(value = "/order/{orderId}", consumes = "application/json")
     public ResponseEntity<Shipment> createShipmentForOrder(
             @PathVariable Long orderId,
             @RequestBody CreateShipmentRequest request
