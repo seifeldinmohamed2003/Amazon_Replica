@@ -1,21 +1,22 @@
 package com.team27.amazon.shipping.service;
 
-import com.team27.amazon.shipping.model.Shipment;
-import com.team27.amazon.shipping.repository.ShipmentRepository;
-import org.springframework.stereotype.Service;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.team27.amazon.shipping.dto.CreateShipmentRequest;
+import com.team27.amazon.shipping.dto.NearbyShipmentDTO;
+import com.team27.amazon.shipping.model.Shipment;
 import com.team27.amazon.shipping.model.ShipmentStatus;
+import com.team27.amazon.shipping.repository.ShipmentRepository;
 import org.springframework.http.HttpStatus;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
-import com.team27.amazon.shipping.dto.NearbyShipmentDTO;
+
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
-import java.util.List;
 
 @Service
 public class ShipmentService {
@@ -54,18 +55,24 @@ public class ShipmentService {
         existing.setCarrier(updatedShipment.getCarrier());
         existing.setStatus(updatedShipment.getStatus());
         existing.setTrackingNumber(updatedShipment.getTrackingNumber());
+        existing.setLatitude(updatedShipment.getLatitude());
+        existing.setLongitude(updatedShipment.getLongitude());
 
         return shipmentRepository.save(existing);
     }
 
     public void deleteShipment(Long id) {
+        if (!shipmentRepository.existsById(id)) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Shipment not found");
+        }
         shipmentRepository.deleteById(id);
     }
+
     public Shipment getLatestShipmentByOrderId(Long orderId) {
         return shipmentRepository.findFirstByOrderIdOrderByCreatedAtDesc(orderId).orElse(null);
     }
-    public Shipment createShipmentForOrder(Long orderId, CreateShipmentRequest request) {
 
+    public Shipment createShipmentForOrder(Long orderId, CreateShipmentRequest request) {
         Shipment shipment = new Shipment();
         shipment.setOrderId(orderId);
         shipment.setCarrier(request.getCarrier());
@@ -84,7 +91,16 @@ public class ShipmentService {
 
         return shipmentRepository.save(shipment);
     }
+
     public List<NearbyShipmentDTO> findNearbyOutForDelivery(Double lat, Double lon, Double radiusKm) {
+        if (lat == null || lon == null || radiusKm == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "lat, lon and radiusKm are required");
+        }
+
+        if (radiusKm < 0) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "radiusKm must be >= 0");
+        }
+
         List<Shipment> shipments = shipmentRepository
                 .findByStatusAndLatitudeIsNotNullAndLongitudeIsNotNull(ShipmentStatus.OUT_FOR_DELIVERY);
 
@@ -95,15 +111,16 @@ public class ShipmentService {
 
             if (existing == null) {
                 latestPerOrder.put(shipment.getOrderId(), shipment);
-            } else {
-                if (shipment.getLastUpdate() != null && existing.getLastUpdate() != null) {
-                    if (shipment.getLastUpdate().isAfter(existing.getLastUpdate())) {
-                        latestPerOrder.put(shipment.getOrderId(), shipment);
-                    }
-                } else if (shipment.getCreatedAt() != null && existing.getCreatedAt() != null) {
-                    if (shipment.getCreatedAt().isAfter(existing.getCreatedAt())) {
-                        latestPerOrder.put(shipment.getOrderId(), shipment);
-                    }
+                continue;
+            }
+
+            if (shipment.getLastUpdate() != null && existing.getLastUpdate() != null) {
+                if (shipment.getLastUpdate().isAfter(existing.getLastUpdate())) {
+                    latestPerOrder.put(shipment.getOrderId(), shipment);
+                }
+            } else if (shipment.getCreatedAt() != null && existing.getCreatedAt() != null) {
+                if (shipment.getCreatedAt().isAfter(existing.getCreatedAt())) {
+                    latestPerOrder.put(shipment.getOrderId(), shipment);
                 }
             }
         }
