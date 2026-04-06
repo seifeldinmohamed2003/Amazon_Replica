@@ -8,6 +8,9 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import java.time.LocalDate;
 import java.util.List;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.*;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/api/transactions")
@@ -30,6 +33,15 @@ public class BillingController {
                         endDate.atTime(23, 59, 59)
                 )
         );
+    }
+
+    @PutMapping("/{id}/refund")
+    public ResponseEntity<Transaction> refundTransaction(
+            @PathVariable Long id,
+            @RequestBody Map<String, String> body
+    ) {
+        String reason = body.get("reason");
+        return ResponseEntity.ok(billingService.processRefund(id, reason));
     }
 
 //POST endpoint to make creating transactions easier
