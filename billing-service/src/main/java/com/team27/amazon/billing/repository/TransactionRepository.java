@@ -4,6 +4,7 @@ import com.team27.amazon.billing.model.Transaction;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
+import java.util.Optional;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -38,5 +39,20 @@ public interface TransactionRepository extends JpaRepository<Transaction, Long> 
     GROUP BY method
     """, nativeQuery = true)
     List<Object[]> getTransactionSummaryByUser(@Param("userId") Long userId);
+
+    @Query(value = "SELECT status FROM orders WHERE id = :orderId", nativeQuery = true)
+    String findOrderStatusById(@Param("orderId") Long orderId);
+
+    @Query(value = "SELECT total_amount FROM orders WHERE id = :orderId", nativeQuery = true)
+    Double findOrderTotalAmountById(@Param("orderId") Long orderId);
+
+    @Query(value = "SELECT * FROM transactions WHERE order_id = :orderId AND status = 'PENDING' LIMIT 1", nativeQuery = true)
+    Optional<Transaction> findPendingTransactionByOrderId(@Param("orderId") Long orderId);
+
+    @Query(value = "SELECT COUNT(*) FROM transactions WHERE order_id = :orderId AND status = 'COMPLETED'", nativeQuery = true)
+    int countCompletedTransactionsByOrderId(@Param("orderId") Long orderId);
+
+
+
 }
 

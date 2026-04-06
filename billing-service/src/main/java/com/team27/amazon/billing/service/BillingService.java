@@ -1,5 +1,6 @@
 package com.team27.amazon.billing.service;
 import com.team27.amazon.billing.dto.UserTransactionSummaryDTO;
+import com.team27.amazon.billing.model.TransactionMethod;
 import org.springframework.stereotype.Service;
 import java.util.HashMap;
 import java.util.List;
@@ -8,14 +9,11 @@ import com.team27.amazon.billing.model.Transaction;
 import com.team27.amazon.billing.model.TransactionStatus;
 import com.team27.amazon.billing.repository.TransactionRepository;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.stereotype.Service;
 import jakarta.transaction.Transactional;
 import java.time.LocalDateTime;
-import java.util.HashMap;
-import java.util.Map;
+
 import org.springframework.http.HttpStatus;
 import org.springframework.web.server.ResponseStatusException;
-import java.util.List;
 
 @Service
 public class BillingService {
@@ -82,6 +80,37 @@ public class BillingService {
         }
 
         return new UserTransactionSummaryDTO(userId, totalTransactions, totalAmount, methodBreakdown);
+    }
+
+    @Transactional
+    public Transaction processTransactionForOrder(Long orderId, String method, String cardLastFour) {
+        String orderStatus = transactionRepository.findOrderStatusById(orderId);
+        if (orderStatus == null) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Order not found");
+        }
+
+        if (!orderStatus.equals("DELIVERED")) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Order must be DELIVERED to process payment");
+        }
+
+        int completedCount = transactionRepository.countCompletedTransactionsByOrderId(orderId);
+        if (completedCount > 0) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "already paid");
+        }
+
+        Transaction transaction = transactionRepository.findPendingTransactionByOrderId(orderId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "No pending transaction found for this order"));
+
+        transaction.setStatus(TransactionStatus.COMPLETED);
+        transaction.setMethod(TransactionMethod.valueOf(method));
+
+        Map<String, Object> details = transaction.getTransactionDetails();
+        if (details == null) details = new HashMap<>();
+        details.put("gatewayResponse", "approved");
+        if (cardLastFour != null) details.put("cardLastFour", cardLastFour);
+        transaction.setTransactionDetails(details);
+
+        return transactionRepository.save(transaction);
     }
 
 

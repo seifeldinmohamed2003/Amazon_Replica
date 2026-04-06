@@ -50,6 +50,19 @@ public class BillingController {
         return ResponseEntity.ok(billingService.getUserTransactionSummary(userId));
     }
 
+    @PostMapping("/order/{orderId}")
+    public ResponseEntity<Transaction> processTransactionForOrder(
+            @PathVariable Long orderId,
+            @RequestBody Map<String, String> body
+    ) {
+        Transaction t = billingService.processTransactionForOrder(
+                orderId,
+                body.get("method"),
+                body.get("cardLastFour")
+        );
+        return ResponseEntity.status(201).body(t);
+    }
+
 //POST endpoint to make creating transactions easier
     @PostMapping
     public ResponseEntity<Transaction> createTransaction(@RequestBody Transaction transaction) {
