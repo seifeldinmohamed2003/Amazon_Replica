@@ -1,5 +1,9 @@
 package com.team27.amazon.billing.service;
-
+import com.team27.amazon.billing.dto.UserTransactionSummaryDTO;
+import org.springframework.stereotype.Service;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 import com.team27.amazon.billing.model.Transaction;
 import com.team27.amazon.billing.model.TransactionStatus;
 import com.team27.amazon.billing.repository.TransactionRepository;
@@ -55,4 +59,30 @@ public class BillingService {
         transaction.setTransactionDetails(details);
         return transactionRepository.save(transaction);
     }
+
+    public UserTransactionSummaryDTO getUserTransactionSummary(Long userId) {
+        int userExists = transactionRepository.countUserById(userId);
+        if (userExists == 0) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "User not found");
+        }
+
+        List<Object[]> rows = transactionRepository.getTransactionSummaryByUser(userId);
+
+        Map<String, Double> methodBreakdown = new HashMap<>();
+        long totalTransactions = 0;
+        double totalAmount = 0.0;
+
+        for (Object[] row : rows) {
+            String method = (String) row[0];
+            long count = ((Number) row[1]).longValue();
+            double sum = ((Number) row[2]).doubleValue();
+            methodBreakdown.put(method, sum);
+            totalTransactions += count;
+            totalAmount += sum;
+        }
+
+        return new UserTransactionSummaryDTO(userId, totalTransactions, totalAmount, methodBreakdown);
+    }
+
+
 }

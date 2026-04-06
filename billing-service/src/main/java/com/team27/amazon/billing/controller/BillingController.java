@@ -10,6 +10,7 @@ import java.time.LocalDate;
 import java.util.List;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import com.team27.amazon.billing.dto.UserTransactionSummaryDTO;
 import java.util.Map;
 
 @RestController
@@ -42,6 +43,11 @@ public class BillingController {
     ) {
         String reason = body.get("reason");
         return ResponseEntity.ok(billingService.processRefund(id, reason));
+    }
+
+    @GetMapping("/user/{userId}/summary")
+    public ResponseEntity<UserTransactionSummaryDTO> getUserTransactionSummary(@PathVariable Long userId) {
+        return ResponseEntity.ok(billingService.getUserTransactionSummary(userId));
     }
 
 //POST endpoint to make creating transactions easier
