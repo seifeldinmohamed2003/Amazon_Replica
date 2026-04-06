@@ -63,6 +63,14 @@ public class BillingController {
         return ResponseEntity.status(201).body(t);
     }
 
+    @PostMapping("/{transactionId}/voucher/{voucherId}")
+    public ResponseEntity<Transaction> applyVoucher(
+            @PathVariable Long transactionId,
+            @PathVariable Long voucherId
+    ) {
+        return ResponseEntity.ok(billingService.applyVoucherToTransaction(transactionId, voucherId));
+    }
+
 //POST endpoint to make creating transactions easier
     @PostMapping
     public ResponseEntity<Transaction> createTransaction(@RequestBody Transaction transaction) {
