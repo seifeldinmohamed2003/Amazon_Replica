@@ -1,6 +1,6 @@
 package com.team27.amazon.shipping.service;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
+//import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.team27.amazon.shipping.dto.CreateShipmentRequest;
 import com.team27.amazon.shipping.dto.NearbyShipmentDTO;
@@ -81,14 +81,9 @@ public class ShipmentService {
         shipment.setLongitude(request.getLongitude());
         shipment.setStatus(ShipmentStatus.PROCESSING);
 
-        try {
-            if (request.getMetadata() != null) {
-                shipment.setMetadata(objectMapper.writeValueAsString(request.getMetadata()));
-            }
-        } catch (JsonProcessingException e) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid metadata format");
+        if (request.getMetadata() != null) {
+            shipment.setMetadata(request.getMetadata());
         }
-
         return shipmentRepository.save(shipment);
     }
 

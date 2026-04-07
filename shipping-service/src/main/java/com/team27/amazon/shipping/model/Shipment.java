@@ -1,10 +1,18 @@
 package com.team27.amazon.shipping.model;
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import jakarta.persistence.*;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
+
+import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.HashMap;
+import java.util.Map;
 
 @Entity
 @Table(name = "shipments")
+@JsonIgnoreProperties({"hibernateLazyInitializer", "handler"})
 public class Shipment {
 
     @Id
@@ -15,6 +23,7 @@ public class Shipment {
 
     private String carrier;
 
+    @Column(unique = true)
     private String trackingNumber;
 
     @Enumerated(EnumType.STRING)
@@ -23,19 +32,19 @@ public class Shipment {
     private Double latitude;
     private Double longitude;
 
-    private LocalDateTime estimatedDelivery;
-    private LocalDateTime actualDelivery;
+    private LocalDate estimatedDelivery;
+    private LocalDate actualDelivery;
 
-    private String metadata;
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(columnDefinition = "jsonb")
+    private Map<String, Object> metadata = new HashMap<>();
 
     private LocalDateTime lastUpdate;
 
     private LocalDateTime createdAt;
 
-    // Constructors
     public Shipment() {}
 
-    // Getters & Setters
     public Long getId() { return id; }
 
     public Long getOrderId() { return orderId; }
@@ -56,25 +65,27 @@ public class Shipment {
     public Double getLongitude() { return longitude; }
     public void setLongitude(Double longitude) { this.longitude = longitude; }
 
-    public LocalDateTime getEstimatedDelivery() { return estimatedDelivery; }
-    public void setEstimatedDelivery(LocalDateTime estimatedDelivery) { this.estimatedDelivery = estimatedDelivery; }
+    public LocalDate getEstimatedDelivery() { return estimatedDelivery; }
+    public void setEstimatedDelivery(LocalDate estimatedDelivery) { this.estimatedDelivery = estimatedDelivery; }
 
-    public LocalDateTime getActualDelivery() { return actualDelivery; }
-    public void setActualDelivery(LocalDateTime actualDelivery) { this.actualDelivery = actualDelivery; }
+    public LocalDate getActualDelivery() { return actualDelivery; }
+    public void setActualDelivery(LocalDate actualDelivery) { this.actualDelivery = actualDelivery; }
 
-    public String getMetadata() { return metadata; }
-    public void setMetadata(String metadata) { this.metadata = metadata; }
+    public Map<String, Object> getMetadata() { return metadata; }
+    public void setMetadata(Map<String, Object> metadata) { this.metadata = metadata; }
 
     public LocalDateTime getLastUpdate() { return lastUpdate; }
     public void setLastUpdate(LocalDateTime lastUpdate) { this.lastUpdate = lastUpdate; }
 
     public LocalDateTime getCreatedAt() { return createdAt; }
     public void setCreatedAt(LocalDateTime createdAt) { this.createdAt = createdAt; }
+
     @PrePersist
     public void prePersist() {
         this.createdAt = LocalDateTime.now();
         this.lastUpdate = LocalDateTime.now();
     }
+
     @PreUpdate
     public void preUpdate() {
         this.lastUpdate = LocalDateTime.now();
