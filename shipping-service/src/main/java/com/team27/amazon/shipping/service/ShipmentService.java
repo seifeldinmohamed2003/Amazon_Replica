@@ -3,7 +3,7 @@ package com.team27.amazon.shipping.service;
 import com.team27.amazon.shipping.model.Shipment;
 import com.team27.amazon.shipping.repository.ShipmentRepository;
 import org.springframework.stereotype.Service;
-import com.fasterxml.jackson.core.JsonProcessingException;
+//import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.team27.amazon.shipping.dto.CreateShipmentRequest;
 import com.team27.amazon.shipping.model.ShipmentStatus;
@@ -82,12 +82,8 @@ public class ShipmentService {
         shipment.setStatus(ShipmentStatus.PROCESSING);
 
         //  STEP 3: Handle metadata safely
-        try {
-            if (request.getMetadata() != null) {
-                shipment.setMetadata(objectMapper.writeValueAsString(request.getMetadata()));
-            }
-        } catch (JsonProcessingException e) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid metadata format");
+        if (request.getMetadata() != null) {
+            shipment.setMetadata(request.getMetadata());
         }
 
         return shipmentRepository.save(shipment);
