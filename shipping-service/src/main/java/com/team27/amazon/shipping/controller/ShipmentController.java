@@ -22,8 +22,6 @@ public class ShipmentController {
 
         int deletedCount = shipmentService.purgeOldShipments(olderThanDays);
 
-        return ResponseEntity.ok(
-                Map.of("deletedCount", deletedCount)
-        );
+        return ResponseEntity.ok(Map.of("deletedCount", deletedCount));
     }
 }
