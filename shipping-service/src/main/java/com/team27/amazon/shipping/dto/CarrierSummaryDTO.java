@@ -8,7 +8,8 @@ public class CarrierSummaryDTO {
     private double averageDeliveryDays;
     private double onTimeRate;
 
-    public CarrierSummaryDTO() {}
+    public CarrierSummaryDTO() {
+    }
 
     public CarrierSummaryDTO(String carrier,
                              long totalShipments,
@@ -22,18 +23,43 @@ public class CarrierSummaryDTO {
         this.onTimeRate = onTimeRate;
     }
 
-    public String getCarrier() { return carrier; }
-    public void setCarrier(String carrier) { this.carrier = carrier; }
+    public String getCarrier() {
+        return carrier;
+    }
 
-    public long getTotalShipments() { return totalShipments; }
-    public void setTotalShipments(long totalShipments) { this.totalShipments = totalShipments; }
+    public void setCarrier(String carrier) {
+        this.carrier = carrier;
+    }
 
-    public long getDeliveredCount() { return deliveredCount; }
-    public void setDeliveredCount(long deliveredCount) { this.deliveredCount = deliveredCount; }
+    public long getTotalShipments() {
+        return totalShipments;
+    }
 
-    public double getAverageDeliveryDays() { return averageDeliveryDays; }
-    public void setAverageDeliveryDays(double averageDeliveryDays) { this.averageDeliveryDays = averageDeliveryDays; }
+    public void setTotalShipments(long totalShipments) {
+        this.totalShipments = totalShipments;
+    }
 
-    public double getOnTimeRate() { return onTimeRate; }
-    public void setOnTimeRate(double onTimeRate) { this.onTimeRate = onTimeRate; }
+    public long getDeliveredCount() {
+        return deliveredCount;
+    }
+
+    public void setDeliveredCount(long deliveredCount) {
+        this.deliveredCount = deliveredCount;
+    }
+
+    public double getAverageDeliveryDays() {
+        return averageDeliveryDays;
+    }
+
+    public void setAverageDeliveryDays(double averageDeliveryDays) {
+        this.averageDeliveryDays = averageDeliveryDays;
+    }
+
+    public double getOnTimeRate() {
+        return onTimeRate;
+    }
+
+    public void setOnTimeRate(double onTimeRate) {
+        this.onTimeRate = onTimeRate;
+    }
 }

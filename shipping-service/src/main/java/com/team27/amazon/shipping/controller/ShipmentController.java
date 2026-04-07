@@ -6,6 +6,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDateTime;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/api/shipments")
@@ -15,6 +16,14 @@ public class ShipmentController {
 
     public ShipmentController(ShipmentService shipmentService) {
         this.shipmentService = shipmentService;
+    }
+
+    @DeleteMapping("/purge")
+    public ResponseEntity<Map<String, Integer>> purgeOldShipments(
+            @RequestParam int olderThanDays) {
+
+        int deletedCount = shipmentService.purgeOldShipments(olderThanDays);
+        return ResponseEntity.ok(Map.of("deletedCount", deletedCount));
     }
 
     @GetMapping("/carrier/{carrier}/summary")
