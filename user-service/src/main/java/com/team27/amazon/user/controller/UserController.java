@@ -87,4 +87,10 @@ public class UserController {
         userService.deleteAddress(userId, addressId);
         return ResponseEntity.noContent().build();
     }
+
+    //S1-F4
+    @PutMapping("/{id}/deactivate")
+    public User deactivateUser(@PathVariable Long id) {
+        return userService.deactivateUser(id);
+    }
 }
