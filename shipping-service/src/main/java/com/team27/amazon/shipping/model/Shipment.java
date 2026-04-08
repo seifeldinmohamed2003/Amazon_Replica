@@ -1,6 +1,7 @@
 package com.team27.amazon.shipping.model;
 
 import jakarta.persistence.*;
+
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.Map;
@@ -13,13 +14,13 @@ public class Shipment {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(nullable = false)
-    private Long orderId; // FK reference (not JPA relationship)
+    @Column(name = "order_id", nullable = false)
+    private Long orderId;
 
     @Column(nullable = false)
     private String carrier;
 
-    @Column(nullable = false, unique = true)
+    @Column(name = "tracking_number", nullable = false, unique = true)
     private String trackingNumber;
 
     @Enumerated(EnumType.STRING)
@@ -29,20 +30,24 @@ public class Shipment {
     private Double latitude;
     private Double longitude;
 
+    @Column(name = "estimated_delivery")
     private LocalDate estimatedDelivery;
+
+    @Column(name = "actual_delivery")
     private LocalDate actualDelivery;
 
-    @Column(columnDefinition = "jsonb")
     @Convert(converter = MapToJsonConverter.class)
+    @Column(columnDefinition = "jsonb")
     private Map<String, Object> metadata;
 
     @Column(name = "last_update", nullable = false)
     private LocalDateTime lastUpdate;
 
-    @Column(nullable = false)
+    @Column(name = "created_at", nullable = false)
     private LocalDateTime createdAt;
 
-    // ================== GETTERS & SETTERS ==================
+    public Shipment() {
+    }
 
     public Long getId() {
         return id;
