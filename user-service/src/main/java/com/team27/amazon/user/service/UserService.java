@@ -2,8 +2,10 @@ package com.team27.amazon.user.service;
 
 import java.util.List;
 
+import com.team27.amazon.user.model.Status;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
 import com.team27.amazon.user.model.ShippingAddress;
@@ -92,5 +94,26 @@ public class UserService {
     public void deleteAddress(Long userId, Long addressId) {
         ShippingAddress address = getAddressById(userId, addressId);
         shippingAddressRepository.delete(address);
+    }
+
+    //S1-F4
+    @Transactional
+    public User deactivateUser(Long id) {
+        User user = userRepository.findById(id)
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND, "User not found"
+                ));
+
+        boolean hasActiveOrders = userRepository.existsActiveOrdersByUserId(id);
+
+        if (hasActiveOrders) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "User has active orders and cannot be deactivated"
+            );
+        }
+
+        user.setStatus(Status.DEACTIVATED);
+        return userRepository.save(user);
     }
 }
