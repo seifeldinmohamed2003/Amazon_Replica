@@ -7,6 +7,7 @@ import org.springframework.stereotype.Repository;
 
 import com.team27.amazon.user.model.User;
 
+import java.time.LocalDateTime;
 import java.util.List;
 
 @Repository
@@ -29,4 +30,25 @@ public interface UserRepository extends JpaRepository<User, Long> {
             WHERE preferences ->> :key = :value
             """, nativeQuery = true)
     List<User> findUsersByPreference(@Param("key") String key, @Param("value") String value);
+
+    //S1-F6
+    @Query(value = """
+        SELECT u.id AS user_id,
+               u.name AS name,
+               COALESCE(SUM(o.total_amount), 0) AS total_spent,
+               COUNT(o.id) AS order_count
+        FROM users u
+        JOIN orders o ON u.id = o.user_id
+        WHERE o.status = 'DELIVERED'
+          AND o.ordered_at >= :startDateTime
+          AND o.ordered_at < :endDateExclusive
+        GROUP BY u.id, u.name
+        ORDER BY total_spent DESC
+        LIMIT :limitValue
+        """, nativeQuery = true)
+    List<Object[]> findTopBuyersByDateRange(
+            @Param("startDateTime") LocalDateTime startDateTime,
+            @Param("endDateExclusive") LocalDateTime endDateExclusive,
+            @Param("limitValue") int limitValue
+    );
 }

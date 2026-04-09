@@ -1,7 +1,10 @@
 package com.team27.amazon.user.controller;
 
+import java.time.LocalDate;
 import java.util.List;
 
+import com.team27.amazon.user.dto.TopBuyerDTO;
+import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -94,5 +97,15 @@ public class UserController {
             @RequestParam String value
     ) {
         return userService.findUsersByPreference(key, value);
+    }
+
+    //S1-F6
+    @GetMapping("/reports/top-buyers")
+    public List<TopBuyerDTO> getTopBuyers(
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate,
+            @RequestParam int limit
+    ) {
+        return userService.getTopBuyers(startDate, endDate, limit);
     }
 }

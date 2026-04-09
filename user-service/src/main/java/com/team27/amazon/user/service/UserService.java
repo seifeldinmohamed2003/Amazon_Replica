@@ -1,7 +1,11 @@
 package com.team27.amazon.user.service;
 
+import java.util.ArrayList;
 import java.util.List;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
 
+import com.team27.amazon.user.dto.TopBuyerDTO;
 import com.team27.amazon.user.model.Status;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -127,5 +131,44 @@ public class UserService {
         }
 
         return userRepository.findUsersByPreference(key.trim(), value.trim());
+    }
+
+    //S1-F6
+    public List<TopBuyerDTO> getTopBuyers(LocalDate startDate, LocalDate endDate, int limit) {
+        if (startDate == null || endDate == null || startDate.isAfter(endDate)) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Invalid date range"
+            );
+        }
+
+        if (limit <= 0) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Limit must be greater than zero"
+            );
+        }
+
+        LocalDateTime startDateTime = startDate.atStartOfDay();
+        LocalDateTime endDateExclusive = endDate.plusDays(1).atStartOfDay();
+
+        List<Object[]> rows = userRepository.findTopBuyersByDateRange(
+                startDateTime,
+                endDateExclusive,
+                limit
+        );
+
+        List<TopBuyerDTO> result = new ArrayList<>();
+
+        for (Object[] row : rows) {
+            Long userId = ((Number) row[0]).longValue();
+            String name = (String) row[1];
+            Double totalSpent = ((Number) row[2]).doubleValue();
+            Long orderCount = ((Number) row[3]).longValue();
+
+            result.add(new TopBuyerDTO(userId, name, totalSpent, orderCount));
+        }
+
+        return result;
     }
 }
