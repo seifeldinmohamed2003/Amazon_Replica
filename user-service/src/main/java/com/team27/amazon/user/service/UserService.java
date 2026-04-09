@@ -171,4 +171,37 @@ public class UserService {
 
         return result;
     }
+
+    // S1-F7
+    @Transactional
+    public User setDefaultAddress(Long userId, Long addressId) {
+
+        // 1. Validate user (404)
+        User user = getUserById(userId);
+
+        // 2. Validate address + ownership (404 / 400)
+        ShippingAddress target = getAddressById(userId, addressId);
+
+        // 3. IMPORTANT: Use user's collection (cleaner + consistent)
+        List<ShippingAddress> addresses = user.getShippingAddresses();
+
+        // If LAZY not loaded, force fetch (safe fallback)
+        if (addresses == null || addresses.isEmpty()) {
+            addresses = shippingAddressRepository.findByUserId(userId);
+        }
+
+        // 4. Reset all
+        for (ShippingAddress addr : addresses) {
+            addr.setIsDefault(false);
+        }
+
+        // 5. Set target
+        target.setIsDefault(true);
+
+        // 6. Save (ensures persistence)
+        shippingAddressRepository.saveAll(addresses);
+
+        return user;
+    }
+
 }
