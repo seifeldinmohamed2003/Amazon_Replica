@@ -108,4 +108,15 @@ public class ShipmentController {
                 shipmentService.getShipmentsInDateRange(startDate, endDate, status)
         );
     }
+
+    @GetMapping("/metadata/search")
+    public ResponseEntity<List<Shipment>> searchShipmentsByMetadata(
+            @RequestParam String key,
+            @RequestParam String operator,
+            @RequestParam String value
+    ) {
+        return ResponseEntity.ok(
+                shipmentService.searchShipmentsByMetadata(key, operator, value)
+        );
+    }
 }

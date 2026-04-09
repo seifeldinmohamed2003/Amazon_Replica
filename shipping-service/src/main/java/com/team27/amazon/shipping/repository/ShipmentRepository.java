@@ -61,4 +61,23 @@ public interface ShipmentRepository extends JpaRepository<Shipment, Long> {
             @Param("endDate") LocalDateTime endDate,
             @Param("status") ShipmentStatus status
     );
+
+    @Query(value = """
+            SELECT * FROM shipments s
+            WHERE REGEXP_SUBSTR(s.metadata, CONCAT('(?i)"', :key, '"\\s*:\\s*"([^"]*)"'), 1, 1, NULL, 1) = :value
+               OR REGEXP_SUBSTR(s.metadata, CONCAT('"', :key, '"\\s*:\\s*([0-9.]+)'), 1, 1, NULL, 1) = :value
+            """, nativeQuery = true)
+    List<Shipment> findByMetadataKeyAndValueEquals(@Param("key") String key, @Param("value") String value);
+
+    @Query(value = """
+            SELECT * FROM shipments s
+            WHERE CAST(REGEXP_SUBSTR(s.metadata, CONCAT('"', :key, '"\\s*:\\s*([0-9.]+)'), 1, 1, NULL, 1) AS DOUBLE) > CAST(:value AS DOUBLE)
+            """, nativeQuery = true)
+    List<Shipment> findByMetadataKeyAndValueGreaterThan(@Param("key") String key, @Param("value") String value);
+
+    @Query(value = """
+            SELECT * FROM shipments s
+            WHERE CAST(REGEXP_SUBSTR(s.metadata, CONCAT('"', :key, '"\\s*:\\s*([0-9.]+)'), 1, 1, NULL, 1) AS DOUBLE) < CAST(:value AS DOUBLE)
+            """, nativeQuery = true)
+    List<Shipment> findByMetadataKeyAndValueLessThan(@Param("key") String key, @Param("value") String value);
 }

@@ -276,4 +276,43 @@ public class ShipmentService {
 
         return shipmentRepository.findShipmentsByDateRangeAndStatus(startDate, endDate, status);
     }
+
+    public List<Shipment> searchShipmentsByMetadata(String key, String operator, String value) {
+        if (key == null || key.trim().isEmpty()) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "key parameter is required"
+            );
+        }
+
+        if (operator == null || operator.trim().isEmpty()) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "operator parameter is required"
+            );
+        }
+
+        if (value == null || value.trim().isEmpty()) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "value parameter is required"
+            );
+        }
+
+        String normalizedOperator = operator.trim().toLowerCase();
+
+        switch (normalizedOperator) {
+            case "eq":
+                return shipmentRepository.findByMetadataKeyAndValueEquals(key, value);
+            case "gt":
+                return shipmentRepository.findByMetadataKeyAndValueGreaterThan(key, value);
+            case "lt":
+                return shipmentRepository.findByMetadataKeyAndValueLessThan(key, value);
+            default:
+                throw new ResponseStatusException(
+                        HttpStatus.BAD_REQUEST,
+                        "Invalid operator. Supported operators are: eq, gt, lt"
+                );
+        }
+    }
 }
