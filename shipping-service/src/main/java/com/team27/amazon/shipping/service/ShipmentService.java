@@ -1,6 +1,7 @@
 package com.team27.amazon.shipping.service;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.team27.amazon.shipping.dto.BatchStatusUpdateRequest;
 import com.team27.amazon.shipping.dto.CarrierSummaryDTO;
 import com.team27.amazon.shipping.dto.CreateShipmentRequest;
 import com.team27.amazon.shipping.dto.DelayedShipmentDTO;
@@ -313,6 +314,82 @@ public class ShipmentService {
                         HttpStatus.BAD_REQUEST,
                         "Invalid operator. Supported operators are: eq, gt, lt"
                 );
+        }
+    }
+
+    @Transactional
+    public int batchUpdateStatus(List<BatchStatusUpdateRequest> requests) {
+        if (requests == null || requests.isEmpty()) {
+            return 0;
+        }
+
+        // Extract all shipment IDs and validate all shipments exist
+        List<Long> shipmentIds = requests.stream()
+                .map(BatchStatusUpdateRequest::getShipmentId)
+                .toList();
+
+        List<Shipment> existingShipments = shipmentRepository.findAllById(shipmentIds);
+        if (existingShipments.size() != shipmentIds.size()) {
+            // Find which shipment IDs are missing
+            List<Long> existingIds = existingShipments.stream()
+                    .map(Shipment::getId)
+                    .toList();
+            List<Long> missingIds = shipmentIds.stream()
+                    .filter(id -> !existingIds.contains(id))
+                    .toList();
+            throw new ResponseStatusException(
+                    HttpStatus.NOT_FOUND,
+                    "Shipments not found with ids: " + missingIds
+            );
+        }
+
+        // Validate coordinates for all requests
+        for (BatchStatusUpdateRequest request : requests) {
+            validateCoordinates(request.getLatitude(), request.getLongitude());
+        }
+
+        // Update each shipment
+        for (BatchStatusUpdateRequest request : requests) {
+            Shipment shipment = existingShipments.stream()
+                    .filter(s -> s.getId().equals(request.getShipmentId()))
+                    .findFirst()
+                    .orElseThrow(() -> new ResponseStatusException(
+                            HttpStatus.NOT_FOUND,
+                            "Shipment not found with id: " + request.getShipmentId()
+                    ));
+
+            shipment.setStatus(request.getStatus());
+            shipment.setLatitude(request.getLatitude());
+            shipment.setLongitude(request.getLongitude());
+            // lastUpdate will be automatically set by @PreUpdate
+        }
+
+        // Save all updated shipments
+        shipmentRepository.saveAll(existingShipments);
+
+        return existingShipments.size();
+    }
+
+    private void validateCoordinates(Double latitude, Double longitude) {
+        if (latitude == null || longitude == null) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Latitude and longitude are required"
+            );
+        }
+
+        if (latitude < -90 || latitude > 90) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Latitude must be between -90 and 90"
+            );
+        }
+
+        if (longitude < -180 || longitude > 180) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Longitude must be between -180 and 180"
+            );
         }
     }
 }

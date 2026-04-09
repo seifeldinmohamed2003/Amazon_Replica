@@ -1,5 +1,6 @@
 package com.team27.amazon.shipping.controller;
 
+import com.team27.amazon.shipping.dto.BatchStatusUpdateRequest;
 import com.team27.amazon.shipping.dto.CarrierSummaryDTO;
 import com.team27.amazon.shipping.dto.CreateShipmentRequest;
 import com.team27.amazon.shipping.dto.DelayedShipmentDTO;
@@ -118,5 +119,13 @@ public class ShipmentController {
         return ResponseEntity.ok(
                 shipmentService.searchShipmentsByMetadata(key, operator, value)
         );
+    }
+
+    @PutMapping("/batch-status")
+    public ResponseEntity<Map<String, Integer>> batchUpdateStatus(
+            @RequestBody List<BatchStatusUpdateRequest> requests
+    ) {
+        int count = shipmentService.batchUpdateStatus(requests);
+        return ResponseEntity.status(HttpStatus.CREATED).body(Map.of("count", count));
     }
 }
