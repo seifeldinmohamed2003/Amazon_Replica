@@ -1,13 +1,18 @@
 package com.team27.amazon.order.service;
 
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.LocalTime;
+import java.util.Comparator;
+import java.util.List;
+import java.util.Optional;
+
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Service;
+
 import com.team27.amazon.order.model.Order;
 import com.team27.amazon.order.model.OrderStatus;
 import com.team27.amazon.order.repository.OrderRepository;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.stereotype.Service;
-import java.time.LocalDateTime;
-import java.util.List;
-import java.util.Optional;
 
 @Service
 public class OrderService {
@@ -50,7 +55,20 @@ public class OrderService {
 
     // READ - Get orders by date range
     public List<Order> getOrdersByDateRange(LocalDateTime startDate, LocalDateTime endDate) {
-        return orderRepository.findByOrderedAtBetween(startDate, endDate);
+        return orderRepository.findByOrderedAtBetween(startDate, endDate).stream()
+            .sorted(Comparator.comparing(Order::getOrderedAt).reversed())
+            .toList();
+    }
+
+    // READ - Search orders by optional status and date range
+    public List<Order> searchOrders(OrderStatus status, LocalDate startDate, LocalDate endDate) {
+        LocalDateTime rangeStart = startDate.atStartOfDay();
+        LocalDateTime rangeEnd = endDate.atTime(LocalTime.MAX);
+
+        return orderRepository.findByOrderedAtBetween(rangeStart, rangeEnd).stream()
+            .filter(order -> status == null || order.getStatus() == status)
+            .sorted(Comparator.comparing(Order::getOrderedAt).reversed())
+            .toList();
     }
 
     // UPDATE
