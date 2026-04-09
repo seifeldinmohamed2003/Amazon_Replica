@@ -1,23 +1,26 @@
 package com.team27.amazon.order.service;
 
-import com.team27.amazon.order.model.Order;
-import com.team27.amazon.order.model.OrderStatus;
-import com.team27.amazon.order.repository.OrderRepository;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.stereotype.Service;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
-
 import java.time.LocalTime;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Optional;
-import com.team27.amazon.order.repository.ShipmentJdbcRepository;
-import com.team27.amazon.order.repository.TransactionJdbcRepository;
+
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
+import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
-import java.time.LocalDate;
 
+import com.team27.amazon.order.model.Order;
+import com.team27.amazon.order.model.OrderItem;
+import com.team27.amazon.order.model.OrderStatus;
+import com.team27.amazon.order.repository.OrderRepository;
+import com.team27.amazon.order.repository.ProductJdbcRepository;
+import com.team27.amazon.order.repository.ShipmentJdbcRepository;
+import com.team27.amazon.order.repository.ShippingAddressJdbcRepository;
+import com.team27.amazon.order.repository.TransactionJdbcRepository;
 @Service
 public class OrderService {
 
@@ -25,6 +28,12 @@ public class OrderService {
     private OrderRepository orderRepository;
     @Autowired
     private ShipmentJdbcRepository shipmentJdbcRepository;
+
+    @Autowired
+    private ShippingAddressJdbcRepository shippingAddressJdbcRepository;
+
+    @Autowired
+    private ProductJdbcRepository productJdbcRepository;
 
     @Autowired
     private TransactionJdbcRepository transactionJdbcRepository;
@@ -174,6 +183,75 @@ public class OrderService {
         }
 
         return orderRepository.findByMetadataField(key, value);
+    }
+
+    @Transactional
+    public Order confirmOrder(Long orderId, Long shippingAddressId) {
+        Order order = orderRepository.findById(orderId)
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND,
+                        "Order not found"
+                ));
+
+        if (order.getStatus() != OrderStatus.PENDING) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Only pending orders can be confirmed"
+            );
+        }
+
+        if (!shippingAddressJdbcRepository.existsByShippingAddressId(shippingAddressId)) {
+            throw new ResponseStatusException(
+                    HttpStatus.NOT_FOUND,
+                    "Shipping address not found"
+            );
+        }
+
+        List<OrderItem> orderItems = order.getOrderItems() == null ? List.of() : order.getOrderItems();
+        double totalAmount = 0.0;
+
+        for (OrderItem orderItem : orderItems) {
+            if (!productJdbcRepository.existsByProductId(orderItem.getProductId())) {
+                throw new ResponseStatusException(
+                        HttpStatus.NOT_FOUND,
+                        "Product not found"
+                );
+            }
+
+            Integer stockQuantity = productJdbcRepository.findStockQuantityByProductId(orderItem.getProductId());
+            if (stockQuantity == null) {
+                throw new ResponseStatusException(
+                        HttpStatus.NOT_FOUND,
+                        "Product not found"
+                );
+            }
+
+            if (stockQuantity < orderItem.getQuantity()) {
+                throw new ResponseStatusException(
+                        HttpStatus.BAD_REQUEST,
+                        "Insufficient stock for product " + orderItem.getProductId()
+                );
+            }
+        }
+
+        for (OrderItem orderItem : orderItems) {
+            int updatedRows = productJdbcRepository.deductStockQuantity(
+                    orderItem.getProductId(),
+                    orderItem.getQuantity()
+            );
+            if (updatedRows == 0) {
+                throw new ResponseStatusException(
+                        HttpStatus.BAD_REQUEST,
+                        "Insufficient stock for product " + orderItem.getProductId()
+                );
+            }
+            totalAmount += orderItem.getQuantity() * orderItem.getPriceAtPurchase();
+        }
+
+        order.setShippingAddressId(shippingAddressId);
+        order.setStatus(OrderStatus.CONFIRMED);
+        order.setTotalAmount(totalAmount);
+        return orderRepository.save(order);
     }
 }
 

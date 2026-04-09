@@ -126,6 +126,14 @@ public class OrderController {
     public ResponseEntity<Order> deliverOrder(@PathVariable Long id) {
         return ResponseEntity.ok(orderService.deliverOrder(id));
     }
+
+    @PutMapping("/{orderId}/confirm")
+    public ResponseEntity<Order> confirmOrder(
+            @PathVariable Long orderId,
+            @RequestParam Long shippingAddressId) {
+        return ResponseEntity.ok(orderService.confirmOrder(orderId, shippingAddressId));
+    }
+
     @GetMapping("/metadata/search")
     public ResponseEntity<List<Order>> searchOrdersByMetadata(
             @RequestParam String key,
