@@ -5,6 +5,7 @@ import java.util.List;
 import java.util.Map;
 
 import com.team27.amazon.user.dto.TopBuyerDTO;
+import com.team27.amazon.user.dto.UserOrderSummaryDTO;
 import com.team27.amazon.user.dto.UserProfileDTO;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
@@ -102,6 +103,13 @@ public class UserController {
             @RequestBody Map<String, Object> preferences) {
         return ResponseEntity.ok(userService.updateUserPreferences(id, preferences));
     }
+
+    // S1-F3
+    @GetMapping("/{id}/order-summary")
+    public ResponseEntity<UserOrderSummaryDTO> getUserOrderSummary(@PathVariable Long id) {
+        return ResponseEntity.ok(userService.getUserOrderSummary(id));
+    }
+
     //S1-F4
     @PutMapping("/{id}/deactivate")
     public User deactivateUser(@PathVariable Long id) {

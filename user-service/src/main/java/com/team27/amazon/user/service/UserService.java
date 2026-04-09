@@ -9,6 +9,7 @@ import java.time.LocalDateTime;
 import java.util.Map;
 
 import com.team27.amazon.user.dto.TopBuyerDTO;
+import com.team27.amazon.user.dto.UserOrderSummaryDTO;
 import com.team27.amazon.user.model.Status;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -131,6 +132,29 @@ public class UserService {
         }
 
         return userRepository.save(user);
+    }
+
+    // S1-F3
+    public UserOrderSummaryDTO getUserOrderSummary(Long userId) {
+        getUserById(userId); // throws 404 if not found
+
+        Object[] row = userRepository.getUserOrderSummary(userId);
+
+        if (row == null || row.length == 0) {
+            // User exists but has no orders
+            User user = getUserById(userId);
+            return new UserOrderSummaryDTO(userId, user.getName(), 0L, 0L, 0L, 0.0, 0.0);
+        }
+
+        return new UserOrderSummaryDTO(
+                ((Number) row[0]).longValue(),
+                (String) row[1],
+                ((Number) row[2]).longValue(),
+                ((Number) row[3]).longValue(),
+                ((Number) row[4]).longValue(),
+                ((Number) row[5]).doubleValue(),
+                ((Number) row[6]).doubleValue()
+        );
     }
 
     //S1-F4
