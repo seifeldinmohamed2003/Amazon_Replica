@@ -1,11 +1,7 @@
 package com.team27.amazon.product.controller;
 
-import com.team27.amazon.product.dto.ProductRequest;
-import com.team27.amazon.product.dto.ProductResponse;
-import com.team27.amazon.product.model.Product;
-import com.team27.amazon.product.model.ProductStatus;
-import com.team27.amazon.product.service.ProductService;
-import jakarta.validation.Valid;
+import java.util.List;
+
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -19,7 +15,13 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
-import java.util.List;
+import com.team27.amazon.product.dto.ProductRequest;
+import com.team27.amazon.product.dto.ProductResponse;
+import com.team27.amazon.product.model.Product;
+import com.team27.amazon.product.model.ProductStatus;
+import com.team27.amazon.product.service.ProductService;
+
+import jakarta.validation.Valid;
 
 @RestController
 @RequestMapping("/api/products")
@@ -58,6 +60,12 @@ public class ProductController {
     public ResponseEntity<Void> deleteProduct(@PathVariable Long id) {
         productService.deleteProduct(id);
         return ResponseEntity.noContent().build();
+    }
+
+    @PutMapping("/{id}/discontinue")
+    public ResponseEntity<Product> discontinueProduct(@PathVariable Long id) {
+        Product updatedProduct = productService.discontinueProduct(id);
+        return ResponseEntity.ok(updatedProduct);
     }
 }
 
