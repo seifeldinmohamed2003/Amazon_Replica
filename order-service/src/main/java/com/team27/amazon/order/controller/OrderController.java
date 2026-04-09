@@ -99,5 +99,10 @@ public class OrderController {
         return ResponseEntity.ok(total);
     }
 
+    @PutMapping("/{id}/deliver")
+    public ResponseEntity<Order> deliverOrder(@PathVariable Long id) {
+        return ResponseEntity.ok(orderService.deliverOrder(id));
+    }
+
 }
 

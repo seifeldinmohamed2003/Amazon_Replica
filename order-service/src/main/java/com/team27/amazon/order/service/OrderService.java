@@ -8,13 +8,22 @@ import org.springframework.stereotype.Service;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
-
+import com.team27.amazon.order.repository.ShipmentJdbcRepository;
+import com.team27.amazon.order.repository.TransactionJdbcRepository;
+import org.springframework.http.HttpStatus;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.server.ResponseStatusException;
+import java.time.LocalDate;
 @Service
 public class OrderService {
 
     @Autowired
     private OrderRepository orderRepository;
+    @Autowired
+    private ShipmentJdbcRepository shipmentJdbcRepository;
 
+    @Autowired
+    private TransactionJdbcRepository transactionJdbcRepository;
     // CREATE
     public Order createOrder(Order order) {
         if (order.getStatus() == null) {
@@ -97,6 +106,49 @@ public class OrderService {
             }
             return 0.0;
         }).orElse(0.0);
+    }
+
+    @Transactional
+    public Order deliverOrder(Long orderId) {
+        Order order = orderRepository.findById(orderId)
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND, "Order not found"
+                ));
+
+        if (order.getStatus() != OrderStatus.SHIPPED) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Only shipped orders can be marked as delivered"
+            );
+        }
+
+        if (!shipmentJdbcRepository.existsByOrderId(orderId)) {
+            throw new ResponseStatusException(
+                    HttpStatus.NOT_FOUND,
+                    "Shipment not found for this order"
+            );
+        }
+
+        order.setStatus(OrderStatus.DELIVERED);
+        order.setDeliveredAt(LocalDateTime.now());
+        Order savedOrder = orderRepository.save(order);
+
+        shipmentJdbcRepository.markDeliveredByOrderId(
+                orderId,
+                LocalDate.now(),
+                LocalDateTime.now()
+        );
+
+        Double amount = savedOrder.getTotalAmount() == null ? 0.0 : savedOrder.getTotalAmount();
+
+        transactionJdbcRepository.insertPendingTransaction(
+                savedOrder.getId(),
+                savedOrder.getUserId(),
+                amount,
+                LocalDateTime.now()
+        );
+
+        return savedOrder;
     }
 }
 
