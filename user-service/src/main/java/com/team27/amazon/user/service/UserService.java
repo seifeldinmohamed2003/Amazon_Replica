@@ -1,7 +1,5 @@
 package com.team27.amazon.user.service;
 
-
-
 import java.util.ArrayList;
 import java.util.List;
 import java.time.LocalDate;
@@ -18,9 +16,6 @@ import com.team27.amazon.user.model.ShippingAddress;
 import com.team27.amazon.user.model.User;
 import com.team27.amazon.user.repository.ShippingAddressRepository;
 import com.team27.amazon.user.repository.UserRepository;
-import com.team27.amazon.user.dto.ShippingAddressDTO;
-import com.team27.amazon.user.dto.UserProfileDTO;
-
 
 @Service
 public class UserService {
@@ -207,34 +202,6 @@ public class UserService {
         shippingAddressRepository.saveAll(addresses);
 
         return user;
-    }
-
-    @Transactional(readOnly = true)
-    public UserProfileDTO getUserProfile(Long userId) {
-        User user = userRepository.findById(userId)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "User not found"));
-
-        List<ShippingAddressDTO> addresses = user.getShippingAddresses().stream()
-                .map(addr -> new ShippingAddressDTO(
-                        addr.getLabel(),
-                        addr.getStreetAddress(),
-                        addr.getCity(),
-                        addr.getCountry(),
-                        addr.getZipCode(),
-                        addr.getIsDefault(),
-                        addr.getMetadata()
-                ))
-                .toList();
-
-        return new UserProfileDTO(
-                user.getId(),
-                user.getName(),
-                user.getEmail(),
-                user.getPhone(),
-                user.getPreferences(),
-                addresses,
-                addresses.size()
-        );
     }
 
 }

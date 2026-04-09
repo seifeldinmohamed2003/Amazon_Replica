@@ -4,7 +4,6 @@ import java.time.LocalDate;
 import java.util.List;
 
 import com.team27.amazon.user.dto.TopBuyerDTO;
-import com.team27.amazon.user.dto.UserProfileDTO;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -119,12 +118,6 @@ public class UserController {
         return ResponseEntity.ok(
                 userService.setDefaultAddress(userId, addressId)
         );
-    }
-
-    //S1-F8
-    @GetMapping("/{id}/profile")
-    public UserProfileDTO getUserProfile(@PathVariable Long id) {
-        return userService.getUserProfile(id);
     }
 
 }
