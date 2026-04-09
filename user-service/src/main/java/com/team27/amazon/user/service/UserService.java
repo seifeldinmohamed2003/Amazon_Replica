@@ -105,6 +105,15 @@ public class UserService {
         shippingAddressRepository.delete(address);
     }
 
+    // S1-F1
+    public List<User> searchUsers(String name, String email, String role) {
+        String nameParam  = (name  != null && !name.trim().isEmpty())  ? name.trim()  : null;
+        String emailParam = (email != null && !email.trim().isEmpty()) ? email.trim() : null;
+        String roleParam  = (role  != null && !role.trim().isEmpty())  ? role.trim()  : null;
+
+        return userRepository.searchUsers(nameParam, emailParam, roleParam);
+    }
+
     //S1-F4
     @Transactional
     public User deactivateUser(Long id) {
