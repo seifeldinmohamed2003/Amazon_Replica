@@ -1,16 +1,20 @@
 package com.team27.amazon.product.service;
 
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.HttpStatus;
+import org.springframework.stereotype.Service;
+import org.springframework.web.server.ResponseStatusException;
+
 import com.team27.amazon.product.dto.ProductRequest;
+import com.team27.amazon.product.dto.TopProductDTO;
 import com.team27.amazon.product.exception.ProductNotFoundException;
 import com.team27.amazon.product.model.Product;
 import com.team27.amazon.product.model.ProductStatus;
 import com.team27.amazon.product.repository.ProductRepository;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.stereotype.Service;
-
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
 
 @Service
 public class ProductService {
@@ -48,6 +52,26 @@ public class ProductService {
     public void deleteProduct(Long id) {
         Product existing = getProductById(id);
         productRepository.delete(existing);
+    }
+
+    public List<TopProductDTO> getTopRatedProducts(Integer limit) {
+    if (limit == null || limit <= 0) {
+        throw new ResponseStatusException(
+                HttpStatus.BAD_REQUEST,
+                "Limit must be greater than 0"
+        );
+    }
+
+    List<Object[]> rows = productRepository.findTopRatedProducts(limit);
+
+    return rows.stream()
+            .map(row -> new TopProductDTO(
+                    ((Number) row[0]).longValue(),
+                    (String) row[1],
+                    row[2] == null ? 0.0 : ((Number) row[2]).doubleValue(),
+                    row[3] == null ? 0L : ((Number) row[3]).longValue()
+            ))
+            .toList();
     }
 
     private void applyRequest(Product product, ProductRequest request) {
