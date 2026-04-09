@@ -7,6 +7,8 @@ import org.springframework.stereotype.Repository;
 
 import com.team27.amazon.user.model.User;
 
+import java.util.List;
+
 @Repository
 public interface UserRepository extends JpaRepository<User, Long> {
     //S1-F4
@@ -19,4 +21,12 @@ public interface UserRepository extends JpaRepository<User, Long> {
             )
             """, nativeQuery = true)
     boolean existsActiveOrdersByUserId(@Param("userId") Long userId);
+
+    //S1-F5
+    @Query(value = """
+            SELECT *
+            FROM users
+            WHERE preferences ->> :key = :value
+            """, nativeQuery = true)
+    List<User> findUsersByPreference(@Param("key") String key, @Param("value") String value);
 }
