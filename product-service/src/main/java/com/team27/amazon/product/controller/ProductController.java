@@ -5,6 +5,7 @@ import com.team27.amazon.product.model.Product;
 import com.team27.amazon.product.model.ProductStatus;
 import com.team27.amazon.product.model.ProductReview;
 import com.team27.amazon.product.service.ProductService;
+import com.team27.amazon.product.dto.LowStockAlertDTO;
 import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
@@ -96,5 +97,10 @@ public class ProductController {
     ) {
         Product updatedProduct = productService.verifyReview(productId, reviewId, request);
         return ResponseEntity.ok(ProductWithReviewsResponse.from(updatedProduct));
+    }
+
+    @GetMapping("/alerts/low-stock")
+    public List<LowStockAlertDTO> getLowStockAlerts(@RequestParam Integer threshold) {
+        return productService.getLowStockAlerts(threshold);
     }
 }

@@ -1,10 +1,7 @@
 package com.team27.amazon.product.service;
 
-import com.team27.amazon.product.dto.ProductRequest;
-import com.team27.amazon.product.dto.ProductReviewVerificationRequest;
+import com.team27.amazon.product.dto.*;
 import com.team27.amazon.product.exception.*;
-import com.team27.amazon.product.dto.ProductSalesDTO;
-import com.team27.amazon.product.dto.ProductReviewRequest;
 import com.team27.amazon.product.model.Product;
 import com.team27.amazon.product.model.ProductReview;
 import com.team27.amazon.product.model.ProductStatus;
@@ -202,6 +199,16 @@ public class ProductService {
 
         productReviewRepository.save(review);
         return product;
+    }
+
+    public List<LowStockAlertDTO> getLowStockAlerts(Integer threshold) {
+        if (threshold == null || threshold < 0) {
+            throw new InvalidProductAlertException("Threshold must be zero or greater.");        }
+
+        return productRepository.findByStockQuantityLessThanOrderByStockQuantityAsc(threshold)
+                .stream()
+                .map(LowStockAlertDTO::from)
+                .toList();
     }
 
     private void applyRequest(Product product, ProductRequest request) {
