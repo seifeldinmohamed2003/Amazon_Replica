@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.team27.amazon.shipping.dto.CarrierSummaryDTO;
 import com.team27.amazon.shipping.dto.CreateShipmentRequest;
 import com.team27.amazon.shipping.dto.DelayedShipmentDTO;
+import com.team27.amazon.shipping.dto.NearbyShipmentDTO;
 import com.team27.amazon.shipping.model.Shipment;
 import com.team27.amazon.shipping.model.ShipmentStatus;
 import com.team27.amazon.shipping.repository.ShipmentRepository;
@@ -15,7 +16,11 @@ import org.springframework.web.server.ResponseStatusException;
 
 import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
+import java.util.Comparator;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
 
 @Service
 public class ShipmentService {
@@ -110,6 +115,60 @@ public class ShipmentService {
         }
 
         return shipmentRepository.save(shipment);
+    }
+
+    public List<NearbyShipmentDTO> findNearbyOutForDelivery(Double lat, Double lon, Double radiusKm) {
+        if (lat == null || lon == null || radiusKm == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "lat, lon and radiusKm are required");
+        }
+
+        if (radiusKm < 0) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "radiusKm must be >= 0");
+        }
+
+        List<Shipment> shipments = shipmentRepository
+                .findByStatusAndLatitudeIsNotNullAndLongitudeIsNotNull(ShipmentStatus.OUT_FOR_DELIVERY);
+
+        Map<Long, Shipment> latestPerOrder = new HashMap<>();
+
+        for (Shipment shipment : shipments) {
+            Shipment existing = latestPerOrder.get(shipment.getOrderId());
+
+            if (existing == null) {
+                latestPerOrder.put(shipment.getOrderId(), shipment);
+                continue;
+            }
+
+            if (shipment.getLastUpdate() != null && existing.getLastUpdate() != null) {
+                if (shipment.getLastUpdate().isAfter(existing.getLastUpdate())) {
+                    latestPerOrder.put(shipment.getOrderId(), shipment);
+                }
+            } else if (shipment.getCreatedAt() != null && existing.getCreatedAt() != null) {
+                if (shipment.getCreatedAt().isAfter(existing.getCreatedAt())) {
+                    latestPerOrder.put(shipment.getOrderId(), shipment);
+                }
+            }
+        }
+
+        return latestPerOrder.values().stream()
+                .map(shipment -> {
+                    double dx = shipment.getLatitude() - lat;
+                    double dy = shipment.getLongitude() - lon;
+                    double distanceKm = Math.sqrt(dx * dx + dy * dy) * 111.0;
+
+                    return new NearbyShipmentDTO(
+                            shipment.getId(),
+                            shipment.getOrderId(),
+                            shipment.getCarrier(),
+                            shipment.getTrackingNumber(),
+                            shipment.getLatitude(),
+                            shipment.getLongitude(),
+                            distanceKm
+                    );
+                })
+                .filter(dto -> dto.getDistanceKm() <= radiusKm)
+                .sorted(Comparator.comparing(NearbyShipmentDTO::getDistanceKm))
+                .collect(Collectors.toList());
     }
 
     @Transactional

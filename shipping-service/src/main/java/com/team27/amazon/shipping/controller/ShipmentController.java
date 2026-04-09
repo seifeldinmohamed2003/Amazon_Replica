@@ -3,6 +3,7 @@ package com.team27.amazon.shipping.controller;
 import com.team27.amazon.shipping.dto.CarrierSummaryDTO;
 import com.team27.amazon.shipping.dto.CreateShipmentRequest;
 import com.team27.amazon.shipping.dto.DelayedShipmentDTO;
+import com.team27.amazon.shipping.dto.NearbyShipmentDTO;
 import com.team27.amazon.shipping.model.Shipment;
 import com.team27.amazon.shipping.service.ShipmentService;
 import org.springframework.http.HttpStatus;
@@ -28,7 +29,7 @@ public class ShipmentController {
         return shipmentService.createShipment(shipment);
     }
 
-    @PostMapping(value = "/order/{orderId}", consumes = "application/json")
+    @PostMapping("/order/{orderId}")
     public ResponseEntity<Shipment> createShipmentForOrder(
             @PathVariable Long orderId,
             @RequestBody CreateShipmentRequest request
@@ -60,6 +61,15 @@ public class ShipmentController {
     @GetMapping("/order/{orderId}/latest")
     public Shipment getLatestShipmentByOrderId(@PathVariable Long orderId) {
         return shipmentService.getLatestShipmentByOrderId(orderId);
+    }
+
+    @GetMapping("/nearby")
+    public List<NearbyShipmentDTO> findNearbyShipments(
+            @RequestParam Double lat,
+            @RequestParam Double lon,
+            @RequestParam Double radiusKm
+    ) {
+        return shipmentService.findNearbyOutForDelivery(lat, lon, radiusKm);
     }
 
     @DeleteMapping("/purge")
