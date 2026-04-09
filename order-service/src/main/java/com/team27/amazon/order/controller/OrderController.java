@@ -103,6 +103,11 @@ public class OrderController {
     public ResponseEntity<Order> deliverOrder(@PathVariable Long id) {
         return ResponseEntity.ok(orderService.deliverOrder(id));
     }
-
+    @GetMapping("/metadata/search")
+    public ResponseEntity<List<Order>> searchOrdersByMetadata(
+            @RequestParam String key,
+            @RequestParam String value) {
+        return ResponseEntity.ok(orderService.searchOrdersByMetadata(key, value));
+    }
 }
 

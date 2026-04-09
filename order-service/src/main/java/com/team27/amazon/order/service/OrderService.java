@@ -14,6 +14,8 @@ import org.springframework.http.HttpStatus;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 import java.time.LocalDate;
+import org.springframework.http.HttpStatus;
+import org.springframework.web.server.ResponseStatusException;
 @Service
 public class OrderService {
 
@@ -149,6 +151,16 @@ public class OrderService {
         );
 
         return savedOrder;
+    }
+    public List<Order> searchOrdersByMetadata(String key, String value) {
+        if (key == null || key.isBlank() || value == null || value.isBlank()) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Key and value must not be blank"
+            );
+        }
+
+        return orderRepository.findByMetadataField(key, value);
     }
 }
 
