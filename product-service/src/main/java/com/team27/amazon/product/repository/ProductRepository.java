@@ -38,5 +38,23 @@ public interface ProductRepository extends JpaRepository<Product, Long> {
             @Param("startDateTime") LocalDateTime startDateTime,
             @Param("endDateTime") LocalDateTime endDateTime
     );
-}
 
+
+    @Query(value = """
+            SELECT COUNT(*) > 0
+            FROM users u
+            WHERE u.id = :userId
+            """, nativeQuery = true)
+    boolean userExists(@Param("userId") Long userId);
+
+    @Query(value = """
+            SELECT COUNT(*) > 0
+            FROM orders o
+            JOIN order_items oi ON oi.order_id = o.id
+            WHERE o.user_id = :userId
+              AND oi.product_id = :productId
+              AND o.status = 'DELIVERED'
+            """, nativeQuery = true)
+    boolean hasDeliveredPurchase(@Param("userId") Long userId,
+                                 @Param("productId") Long productId);
+}

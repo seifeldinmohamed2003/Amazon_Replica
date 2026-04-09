@@ -3,22 +3,17 @@ package com.team27.amazon.product.controller;
 import com.team27.amazon.product.dto.ProductRequest;
 import com.team27.amazon.product.dto.ProductResponse;
 import com.team27.amazon.product.dto.ProductSalesDTO;
+import com.team27.amazon.product.dto.ProductReviewRequest;
+import com.team27.amazon.product.dto.ProductReviewResponse;
 import com.team27.amazon.product.model.Product;
 import com.team27.amazon.product.model.ProductStatus;
+import com.team27.amazon.product.model.ProductReview;
 import com.team27.amazon.product.service.ProductService;
 import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.DeleteMapping;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PathVariable;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.PutMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestParam;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDate;
 import java.util.List;
@@ -87,5 +82,13 @@ public class ProductController {
         productService.deleteProduct(id);
         return ResponseEntity.noContent().build();
     }
-}
 
+    @PostMapping("/{id}/reviews")
+    public ResponseEntity<ProductReviewResponse> addReview(
+            @PathVariable Long id,
+            @Valid @RequestBody ProductReviewRequest request
+    ) {
+        ProductReview review = productService.addReview(id, request);
+        return ResponseEntity.ok(ProductReviewResponse.from(review));
+    }
+}
