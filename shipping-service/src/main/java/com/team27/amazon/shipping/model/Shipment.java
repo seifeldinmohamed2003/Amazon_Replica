@@ -1,13 +1,18 @@
 package com.team27.amazon.shipping.model;
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import jakarta.persistence.*;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.HashMap;
 import java.util.Map;
 
 @Entity
 @Table(name = "shipments")
+@JsonIgnoreProperties({"hibernateLazyInitializer", "handler"})
 public class Shipment {
 
     @Id
@@ -36,9 +41,9 @@ public class Shipment {
     @Column(name = "actual_delivery")
     private LocalDate actualDelivery;
 
-    @Convert(converter = MapToJsonConverter.class)
+    @JdbcTypeCode(SqlTypes.JSON)
     @Column(columnDefinition = "jsonb")
-    private Map<String, Object> metadata;
+    private Map<String, Object> metadata = new HashMap<>();
 
     @Column(name = "last_update", nullable = false)
     private LocalDateTime lastUpdate;
@@ -139,5 +144,18 @@ public class Shipment {
 
     public void setCreatedAt(LocalDateTime createdAt) {
         this.createdAt = createdAt;
+    }
+
+    @PrePersist
+    public void prePersist() {
+        if (this.createdAt == null) {
+            this.createdAt = LocalDateTime.now();
+        }
+        this.lastUpdate = LocalDateTime.now();
+    }
+
+    @PreUpdate
+    public void preUpdate() {
+        this.lastUpdate = LocalDateTime.now();
     }
 }

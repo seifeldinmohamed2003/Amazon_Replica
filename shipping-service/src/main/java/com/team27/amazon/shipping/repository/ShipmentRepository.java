@@ -8,8 +8,11 @@ import org.springframework.data.repository.query.Param;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Optional;
 
 public interface ShipmentRepository extends JpaRepository<Shipment, Long> {
+
+    Optional<Shipment> findFirstByOrderIdOrderByCreatedAtDesc(Long orderId);
 
     @Query(value = "SELECT COUNT(*) FROM shipments s WHERE s.last_update < :cutoff", nativeQuery = true)
     int countOlderThan(@Param("cutoff") LocalDateTime cutoff);
