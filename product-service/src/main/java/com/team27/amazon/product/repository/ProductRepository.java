@@ -57,4 +57,12 @@ public interface ProductRepository extends JpaRepository<Product, Long> {
             """, nativeQuery = true)
     boolean hasDeliveredPurchase(@Param("userId") Long userId,
                                  @Param("productId") Long productId);
+
+    @Query(value = """
+            SELECT COUNT(*) > 0
+            FROM users u
+            WHERE u.id = :userId
+              AND u.role = 'ADMIN'
+            """, nativeQuery = true)
+    boolean isAdminUser(@Param("userId") Long userId);
 }

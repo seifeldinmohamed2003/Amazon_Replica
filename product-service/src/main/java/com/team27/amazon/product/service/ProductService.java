@@ -1,12 +1,10 @@
 package com.team27.amazon.product.service;
 
 import com.team27.amazon.product.dto.ProductRequest;
-import com.team27.amazon.product.exception.InvalidPriceRangeException;
+import com.team27.amazon.product.dto.ProductReviewVerificationRequest;
+import com.team27.amazon.product.exception.*;
 import com.team27.amazon.product.dto.ProductSalesDTO;
 import com.team27.amazon.product.dto.ProductReviewRequest;
-import com.team27.amazon.product.exception.InvalidReviewException;
-import com.team27.amazon.product.exception.ProductNotFoundException;
-import com.team27.amazon.product.exception.UserNotFoundException;
 import com.team27.amazon.product.model.Product;
 import com.team27.amazon.product.model.ProductReview;
 import com.team27.amazon.product.model.ProductStatus;
@@ -160,6 +158,50 @@ public class ProductService {
         productRepository.save(product);
 
         return review;
+    }
+
+    @Transactional
+    public Product verifyReview(Long productId, Long reviewId, ProductReviewVerificationRequest request) {
+        Product product = getProductById(productId);
+
+        ProductReview review = productReviewRepository.findById(reviewId)
+                .orElseThrow(() -> new ProductReviewNotFoundException(reviewId));
+
+        if (review.getProduct() == null || review.getProduct().getId() == null) {
+            throw new ProductReviewNotFoundException(reviewId);
+        }
+
+        if (!review.getProduct().getId().equals(productId)) {
+            throw new InvalidReviewException("Review does not belong to the specified product.");
+        }
+
+        if (!productRepository.hasDeliveredPurchase(review.getUserId(), productId)) {
+            throw new InvalidReviewException("Reviewer does not have a verified purchase for this product.");
+        }
+
+        if (!productRepository.userExists(request.getVerifiedBy())) {
+            throw new UserNotFoundException(request.getVerifiedBy());
+        }
+
+        if (!productRepository.isAdminUser(request.getVerifiedBy())) {
+            throw new ReviewVerificationForbiddenException("Only an admin user can verify reviews.");
+        }
+
+        review.setVerified(true);
+
+        Map<String, Object> metadata = review.getMetadata();
+        if (metadata == null) {
+            metadata = new HashMap<>();
+        } else {
+            metadata = new HashMap<>(metadata);
+        }
+
+        metadata.put("verifiedAt", LocalDateTime.now().toString());
+        metadata.put("verifiedBy", request.getVerifiedBy());
+        review.setMetadata(metadata);
+
+        productReviewRepository.save(review);
+        return product;
     }
 
     private void applyRequest(Product product, ProductRequest request) {

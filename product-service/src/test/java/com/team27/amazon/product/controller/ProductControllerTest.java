@@ -1,4 +1,4 @@
-﻿package com.team27.amazon.product.controller;
+package com.team27.amazon.product.controller;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.team27.amazon.product.dto.ProductRequest;

@@ -1,10 +1,6 @@
 package com.team27.amazon.product.controller;
 
-import com.team27.amazon.product.dto.ProductRequest;
-import com.team27.amazon.product.dto.ProductResponse;
-import com.team27.amazon.product.dto.ProductSalesDTO;
-import com.team27.amazon.product.dto.ProductReviewRequest;
-import com.team27.amazon.product.dto.ProductReviewResponse;
+import com.team27.amazon.product.dto.*;
 import com.team27.amazon.product.model.Product;
 import com.team27.amazon.product.model.ProductStatus;
 import com.team27.amazon.product.model.ProductReview;
@@ -90,5 +86,15 @@ public class ProductController {
     ) {
         ProductReview review = productService.addReview(id, request);
         return ResponseEntity.ok(ProductReviewResponse.from(review));
+    }
+
+    @PutMapping("/{productId}/reviews/{reviewId}/verify")
+    public ResponseEntity<ProductWithReviewsResponse> verifyReview(
+            @PathVariable Long productId,
+            @PathVariable Long reviewId,
+            @Valid @RequestBody ProductReviewVerificationRequest request
+    ) {
+        Product updatedProduct = productService.verifyReview(productId, reviewId, request);
+        return ResponseEntity.ok(ProductWithReviewsResponse.from(updatedProduct));
     }
 }

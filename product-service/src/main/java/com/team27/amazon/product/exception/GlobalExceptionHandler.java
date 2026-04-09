@@ -34,6 +34,15 @@ public class GlobalExceptionHandler {
         return buildResponse(HttpStatus.BAD_REQUEST, ex.getMessage());
     }
 
+    @ExceptionHandler(ReviewVerificationForbiddenException.class)
+    public ResponseEntity<Map<String, Object>> handleReviewVerificationForbidden(ReviewVerificationForbiddenException ex) {
+        return buildResponse(HttpStatus.FORBIDDEN, ex.getMessage());
+    }
+
+    @ExceptionHandler(ProductReviewNotFoundException.class)
+    public ResponseEntity<Map<String, Object>> handleProductReviewNotFound(ProductReviewNotFoundException ex) {
+        return buildResponse(HttpStatus.NOT_FOUND, ex.getMessage());
+    }
     @ExceptionHandler(MethodArgumentNotValidException.class)
     public ResponseEntity<Map<String, Object>> handleValidation(MethodArgumentNotValidException ex) {
         Map<String, String> fieldErrors = new HashMap<>();
