@@ -17,7 +17,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 import java.time.LocalDate;
-
+import com.team27.amazon.order.dto.OrderAnalyticsDTO;
 @Service
 public class OrderService {
 
@@ -174,6 +174,46 @@ public class OrderService {
         }
 
         return orderRepository.findByMetadataField(key, value);
+    }
+    public OrderAnalyticsDTO getOrderAnalytics(LocalDateTime startDate, LocalDateTime endDate) {
+        if (startDate == null || endDate == null || startDate.isAfter(endDate)) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Invalid date range"
+            );
+        }
+
+        List<Order> orders = orderRepository.findByOrderedAtBetween(startDate, endDate);
+
+        long totalOrders = orders.size();
+
+        long deliveredOrders = orders.stream()
+                .filter(order -> order.getStatus() == OrderStatus.DELIVERED)
+                .count();
+
+        long cancelledOrders = orders.stream()
+                .filter(order -> order.getStatus() == OrderStatus.CANCELLED)
+                .count();
+
+        double totalRevenue = orders.stream()
+                .filter(order -> order.getStatus() == OrderStatus.DELIVERED)
+                .map(Order::getTotalAmount)
+                .filter(amount -> amount != null)
+                .mapToDouble(Double::doubleValue)
+                .sum();
+
+        double averageOrderValue = deliveredOrders == 0 ? 0.0 : totalRevenue / deliveredOrders;
+
+        double completionRate = totalOrders == 0 ? 0.0 : (deliveredOrders * 100.0) / totalOrders;
+
+        return new OrderAnalyticsDTO(
+                totalOrders,
+                deliveredOrders,
+                cancelledOrders,
+                totalRevenue,
+                averageOrderValue,
+                completionRate
+        );
     }
 }
 

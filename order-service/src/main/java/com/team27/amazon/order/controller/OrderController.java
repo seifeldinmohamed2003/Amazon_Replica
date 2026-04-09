@@ -24,6 +24,7 @@ import com.team27.amazon.order.model.OrderStatus;
 import com.team27.amazon.order.service.OrderService;
 
 import jakarta.validation.Valid;
+import com.team27.amazon.order.dto.OrderAnalyticsDTO;
 
 @RestController
 @RequestMapping("/api/orders")
@@ -131,6 +132,18 @@ public class OrderController {
             @RequestParam String key,
             @RequestParam String value) {
         return ResponseEntity.ok(orderService.searchOrdersByMetadata(key, value));
+    }
+    @GetMapping("/analytics")
+    public ResponseEntity<OrderAnalyticsDTO> getOrderAnalytics(
+            @RequestParam LocalDate startDate,
+            @RequestParam LocalDate endDate) {
+
+        return ResponseEntity.ok(
+                orderService.getOrderAnalytics(
+                        startDate.atStartOfDay(),
+                        endDate.atTime(23, 59, 59)
+                )
+        );
     }
 }
 
