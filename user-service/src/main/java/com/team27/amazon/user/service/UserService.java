@@ -116,4 +116,16 @@ public class UserService {
         user.setStatus(Status.DEACTIVATED);
         return userRepository.save(user);
     }
+
+    //S1-F5
+    public List<User> findUsersByPreference(String key, String value) {
+        if (key == null || key.trim().isEmpty() || value == null || value.trim().isEmpty()) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Preference key and value must not be blank"
+            );
+        }
+
+        return userRepository.findUsersByPreference(key.trim(), value.trim());
+    }
 }

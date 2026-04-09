@@ -4,14 +4,7 @@ import java.util.List;
 
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.DeleteMapping;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PathVariable;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.PutMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 
 import com.team27.amazon.user.model.ShippingAddress;
 import com.team27.amazon.user.model.User;
@@ -92,5 +85,14 @@ public class UserController {
     @PutMapping("/{id}/deactivate")
     public User deactivateUser(@PathVariable Long id) {
         return userService.deactivateUser(id);
+    }
+
+    //S1-F5
+    @GetMapping("/preferences/search")
+    public List<User> findUsersByPreference(
+            @RequestParam String key,
+            @RequestParam String value
+    ) {
+        return userService.findUsersByPreference(key, value);
     }
 }
