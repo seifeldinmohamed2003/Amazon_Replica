@@ -108,16 +108,4 @@ public class UserController {
     ) {
         return userService.getTopBuyers(startDate, endDate, limit);
     }
-
-    //S1-F7
-    @PutMapping("/{userId}/addresses/{addressId}/default")
-    public ResponseEntity<User> setDefaultAddress(
-            @PathVariable Long userId,
-            @PathVariable Long addressId) {
-
-        return ResponseEntity.ok(
-                userService.setDefaultAddress(userId, addressId)
-        );
-    }
-
 }
