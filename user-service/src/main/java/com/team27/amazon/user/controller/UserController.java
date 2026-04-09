@@ -127,4 +127,17 @@ public class UserController {
         return userService.getUserProfile(id);
     }
 
+    @GetMapping("/language")
+    public ResponseEntity<List<User>> getUsersByLanguage(
+            @RequestParam String lang,
+            @RequestParam(name = "minOrders", defaultValue = "0") long minOrders
+    ) {
+        if (lang == null || lang.isBlank()) {
+            return ResponseEntity.badRequest().build();
+        }
+        List<User> users = userService.findUsersByLanguage(lang, minOrders);
+        return ResponseEntity.ok(users);
+    }
+
+
 }
