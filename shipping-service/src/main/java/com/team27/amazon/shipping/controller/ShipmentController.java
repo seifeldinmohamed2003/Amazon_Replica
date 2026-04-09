@@ -96,4 +96,15 @@ public class ShipmentController {
                 shipmentService.getDelayedShipments(maxDeliveryAttempts)
         );
     }
+
+    @GetMapping("/history")
+    public ResponseEntity<List<Shipment>> getShipmentsInDateRange(
+            @RequestParam LocalDateTime startDate,
+            @RequestParam LocalDateTime endDate,
+            @RequestParam(required = false) String status
+    ) {
+        return ResponseEntity.ok(
+                shipmentService.getShipmentsInDateRange(startDate, endDate, status)
+        );
+    }
 }

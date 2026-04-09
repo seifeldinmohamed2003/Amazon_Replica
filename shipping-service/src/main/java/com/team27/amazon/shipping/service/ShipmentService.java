@@ -258,4 +258,22 @@ public class ShipmentService {
                 ((Number) row[6]).intValue()
         )).toList();
     }
+
+    public List<Shipment> getShipmentsInDateRange(LocalDateTime startDate, LocalDateTime endDate, String status) {
+        if (startDate == null || endDate == null) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "startDate and endDate are required"
+            );
+        }
+
+        if (startDate.isAfter(endDate)) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "startDate cannot be after endDate"
+            );
+        }
+
+        return shipmentRepository.findShipmentsByDateRangeAndStatus(startDate, endDate, status);
+    }
 }

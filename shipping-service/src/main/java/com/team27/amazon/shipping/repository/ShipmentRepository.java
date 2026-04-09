@@ -54,4 +54,11 @@ public interface ShipmentRepository extends JpaRepository<Shipment, Long> {
         ORDER BY days_overdue DESC
         """, nativeQuery = true)
     List<Object[]> findDelayedShipments(@Param("maxDeliveryAttempts") Integer maxDeliveryAttempts);
+
+    @Query("SELECT s FROM Shipment s WHERE s.lastUpdate BETWEEN :startDate AND :endDate AND (:status IS NULL OR s.status = :status) ORDER BY s.lastUpdate ASC")
+    List<Shipment> findShipmentsByDateRangeAndStatus(
+            @Param("startDate") LocalDateTime startDate,
+            @Param("endDate") LocalDateTime endDate,
+            @Param("status") String status
+    );
 }
