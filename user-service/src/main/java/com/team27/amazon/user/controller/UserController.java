@@ -4,6 +4,7 @@ import java.time.LocalDate;
 import java.util.List;
 
 import com.team27.amazon.user.dto.TopBuyerDTO;
+import com.team27.amazon.user.dto.UserProfileDTO;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -108,4 +109,35 @@ public class UserController {
     ) {
         return userService.getTopBuyers(startDate, endDate, limit);
     }
+
+    //S1-F7
+    @PutMapping("/{userId}/addresses/{addressId}/default")
+    public ResponseEntity<User> setDefaultAddress(
+            @PathVariable Long userId,
+            @PathVariable Long addressId) {
+
+        return ResponseEntity.ok(
+                userService.setDefaultAddress(userId, addressId)
+        );
+    }
+
+    //S1-F8
+    @GetMapping("/{id}/profile")
+    public UserProfileDTO getUserProfile(@PathVariable Long id) {
+        return userService.getUserProfile(id);
+    }
+
+    @GetMapping("/language")
+    public ResponseEntity<List<User>> getUsersByLanguage(
+            @RequestParam String lang,
+            @RequestParam(name = "minOrders", defaultValue = "0") long minOrders
+    ) {
+        if (lang == null || lang.isBlank()) {
+            return ResponseEntity.badRequest().build();
+        }
+        List<User> users = userService.findUsersByLanguage(lang, minOrders);
+        return ResponseEntity.ok(users);
+    }
+
+
 }
