@@ -85,6 +85,15 @@ public class UserController {
         return ResponseEntity.noContent().build();
     }
 
+    // S1-F1
+    @GetMapping("/search")
+    public ResponseEntity<List<User>> searchUsers(
+            @RequestParam(required = false) String name,
+            @RequestParam(required = false) String email,
+            @RequestParam(required = false) String role) {
+        return ResponseEntity.ok(userService.searchUsers(name, email, role));
+    }
+
     //S1-F4
     @PutMapping("/{id}/deactivate")
     public User deactivateUser(@PathVariable Long id) {
