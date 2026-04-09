@@ -6,6 +6,8 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 import java.time.LocalDateTime;
 import java.util.List;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 
 @Repository
 public interface OrderRepository extends JpaRepository<Order, Long> {
@@ -19,5 +21,11 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
     List<Order> findByOrderedAtBetween(LocalDateTime startDate, LocalDateTime endDate);
 
     List<Order> findByShippingAddressId(Long shippingAddressId);
+    @Query(value = """
+        SELECT *
+        FROM orders
+        WHERE metadata ->> :key = :value
+        """, nativeQuery = true)
+    List<Order> findByMetadataField(@Param("key") String key, @Param("value") String value);
 }
 
