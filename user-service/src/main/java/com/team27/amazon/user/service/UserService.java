@@ -12,6 +12,7 @@ import com.team27.amazon.user.model.Status;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.StringUtils;
 import org.springframework.web.server.ResponseStatusException;
 
 import com.team27.amazon.user.model.ShippingAddress;
@@ -245,5 +246,13 @@ public class UserService {
                 addresses.size()
         );
     }
+
+    public List<User> findUsersByLanguage(String lang, long minOrders) {
+        if (!StringUtils.hasText(lang)) {
+            throw new IllegalArgumentException("Language cannot be blank");
+        }
+        return userRepository.findByLanguageAndMinOrders(lang, minOrders);
+    }
+
 
 }

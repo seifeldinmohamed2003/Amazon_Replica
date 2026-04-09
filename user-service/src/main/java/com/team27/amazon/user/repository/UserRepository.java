@@ -65,4 +65,12 @@ public interface UserRepository extends JpaRepository<User, Long> {
             @Param("endDateExclusive") LocalDateTime endDateExclusive,
             @Param("limitValue") int limitValue
     );
+    @Query(value = "SELECT u.* FROM public.users u " +
+            "LEFT JOIN public.orders o ON o.user_id = u.id AND o.status = 'DELIVERED' " +
+            "WHERE u.preferences ->> 'language' = :lang " +
+            "GROUP BY u.id " +
+            "HAVING COUNT(o.id) >= :minOrders",
+            nativeQuery = true)
+    List<User> findByLanguageAndMinOrders(@Param("lang") String lang, @Param("minOrders") long minOrders);
+
 }
