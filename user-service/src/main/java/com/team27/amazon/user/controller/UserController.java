@@ -2,6 +2,7 @@ package com.team27.amazon.user.controller;
 
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Map;
 
 import com.team27.amazon.user.dto.TopBuyerDTO;
 import com.team27.amazon.user.dto.UserProfileDTO;
@@ -94,6 +95,13 @@ public class UserController {
         return ResponseEntity.ok(userService.searchUsers(name, email, role));
     }
 
+    // S1-F2
+    @PutMapping("/{id}/preferences")
+    public ResponseEntity<User> updateUserPreferences(
+            @PathVariable Long id,
+            @RequestBody Map<String, Object> preferences) {
+        return ResponseEntity.ok(userService.updateUserPreferences(id, preferences));
+    }
     //S1-F4
     @PutMapping("/{id}/deactivate")
     public User deactivateUser(@PathVariable Long id) {

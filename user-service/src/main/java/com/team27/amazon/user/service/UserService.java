@@ -6,6 +6,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.Map;
 
 import com.team27.amazon.user.dto.TopBuyerDTO;
 import com.team27.amazon.user.model.Status;
@@ -112,6 +113,24 @@ public class UserService {
         String roleParam  = (role  != null && !role.trim().isEmpty())  ? role.trim()  : null;
 
         return userRepository.searchUsers(nameParam, emailParam, roleParam);
+    }
+
+    // S1-F2
+    public User updateUserPreferences(Long id, Map<String, Object> incomingPreferences) {
+        User user = getUserById(id);
+
+        Map<String, Object> existing = user.getPreferences();
+
+        if (existing == null) {
+            user.setPreferences(incomingPreferences);
+        } else {
+            for (Map.Entry<String, Object> entry : incomingPreferences.entrySet()) {
+                existing.put(entry.getKey(), entry.getValue());
+            }
+            user.setPreferences(existing);
+        }
+
+        return userRepository.save(user);
     }
 
     //S1-F4
