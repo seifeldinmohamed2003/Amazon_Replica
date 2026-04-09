@@ -1,9 +1,11 @@
 package com.team27.amazon.shipping.controller;
 
 import com.team27.amazon.shipping.dto.CarrierSummaryDTO;
+import com.team27.amazon.shipping.dto.CreateShipmentRequest;
 import com.team27.amazon.shipping.dto.DelayedShipmentDTO;
 import com.team27.amazon.shipping.model.Shipment;
 import com.team27.amazon.shipping.service.ShipmentService;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -24,6 +26,15 @@ public class ShipmentController {
     @PostMapping
     public Shipment createShipment(@RequestBody Shipment shipment) {
         return shipmentService.createShipment(shipment);
+    }
+
+    @PostMapping(value = "/order/{orderId}", consumes = "application/json")
+    public ResponseEntity<Shipment> createShipmentForOrder(
+            @PathVariable Long orderId,
+            @RequestBody CreateShipmentRequest request
+    ) {
+        Shipment shipment = shipmentService.createShipmentForOrder(orderId, request);
+        return ResponseEntity.status(HttpStatus.CREATED).body(shipment);
     }
 
     @GetMapping

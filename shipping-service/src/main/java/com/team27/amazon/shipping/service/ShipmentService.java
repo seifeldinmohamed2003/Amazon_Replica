@@ -1,6 +1,8 @@
 package com.team27.amazon.shipping.service;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.team27.amazon.shipping.dto.CarrierSummaryDTO;
+import com.team27.amazon.shipping.dto.CreateShipmentRequest;
 import com.team27.amazon.shipping.dto.DelayedShipmentDTO;
 import com.team27.amazon.shipping.model.Shipment;
 import com.team27.amazon.shipping.model.ShipmentStatus;
@@ -11,7 +13,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
-import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
@@ -21,10 +22,16 @@ public class ShipmentService {
 
     private final ShipmentRepository shipmentRepository;
     private final JdbcTemplate jdbcTemplate;
+    private final ObjectMapper objectMapper;
 
-    public ShipmentService(ShipmentRepository shipmentRepository, JdbcTemplate jdbcTemplate) {
+    public ShipmentService(
+            ShipmentRepository shipmentRepository,
+            JdbcTemplate jdbcTemplate,
+            ObjectMapper objectMapper
+    ) {
         this.shipmentRepository = shipmentRepository;
         this.jdbcTemplate = jdbcTemplate;
+        this.objectMapper = objectMapper;
     }
 
     public Shipment createShipment(Shipment shipment) {
@@ -77,6 +84,32 @@ public class ShipmentService {
 
         return shipmentRepository.findFirstByOrderIdOrderByCreatedAtDesc(orderId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "No shipment found for this order"));
+    }
+
+    public Shipment createShipmentForOrder(Long orderId, CreateShipmentRequest request) {
+        Integer orderCount = jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM orders WHERE id = ?",
+                Integer.class,
+                orderId
+        );
+
+        if (orderCount == null || orderCount == 0) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Order not found");
+        }
+
+        Shipment shipment = new Shipment();
+        shipment.setOrderId(orderId);
+        shipment.setCarrier(request.getCarrier());
+        shipment.setTrackingNumber(request.getTrackingNumber());
+        shipment.setLatitude(request.getLatitude());
+        shipment.setLongitude(request.getLongitude());
+        shipment.setStatus(ShipmentStatus.PROCESSING);
+
+        if (request.getMetadata() != null) {
+            shipment.setMetadata(request.getMetadata());
+        }
+
+        return shipmentRepository.save(shipment);
     }
 
     @Transactional
