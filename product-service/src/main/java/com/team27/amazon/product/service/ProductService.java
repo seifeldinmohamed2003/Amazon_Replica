@@ -1,16 +1,19 @@
 package com.team27.amazon.product.service;
 
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.HttpStatus;
+import org.springframework.stereotype.Service;
+import org.springframework.web.server.ResponseStatusException;
+
 import com.team27.amazon.product.dto.ProductRequest;
 import com.team27.amazon.product.exception.ProductNotFoundException;
 import com.team27.amazon.product.model.Product;
 import com.team27.amazon.product.model.ProductStatus;
 import com.team27.amazon.product.repository.ProductRepository;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.stereotype.Service;
-
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
 
 @Service
 public class ProductService {
@@ -48,7 +51,24 @@ public class ProductService {
     public void deleteProduct(Long id) {
         Product existing = getProductById(id);
         productRepository.delete(existing);
+
     }
+
+    public List<Product> searchBySpecification(String key, String value, ProductStatus status) {
+    if (key == null || key.isBlank() || value == null || value.isBlank()) {
+        throw new ResponseStatusException(
+                HttpStatus.BAD_REQUEST,
+                "Key and value must not be blank"
+        );
+    }
+
+    return productRepository.findBySpecificationKeyValueAndOptionalStatus(
+            key,
+            value,
+            status == null ? null : status.name()
+    );
+} 
+        
 
     private void applyRequest(Product product, ProductRequest request) {
         product.setName(request.getName());
@@ -62,4 +82,6 @@ public class ProductService {
         Map<String, Object> specifications = request.getSpecifications();
         product.setSpecifications(specifications == null ? new HashMap<>() : new HashMap<>(specifications));
     }
+
+    
 }
