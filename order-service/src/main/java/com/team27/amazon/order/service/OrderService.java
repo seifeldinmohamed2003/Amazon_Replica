@@ -14,6 +14,8 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
 import com.team27.amazon.order.dto.OrderAnalyticsDTO;
+import com.team27.amazon.order.dto.OrderEstimateDTO;
+import com.team27.amazon.order.dto.OrderEstimateItemRequestDTO;
 import com.team27.amazon.order.model.Order;
 import com.team27.amazon.order.model.OrderItem;
 import com.team27.amazon.order.model.OrderStatus;
@@ -24,6 +26,9 @@ import com.team27.amazon.order.repository.ShippingAddressJdbcRepository;
 import com.team27.amazon.order.repository.TransactionJdbcRepository;
 @Service
 public class OrderService {
+
+    private static final double SHIPPING_THRESHOLD = 500.0;
+    private static final double SHIPPING_FLAT_RATE = 50.0;
 
     @Autowired
     private OrderRepository orderRepository;
@@ -44,6 +49,45 @@ public class OrderService {
             order.setStatus(OrderStatus.PENDING);
         }
         return orderRepository.save(order);
+    }
+
+    public OrderEstimateDTO estimateOrderPrice(List<OrderEstimateItemRequestDTO> items) {
+        if (items == null || items.isEmpty()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Items list must not be empty");
+        }
+
+        int itemCount = 0;
+        double subtotal = 0.0;
+
+        for (OrderEstimateItemRequestDTO item : items) {
+            if (item == null || item.getProductId() == null || item.getQuantity() == null || item.getQuantity() < 1) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Each item must include productId and quantity >= 1");
+            }
+
+            Double currentPrice = productJdbcRepository.findCurrentPriceByProductId(item.getProductId());
+            if (currentPrice == null) {
+                throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Product not found");
+            }
+
+            itemCount += item.getQuantity();
+            subtotal += currentPrice * item.getQuantity();
+        }
+
+        double discountApplied = calculateDiscountPercent(itemCount);
+        double shippingCost = subtotal >= SHIPPING_THRESHOLD ? 0.0 : SHIPPING_FLAT_RATE;
+        double estimatedTotal = (subtotal * (1 - (discountApplied / 100.0))) + shippingCost;
+
+        return new OrderEstimateDTO(itemCount, subtotal, shippingCost, estimatedTotal, discountApplied);
+    }
+
+    private double calculateDiscountPercent(int itemCount) {
+        if (itemCount > 15) {
+            return 10.0;
+        }
+        if (itemCount >= 6) {
+            return 5.0;
+        }
+        return 0.0;
     }
 
     // READ - Get all orders
@@ -164,7 +208,8 @@ public class OrderService {
                 LocalDateTime.now()
         );
 
-        Double amount = savedOrder.getTotalAmount() == null ? 0.0 : savedOrder.getTotalAmount();
+        Double totalAmount = savedOrder.getTotalAmount();
+        double amount = totalAmount == null ? 0.0 : totalAmount;
 
         transactionJdbcRepository.insertPendingTransaction(
                 savedOrder.getId(),

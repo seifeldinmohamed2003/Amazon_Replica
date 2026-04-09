@@ -19,12 +19,14 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import com.team27.amazon.order.dto.OrderAnalyticsDTO;
+import com.team27.amazon.order.dto.OrderEstimateDTO;
+import com.team27.amazon.order.dto.OrderEstimateItemRequestDTO;
 import com.team27.amazon.order.model.Order;
 import com.team27.amazon.order.model.OrderStatus;
 import com.team27.amazon.order.service.OrderService;
 
 import jakarta.validation.Valid;
-import com.team27.amazon.order.dto.OrderAnalyticsDTO;
 
 @RestController
 @RequestMapping("/api/orders")
@@ -38,6 +40,12 @@ public class OrderController {
     public ResponseEntity<Order> createOrder(@Valid @RequestBody Order order) {
         Order createdOrder = orderService.createOrder(order);
         return ResponseEntity.status(HttpStatus.CREATED).body(createdOrder);
+    }
+
+    @PostMapping("/estimate")
+    public ResponseEntity<OrderEstimateDTO> estimateOrder(
+            @RequestBody List<OrderEstimateItemRequestDTO> items) {
+        return ResponseEntity.ok(orderService.estimateOrderPrice(items));
     }
 
     // READ - GET /api/orders
