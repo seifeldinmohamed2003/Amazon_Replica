@@ -99,7 +99,7 @@ public class ProductController {
         return ResponseEntity.ok(ProductWithReviewsResponse.from(updatedProduct));
     }
 
-    @GetMapping("/alerts/low-stock")
+    @GetMapping("/stock/low-stock")
     public List<LowStockAlertDTO> getLowStockAlerts(@RequestParam Integer threshold) {
         return productService.getLowStockAlerts(threshold);
     }
