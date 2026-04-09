@@ -5,6 +5,7 @@ import com.team27.amazon.shipping.dto.CreateShipmentRequest;
 import com.team27.amazon.shipping.dto.DelayedShipmentDTO;
 import com.team27.amazon.shipping.dto.NearbyShipmentDTO;
 import com.team27.amazon.shipping.model.Shipment;
+import com.team27.amazon.shipping.model.ShipmentStatus;
 import com.team27.amazon.shipping.service.ShipmentService;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -101,7 +102,7 @@ public class ShipmentController {
     public ResponseEntity<List<Shipment>> getShipmentsInDateRange(
             @RequestParam LocalDateTime startDate,
             @RequestParam LocalDateTime endDate,
-            @RequestParam(required = false) String status
+            @RequestParam(required = false) ShipmentStatus status
     ) {
         return ResponseEntity.ok(
                 shipmentService.getShipmentsInDateRange(startDate, endDate, status)

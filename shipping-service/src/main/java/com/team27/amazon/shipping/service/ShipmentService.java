@@ -259,7 +259,7 @@ public class ShipmentService {
         )).toList();
     }
 
-    public List<Shipment> getShipmentsInDateRange(LocalDateTime startDate, LocalDateTime endDate, String status) {
+    public List<Shipment> getShipmentsInDateRange(LocalDateTime startDate, LocalDateTime endDate, ShipmentStatus status) {
         if (startDate == null || endDate == null) {
             throw new ResponseStatusException(
                     HttpStatus.BAD_REQUEST,

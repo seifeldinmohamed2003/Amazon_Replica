@@ -59,6 +59,6 @@ public interface ShipmentRepository extends JpaRepository<Shipment, Long> {
     List<Shipment> findShipmentsByDateRangeAndStatus(
             @Param("startDate") LocalDateTime startDate,
             @Param("endDate") LocalDateTime endDate,
-            @Param("status") String status
+            @Param("status") ShipmentStatus status
     );
 }

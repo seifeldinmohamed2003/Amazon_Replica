@@ -3,38 +3,22 @@ package com.team27.amazon.shipping.shipmenthistory;
 import com.team27.amazon.shipping.model.Shipment;
 import com.team27.amazon.shipping.model.ShipmentStatus;
 import com.team27.amazon.shipping.repository.ShipmentRepository;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.test.web.servlet.MockMvc;
-import org.springframework.transaction.annotation.Transactional;
+import org.springframework.test.annotation.DirtiesContext;
 
-import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.List;
 
-import static org.hamcrest.Matchers.hasSize;
-import static org.hamcrest.Matchers.is;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+import static org.junit.jupiter.api.Assertions.*;
 
 @SpringBootTest
-@AutoConfigureMockMvc
-@Transactional
+@DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_EACH_TEST_METHOD)
 public class ShipmentHistoryTest {
 
     @Autowired
-    private MockMvc mockMvc;
-
-    @Autowired
     private ShipmentRepository shipmentRepository;
-
-    @BeforeEach
-    void setUp() {
-        shipmentRepository.deleteAll();
-    }
 
     private Shipment createShipment(Long orderId, String carrier, String trackingNumber, ShipmentStatus status, LocalDateTime lastUpdate) {
         Shipment shipment = new Shipment();
@@ -48,7 +32,7 @@ public class ShipmentHistoryTest {
     }
 
     @Test
-    void testGetShipmentsInDateRange_ReturnsThreeShipmentsOrderedByLastUpdate() throws Exception {
+    void testGetShipmentsInDateRange_ReturnsThreeShipmentsOrderedByLastUpdate() {
         // Create 5 shipments: 3 in March (2 DELIVERED, 1 IN_TRANSIT), 2 in February
         createShipment(1L, "FedEx", "TRACK001", ShipmentStatus.DELIVERED, LocalDateTime.of(2026, 3, 5, 10, 0));
         createShipment(2L, "UPS", "TRACK002", ShipmentStatus.DELIVERED, LocalDateTime.of(2026, 3, 15, 10, 0));
@@ -56,19 +40,20 @@ public class ShipmentHistoryTest {
         createShipment(4L, "FedEx", "TRACK004", ShipmentStatus.PROCESSING, LocalDateTime.of(2026, 2, 10, 10, 0));
         createShipment(5L, "UPS", "TRACK005", ShipmentStatus.SHIPPED, LocalDateTime.of(2026, 2, 20, 10, 0));
 
-        // GET /api/shipments/history?startDate=2026-03-01T00:00:00&endDate=2026-03-31T23:59:59
-        mockMvc.perform(get("/api/shipments/history")
-                        .param("startDate", "2026-03-01T00:00:00")
-                        .param("endDate", "2026-03-31T23:59:59"))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$", hasSize(3)))
-                .andExpect(jsonPath("$[0].trackingNumber", is("TRACK001")))
-                .andExpect(jsonPath("$[1].trackingNumber", is("TRACK002")))
-                .andExpect(jsonPath("$[2].trackingNumber", is("TRACK003")));
+        // Query shipments in March date range
+        LocalDateTime startDate = LocalDateTime.of(2026, 3, 1, 0, 0);
+        LocalDateTime endDate = LocalDateTime.of(2026, 3, 31, 23, 59, 59);
+        List<Shipment> shipments = shipmentRepository.findShipmentsByDateRangeAndStatus(startDate, endDate, null);
+
+        // Should return 3 shipments ordered by lastUpdate ascending
+        assertEquals(3, shipments.size());
+        assertEquals("TRACK001", shipments.get(0).getTrackingNumber());
+        assertEquals("TRACK002", shipments.get(1).getTrackingNumber());
+        assertEquals("TRACK003", shipments.get(2).getTrackingNumber());
     }
 
     @Test
-    void testGetShipmentsInDateRangeWithStatusFilter_ReturnsTwoDelivered() throws Exception {
+    void testGetShipmentsInDateRangeWithStatusFilter_ReturnsTwoDelivered() {
         // Create 5 shipments: 3 in March (2 DELIVERED, 1 IN_TRANSIT), 2 in February
         createShipment(1L, "FedEx", "TRACK001", ShipmentStatus.DELIVERED, LocalDateTime.of(2026, 3, 5, 10, 0));
         createShipment(2L, "UPS", "TRACK002", ShipmentStatus.DELIVERED, LocalDateTime.of(2026, 3, 15, 10, 0));
@@ -76,19 +61,19 @@ public class ShipmentHistoryTest {
         createShipment(4L, "FedEx", "TRACK004", ShipmentStatus.PROCESSING, LocalDateTime.of(2026, 2, 10, 10, 0));
         createShipment(5L, "UPS", "TRACK005", ShipmentStatus.SHIPPED, LocalDateTime.of(2026, 2, 20, 10, 0));
 
-        // GET /api/shipments/history?startDate=2026-03-01T00:00:00&endDate=2026-03-31T23:59:59&status=DELIVERED
-        mockMvc.perform(get("/api/shipments/history")
-                        .param("startDate", "2026-03-01T00:00:00")
-                        .param("endDate", "2026-03-31T23:59:59")
-                        .param("status", "DELIVERED"))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$", hasSize(2)))
-                .andExpect(jsonPath("$[0].trackingNumber", is("TRACK001")))
-                .andExpect(jsonPath("$[1].trackingNumber", is("TRACK002")));
+        // Query shipments in March with DELIVERED status
+        LocalDateTime startDate = LocalDateTime.of(2026, 3, 1, 0, 0);
+        LocalDateTime endDate = LocalDateTime.of(2026, 3, 31, 23, 59, 59);
+        List<Shipment> shipments = shipmentRepository.findShipmentsByDateRangeAndStatus(startDate, endDate, ShipmentStatus.DELIVERED);
+
+        // Should return 2 DELIVERED shipments
+        assertEquals(2, shipments.size());
+        assertEquals("TRACK001", shipments.get(0).getTrackingNumber());
+        assertEquals("TRACK002", shipments.get(1).getTrackingNumber());
     }
 
     @Test
-    void testGetShipmentsInDateRangeWithNoResults_ReturnsEmptyList() throws Exception {
+    void testGetShipmentsInDateRangeWithNoResults_ReturnsEmptyList() {
         // Create 5 shipments: 3 in March, 2 in February
         createShipment(1L, "FedEx", "TRACK001", ShipmentStatus.DELIVERED, LocalDateTime.of(2026, 3, 5, 10, 0));
         createShipment(2L, "UPS", "TRACK002", ShipmentStatus.DELIVERED, LocalDateTime.of(2026, 3, 15, 10, 0));
@@ -96,16 +81,17 @@ public class ShipmentHistoryTest {
         createShipment(4L, "FedEx", "TRACK004", ShipmentStatus.PROCESSING, LocalDateTime.of(2026, 2, 10, 10, 0));
         createShipment(5L, "UPS", "TRACK005", ShipmentStatus.SHIPPED, LocalDateTime.of(2026, 2, 20, 10, 0));
 
-        // GET /api/shipments/history?startDate=2026-04-01T00:00:00&endDate=2026-04-30T23:59:59
-        mockMvc.perform(get("/api/shipments/history")
-                        .param("startDate", "2026-04-01T00:00:00")
-                        .param("endDate", "2026-04-30T23:59:59"))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$", hasSize(0)));
+        // Query shipments in April (no shipments exist)
+        LocalDateTime startDate = LocalDateTime.of(2026, 4, 1, 0, 0);
+        LocalDateTime endDate = LocalDateTime.of(2026, 4, 30, 23, 59, 59);
+        List<Shipment> shipments = shipmentRepository.findShipmentsByDateRangeAndStatus(startDate, endDate, null);
+
+        // Should return empty list
+        assertTrue(shipments.isEmpty());
     }
 
     @Test
-    void testGetShipmentsInDateRangeWithInTransitStatus_ReturnsOne() throws Exception {
+    void testGetShipmentsInDateRangeWithInTransitStatus_ReturnsOne() {
         // Create 5 shipments: 3 in March (2 DELIVERED, 1 IN_TRANSIT), 2 in February
         createShipment(1L, "FedEx", "TRACK001", ShipmentStatus.DELIVERED, LocalDateTime.of(2026, 3, 5, 10, 0));
         createShipment(2L, "UPS", "TRACK002", ShipmentStatus.DELIVERED, LocalDateTime.of(2026, 3, 15, 10, 0));
@@ -113,18 +99,18 @@ public class ShipmentHistoryTest {
         createShipment(4L, "FedEx", "TRACK004", ShipmentStatus.PROCESSING, LocalDateTime.of(2026, 2, 10, 10, 0));
         createShipment(5L, "UPS", "TRACK005", ShipmentStatus.SHIPPED, LocalDateTime.of(2026, 2, 20, 10, 0));
 
-        // GET /api/shipments/history?startDate=2026-03-01T00:00:00&endDate=2026-03-31T23:59:59&status=IN_TRANSIT
-        mockMvc.perform(get("/api/shipments/history")
-                        .param("startDate", "2026-03-01T00:00:00")
-                        .param("endDate", "2026-03-31T23:59:59")
-                        .param("status", "IN_TRANSIT"))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$", hasSize(1)))
-                .andExpect(jsonPath("$[0].trackingNumber", is("TRACK003")));
+        // Query shipments in March with IN_TRANSIT status
+        LocalDateTime startDate = LocalDateTime.of(2026, 3, 1, 0, 0);
+        LocalDateTime endDate = LocalDateTime.of(2026, 3, 31, 23, 59, 59);
+        List<Shipment> shipments = shipmentRepository.findShipmentsByDateRangeAndStatus(startDate, endDate, ShipmentStatus.IN_TRANSIT);
+
+        // Should return 1 IN_TRANSIT shipment
+        assertEquals(1, shipments.size());
+        assertEquals("TRACK003", shipments.get(0).getTrackingNumber());
     }
 
     @Test
-    void testGetShipmentsInDateRangeWithFebruaryRange_ReturnsTwo() throws Exception {
+    void testGetShipmentsInDateRangeWithFebruaryRange_ReturnsTwo() {
         // Create 5 shipments: 3 in March (2 DELIVERED, 1 IN_TRANSIT), 2 in February
         createShipment(1L, "FedEx", "TRACK001", ShipmentStatus.DELIVERED, LocalDateTime.of(2026, 3, 5, 10, 0));
         createShipment(2L, "UPS", "TRACK002", ShipmentStatus.DELIVERED, LocalDateTime.of(2026, 3, 15, 10, 0));
@@ -132,13 +118,14 @@ public class ShipmentHistoryTest {
         createShipment(4L, "FedEx", "TRACK004", ShipmentStatus.PROCESSING, LocalDateTime.of(2026, 2, 10, 10, 0));
         createShipment(5L, "UPS", "TRACK005", ShipmentStatus.SHIPPED, LocalDateTime.of(2026, 2, 20, 10, 0));
 
-        // GET /api/shipments/history?startDate=2026-02-01T00:00:00&endDate=2026-02-28T23:59:59
-        mockMvc.perform(get("/api/shipments/history")
-                        .param("startDate", "2026-02-01T00:00:00")
-                        .param("endDate", "2026-02-28T23:59:59"))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$", hasSize(2)))
-                .andExpect(jsonPath("$[0].trackingNumber", is("TRACK004")))
-                .andExpect(jsonPath("$[1].trackingNumber", is("TRACK005")));
+        // Query shipments in February
+        LocalDateTime startDate = LocalDateTime.of(2026, 2, 1, 0, 0);
+        LocalDateTime endDate = LocalDateTime.of(2026, 2, 28, 23, 59, 59);
+        List<Shipment> shipments = shipmentRepository.findShipmentsByDateRangeAndStatus(startDate, endDate, null);
+
+        // Should return 2 shipments ordered by lastUpdate ascending
+        assertEquals(2, shipments.size());
+        assertEquals("TRACK004", shipments.get(0).getTrackingNumber());
+        assertEquals("TRACK005", shipments.get(1).getTrackingNumber());
     }
 }

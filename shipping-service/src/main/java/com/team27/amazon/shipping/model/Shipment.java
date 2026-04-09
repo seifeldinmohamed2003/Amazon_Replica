@@ -42,7 +42,6 @@ public class Shipment {
     private LocalDate actualDelivery;
 
     @JdbcTypeCode(SqlTypes.JSON)
-    @Column(columnDefinition = "jsonb")
     private Map<String, Object> metadata = new HashMap<>();
 
     @Column(name = "last_update", nullable = false)
@@ -151,7 +150,9 @@ public class Shipment {
         if (this.createdAt == null) {
             this.createdAt = LocalDateTime.now();
         }
-        this.lastUpdate = LocalDateTime.now();
+        if (this.lastUpdate == null) {
+            this.lastUpdate = LocalDateTime.now();
+        }
     }
 
     @PreUpdate
