@@ -76,4 +76,16 @@ public interface ProductRepository extends JpaRepository<Product, Long> {
               AND u.role = 'ADMIN'
             """, nativeQuery = true)
     boolean isAdminUser(@Param("userId") Long userId);
+          
+    @Query(value = """
+         SELECT *
+            FROM products p
+            WHERE p.specifications ->> :key = :value
+              AND (:status IS NULL OR p.status = CAST(:status AS VARCHAR))
+            """, nativeQuery = true)
+    List<Product> findBySpecificationKeyValueAndOptionalStatus(
+            @Param("key") String key,
+            @Param("value") String value,
+            @Param("status") String status
+    );
 }

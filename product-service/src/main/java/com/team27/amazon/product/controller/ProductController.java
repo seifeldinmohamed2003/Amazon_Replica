@@ -126,4 +126,18 @@ public class ProductController {
     public List<LowStockAlertDTO> getLowStockAlerts(@RequestParam Integer threshold) {
         return productService.getLowStockAlerts(threshold);
     }
+
+ 
+    @GetMapping("/specifications/search")
+    public List<ProductResponse> searchBySpecification(
+            @RequestParam String key,
+            @RequestParam String value,
+            @RequestParam(required = false) ProductStatus status
+    ) {
+        return productService.searchBySpecification(key, value, status).stream()
+                .map(ProductResponse::from)
+                .toList();
+    }
 }
+
+

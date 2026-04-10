@@ -128,6 +128,7 @@ public class ProductService {
     public void deleteProduct(Long id) {
         Product existing = getProductById(id);
         productRepository.delete(existing);
+
     }
 
     @Transactional
@@ -224,6 +225,21 @@ public class ProductService {
                 .map(LowStockAlertDTO::from)
                 .toList();
     }
+    public List<Product> searchBySpecification(String key, String value, ProductStatus status) {
+    if (key == null || key.isBlank() || value == null || value.isBlank()) {
+        throw new ResponseStatusException(
+                HttpStatus.BAD_REQUEST,
+                "Key and value must not be blank"
+        );
+    }
+
+    return productRepository.findBySpecificationKeyValueAndOptionalStatus(
+            key,
+            value,
+            status == null ? null : status.name()
+    );
+} 
+        
 
     private void applyRequest(Product product, ProductRequest request) {
         product.setName(request.getName());
@@ -253,4 +269,5 @@ public class ProductService {
     product.setStatus(ProductStatus.INACTIVE);
     return productRepository.save(product);
 }
+    
 }
