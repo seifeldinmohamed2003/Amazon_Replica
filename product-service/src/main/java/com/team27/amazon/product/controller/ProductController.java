@@ -25,6 +25,7 @@ import com.team27.amazon.product.dto.ProductReviewResponse;
 import com.team27.amazon.product.dto.ProductReviewVerificationRequest;
 import com.team27.amazon.product.dto.ProductSalesDTO;
 import com.team27.amazon.product.dto.ProductWithReviewsResponse;
+import com.team27.amazon.product.dto.TopProductDTO;
 import com.team27.amazon.product.model.Product;
 import com.team27.amazon.product.model.ProductReview;
 import com.team27.amazon.product.model.ProductStatus;
@@ -138,6 +139,11 @@ public class ProductController {
                 .map(ProductResponse::from)
                 .toList();
     }
+ 
+    @GetMapping("/reports/top-rated")
+    public List<TopProductDTO> getTopRatedProducts(@RequestParam Integer limit) {
+        return productService.getTopRatedProducts(limit);
+}
 }
 
 
