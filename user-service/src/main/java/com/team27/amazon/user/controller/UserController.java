@@ -2,8 +2,10 @@ package com.team27.amazon.user.controller;
 
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Map;
 
 import com.team27.amazon.user.dto.TopBuyerDTO;
+import com.team27.amazon.user.dto.UserOrderSummaryDTO;
 import com.team27.amazon.user.dto.UserProfileDTO;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
@@ -92,6 +94,20 @@ public class UserController {
             @RequestParam(required = false) String email,
             @RequestParam(required = false) String role) {
         return ResponseEntity.ok(userService.searchUsers(name, email, role));
+    }
+
+    // S1-F2
+    @PutMapping("/{id}/preferences")
+    public ResponseEntity<User> updateUserPreferences(
+            @PathVariable Long id,
+            @RequestBody Map<String, Object> preferences) {
+        return ResponseEntity.ok(userService.updateUserPreferences(id, preferences));
+    }
+
+    // S1-F3
+    @GetMapping("/{id}/order-summary")
+    public ResponseEntity<UserOrderSummaryDTO> getUserOrderSummary(@PathVariable Long id) {
+        return ResponseEntity.ok(userService.getUserOrderSummary(id));
     }
 
     //S1-F4
