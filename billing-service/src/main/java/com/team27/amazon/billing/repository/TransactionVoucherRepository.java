@@ -1,5 +1,6 @@
 package com.team27.amazon.billing.repository;
 
+import java.util.List;
 import com.team27.amazon.billing.model.TransactionVoucher;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
@@ -18,4 +19,9 @@ public interface TransactionVoucherRepository extends JpaRepository<TransactionV
             @Param("transactionId") Long transactionId,
             @Param("voucherId") Long voucherId
     );
+     @Query("SELECT tv.voucher, tv.voucher.currentUses, SUM(tv.discountApplied) " +
+           "FROM TransactionVoucher tv " +
+           "GROUP BY tv.voucher " +
+           "ORDER BY tv.voucher.currentUses DESC")
+    List<Object[]> findTopUsedVouchers();
 }
