@@ -12,6 +12,10 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import com.team27.amazon.billing.dto.UserTransactionSummaryDTO;
 import java.util.Map;
+import com.team27.amazon.billing.dto.RevenueReportDTO;
+import com.team27.amazon.billing.dto.TransactionDetailsDTO;
+import com.team27.amazon.billing.dto.VoucherUsageDTO;
+import java.time.LocalDateTime;
 
 @RestController
 @RequestMapping("/api/transactions")
@@ -75,5 +79,34 @@ public class BillingController {
     @PostMapping
     public ResponseEntity<Transaction> createTransaction(@RequestBody Transaction transaction) {
         return ResponseEntity.ok(billingService.saveTransaction(transaction));
+    }
+
+    @GetMapping("/reports/revenue")
+    public ResponseEntity<RevenueReportDTO> getRevenueReport(
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime startDate,
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime endDate) {
+ 
+        return ResponseEntity.ok(billingService.getRevenueReport(startDate, endDate));
+    }
+ 
+    // S5-F7 — PUT /api/transactions/{id}/retry
+    @PutMapping("/{id}/retry")
+    public ResponseEntity<Transaction> retryTransaction(@PathVariable Long id) {
+        return ResponseEntity.ok(billingService.retryTransaction(id));
+    }
+ 
+    // S5-F8 — GET /api/transactions/{transactionId}/details
+    @GetMapping("/{transactionId}/details")
+    public ResponseEntity<TransactionDetailsDTO> getTransactionDetails(
+            @PathVariable Long transactionId) {
+ 
+        return ResponseEntity.ok(billingService.getTransactionDetails(transactionId));
+    }
+
+     @GetMapping("/voucher/top-used")
+    public ResponseEntity<List<VoucherUsageDTO>> getTopUsedVouchers(
+            @RequestParam int limit) {
+ 
+        return ResponseEntity.ok(billingService.getTopUsedVouchers(limit));
     }
 }

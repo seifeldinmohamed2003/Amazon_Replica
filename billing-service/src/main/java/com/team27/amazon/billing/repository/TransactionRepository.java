@@ -52,7 +52,33 @@ public interface TransactionRepository extends JpaRepository<Transaction, Long> 
     @Query(value = "SELECT COUNT(*) FROM transactions WHERE order_id = :orderId AND status = 'COMPLETED'", nativeQuery = true)
     int countCompletedTransactionsByOrderId(@Param("orderId") Long orderId);
 
-
+    @Query("SELECT COALESCE(SUM(t.amount), 0.0) FROM Transaction t " +
+           "WHERE t.status = com.team27.amazon.billing.model.TransactionStatus.COMPLETED " +
+           "AND t.createdAt BETWEEN :start AND :end")
+    Double sumCompletedRevenue(@Param("start") LocalDateTime start,
+                               @Param("end") LocalDateTime end);
+ 
+    @Query("SELECT COUNT(t) FROM Transaction t " +
+           "WHERE t.status = com.team27.amazon.billing.model.TransactionStatus.COMPLETED " +
+           "AND t.createdAt BETWEEN :start AND :end")
+    Long countCompleted(@Param("start") LocalDateTime start,
+                        @Param("end") LocalDateTime end);
+ 
+    @Query("SELECT COALESCE(SUM(t.amount), 0.0) FROM Transaction t " +
+           "WHERE t.status = com.team27.amazon.billing.model.TransactionStatus.REFUNDED " +
+           "AND t.createdAt BETWEEN :start AND :end")
+    Double sumRefundedAmount(@Param("start") LocalDateTime start,
+                             @Param("end") LocalDateTime end);
+ 
+    @Query("SELECT COUNT(t) FROM Transaction t " +
+           "WHERE t.status = com.team27.amazon.billing.model.TransactionStatus.REFUNDED " +
+           "AND t.createdAt BETWEEN :start AND :end")
+    Long countRefunded(@Param("start") LocalDateTime start,
+                       @Param("end") LocalDateTime end);
+ 
+    @Query("SELECT t FROM Transaction t LEFT JOIN FETCH t.transactionVouchers tv " +
+           "LEFT JOIN FETCH tv.voucher WHERE t.id = :id")
+    Optional<Transaction> findByIdWithVouchers(@Param("id") Long id);
 
 }
 
