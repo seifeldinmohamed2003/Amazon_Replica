@@ -1,20 +1,36 @@
 package com.team27.amazon.product.controller;
 
-import com.team27.amazon.product.dto.*;
-import com.team27.amazon.product.model.Product;
-import com.team27.amazon.product.model.ProductStatus;
-import com.team27.amazon.product.model.ProductReview;
-import com.team27.amazon.product.service.ProductService;
-import com.team27.amazon.product.dto.LowStockAlertDTO;
-import jakarta.validation.Valid;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.http.HttpStatus;
-import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.*;
-
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
+
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RestController;
+
+import com.team27.amazon.product.dto.LowStockAlertDTO;
+import com.team27.amazon.product.dto.ProductRequest;
+import com.team27.amazon.product.dto.ProductResponse;
+import com.team27.amazon.product.dto.ProductReviewRequest;
+import com.team27.amazon.product.dto.ProductReviewResponse;
+import com.team27.amazon.product.dto.ProductReviewVerificationRequest;
+import com.team27.amazon.product.dto.ProductSalesDTO;
+import com.team27.amazon.product.dto.ProductWithReviewsResponse;
+import com.team27.amazon.product.model.Product;
+import com.team27.amazon.product.model.ProductReview;
+import com.team27.amazon.product.model.ProductStatus;
+import com.team27.amazon.product.service.ProductService;
+
+import jakarta.validation.Valid;
 
 @RestController
 @RequestMapping("/api/products")
@@ -79,6 +95,13 @@ public class ProductController {
         productService.deleteProduct(id);
         return ResponseEntity.noContent().build();
     }
+
+    @PutMapping("/{id}/discontinue")
+    public ResponseEntity<Product> discontinueProduct(@PathVariable Long id) {
+        Product updatedProduct = productService.discontinueProduct(id);
+        return ResponseEntity.ok(updatedProduct);
+    }
+
 
     @PostMapping("/{id}/reviews")
     public ResponseEntity<ProductReviewResponse> addReview(

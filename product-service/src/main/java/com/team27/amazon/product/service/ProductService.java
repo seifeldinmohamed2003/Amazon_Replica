@@ -1,22 +1,36 @@
 package com.team27.amazon.product.service;
 
-import com.team27.amazon.product.dto.*;
-import com.team27.amazon.product.exception.*;
-import com.team27.amazon.product.model.Product;
-import com.team27.amazon.product.model.ProductReview;
-import com.team27.amazon.product.model.ProductStatus;
-import com.team27.amazon.product.repository.ProductRepository;
-import com.team27.amazon.product.repository.ProductReviewRepository;
-import jakarta.transaction.Transactional;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.stereotype.Service;
-
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.HttpStatus;
+import org.springframework.stereotype.Service;
+import org.springframework.web.server.ResponseStatusException;
+
+import com.team27.amazon.product.dto.LowStockAlertDTO;
+import com.team27.amazon.product.dto.ProductRequest;
+import com.team27.amazon.product.dto.ProductReviewRequest;
+import com.team27.amazon.product.dto.ProductReviewVerificationRequest;
+import com.team27.amazon.product.dto.ProductSalesDTO;
+import com.team27.amazon.product.exception.InvalidPriceRangeException;
+import com.team27.amazon.product.exception.InvalidProductAlertException;
+import com.team27.amazon.product.exception.InvalidReviewException;
+import com.team27.amazon.product.exception.ProductNotFoundException;
+import com.team27.amazon.product.exception.ProductReviewNotFoundException;
+import com.team27.amazon.product.exception.ReviewVerificationForbiddenException;
+import com.team27.amazon.product.exception.UserNotFoundException;
+import com.team27.amazon.product.model.Product;
+import com.team27.amazon.product.model.ProductReview;
+import com.team27.amazon.product.model.ProductStatus;
+import com.team27.amazon.product.repository.ProductRepository;
+import com.team27.amazon.product.repository.ProductReviewRepository;
+
+import jakarta.transaction.Transactional;
 
 @Service
 public class ProductService {
@@ -223,4 +237,20 @@ public class ProductService {
         Map<String, Object> specifications = request.getSpecifications();
         product.setSpecifications(specifications == null ? new HashMap<>() : new HashMap<>(specifications));
     }
+
+    @Transactional
+    public Product discontinueProduct(Long productId) {
+    Product product = getProductById(productId);
+
+    boolean existsInPendingOrders = productRepository.existsInPendingOrders(productId);
+    if (existsInPendingOrders) {
+        throw new ResponseStatusException(
+                HttpStatus.BAD_REQUEST,
+                "Cannot discontinue product because it is used in pending orders"
+        );
+    }
+
+    product.setStatus(ProductStatus.INACTIVE);
+    return productRepository.save(product);
+}
 }
