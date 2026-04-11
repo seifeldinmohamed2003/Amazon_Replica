@@ -37,8 +37,10 @@ public class Product {
     @Column(nullable = false)
     private Double price;
 
+    @Enumerated(EnumType.STRING)
+    @JdbcTypeCode(SqlTypes.NAMED_ENUM)
     @Column(nullable = false)
-    private String category;
+    private ProductCategory category = ProductCategory.OTHER;
 
     @Column(nullable = false)
     private String brand;
@@ -47,6 +49,7 @@ public class Product {
     private Integer stockQuantity = 0;
 
     @Enumerated(EnumType.STRING)
+    @JdbcTypeCode(SqlTypes.NAMED_ENUM)
     @Column(nullable = false)
     private ProductStatus status = ProductStatus.ACTIVE;
 
@@ -137,10 +140,22 @@ public class Product {
     }
 
     public String getCategory() {
-        return category;
+        return category == null ? null : category.name();
     }
 
     public void setCategory(String category) {
+        if (category == null || category.isBlank()) {
+            this.category = ProductCategory.OTHER;
+            return;
+        }
+        this.category = ProductCategory.valueOf(category.trim().toUpperCase());
+    }
+
+    public ProductCategory getCategoryEnum() {
+        return category;
+    }
+
+    public void setCategoryEnum(ProductCategory category) {
         this.category = category;
     }
 

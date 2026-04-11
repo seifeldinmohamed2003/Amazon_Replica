@@ -14,7 +14,8 @@ public interface ProductRepository extends JpaRepository<Product, Long> {
 
     List<Product> findByStatus(ProductStatus status);
 
-    List<Product> findByCategoryIgnoreCase(String category);
+        @Query("SELECT p FROM Product p WHERE LOWER(CAST(p.category AS string)) = LOWER(:category)")
+        List<Product> findByCategoryIgnoreCase(@Param("category") String category);
 
    @Query(value = """
         SELECT 
@@ -44,7 +45,7 @@ List<Object[]> findTopRatedProducts(@Param("limit") int limit);
     List<Product> findByStockQuantityLessThanOrderByStockQuantityAsc(Integer threshold);
 
     @Query("SELECT p FROM Product p WHERE " +
-           "(:category IS NULL OR LOWER(p.category) = LOWER(:category)) " +
+            "(:category IS NULL OR LOWER(CAST(p.category AS string)) = LOWER(:category)) " +
            "AND p.price >= :minPrice AND p.price <= :maxPrice " +
            "ORDER BY p.price ASC")
     List<Product> searchByPriceRange(
@@ -59,7 +60,7 @@ List<Object[]> findTopRatedProducts(@Param("limit") int limit);
             "JOIN orders o ON oi.order_id = o.id " +
             "WHERE oi.product_id = :productId " +
             "AND o.status = 'DELIVERED' " +
-            "AND o.delivered_at BETWEEN :startDateTime AND :endDateTime",
+            "AND o.ordered_at BETWEEN :startDateTime AND :endDateTime",
             nativeQuery = true)
     Object[] getProductSalesSummary(
             @Param("productId") Long productId,
@@ -97,7 +98,7 @@ List<Object[]> findTopRatedProducts(@Param("limit") int limit);
          SELECT *
             FROM products p
             WHERE p.specifications ->> :key = :value
-              AND (:status IS NULL OR p.status = CAST(:status AS VARCHAR))
+                                                        AND (:status IS NULL OR p.status::text = :status)
             """, nativeQuery = true)
     List<Product> findBySpecificationKeyValueAndOptionalStatus(
             @Param("key") String key,
