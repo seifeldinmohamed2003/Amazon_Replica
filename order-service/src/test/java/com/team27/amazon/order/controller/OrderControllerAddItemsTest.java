@@ -40,7 +40,7 @@ class OrderControllerAddItemsTest {
 
     @BeforeEach
     void setUp() {
-        OrderController orderController = new OrderController();
+        OrderController orderController = new OrderController(orderService);
         ReflectionTestUtils.setField(orderController, "orderService", orderService);
         mockMvc = MockMvcBuilders.standaloneSetup(orderController).build();
     }
