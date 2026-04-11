@@ -339,5 +339,35 @@ public class OrderService {
         order.setTotalAmount(totalAmount);
         return orderRepository.save(order);
     }
+
+    @Transactional
+    public Order cancelOrder(Long orderId) {
+        Order order = orderRepository.findById(orderId)
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND,
+                        "Order not found"
+                ));
+
+        if (order.getStatus() != OrderStatus.PENDING && order.getStatus() != OrderStatus.CONFIRMED) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Only pending or confirmed orders can be cancelled"
+            );
+        }
+
+        // If order was confirmed, restore stock for each item
+        if (order.getStatus() == OrderStatus.CONFIRMED) {
+            List<OrderItem> orderItems = order.getOrderItems() == null ? List.of() : order.getOrderItems();
+            for (OrderItem orderItem : orderItems) {
+                productJdbcRepository.restoreStockQuantity(
+                        orderItem.getProductId(),
+                        orderItem.getQuantity()
+                );
+            }
+        }
+
+        order.setStatus(OrderStatus.CANCELLED);
+        return orderRepository.save(order);
+    }
 }
 

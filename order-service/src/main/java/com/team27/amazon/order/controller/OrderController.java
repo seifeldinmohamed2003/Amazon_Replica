@@ -143,6 +143,9 @@ public class OrderController {
         return ResponseEntity.ok(orderService.confirmOrder(orderId, shippingAddressId));
     }
 
+    @PutMapping("/{id}/cancel")
+    public ResponseEntity<?> cancelOrder(@PathVariable Long id) {
+        Order cancelledOrder = orderService.cancelOrder(id);
     @GetMapping("/metadata/search")
     public ResponseEntity<List<Order>> searchOrdersByMetadata(
             @RequestParam String key,

@@ -32,4 +32,9 @@ public class ProductJdbcRepository {
         String sql = "UPDATE products SET stock_quantity = stock_quantity - ? WHERE id = ? AND stock_quantity >= ?";
         return jdbcTemplate.update(sql, quantity, productId, quantity);
     }
+
+    public int restoreStockQuantity(Long productId, Integer quantity) {
+        String sql = "UPDATE products SET stock_quantity = stock_quantity + ? WHERE id = ?";
+        return jdbcTemplate.update(sql, quantity, productId);
+    }
 }

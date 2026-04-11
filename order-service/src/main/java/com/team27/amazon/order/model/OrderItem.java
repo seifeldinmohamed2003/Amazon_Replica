@@ -35,7 +35,7 @@ public class OrderItem {
     private Integer itemOrder;
 
     @JdbcTypeCode(SqlTypes.JSON)
-    @Column(columnDefinition = "jsonb", nullable = false)
+    @Column(columnDefinition = "text", nullable = false)
     private Map<String, Object> metadata = new HashMap<>();
 
     @ManyToOne(fetch = FetchType.LAZY)
