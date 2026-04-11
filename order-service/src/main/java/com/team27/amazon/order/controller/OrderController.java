@@ -19,6 +19,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import com.team27.amazon.order.dto.AddOrderItemRequestDTO;
 import com.team27.amazon.order.dto.OrderAnalyticsDTO;
 import com.team27.amazon.order.dto.OrderEstimateDTO;
 import com.team27.amazon.order.dto.OrderEstimateItemRequestDTO;
@@ -46,6 +47,14 @@ public class OrderController {
     public ResponseEntity<OrderEstimateDTO> estimateOrder(
             @RequestBody List<OrderEstimateItemRequestDTO> items) {
         return ResponseEntity.ok(orderService.estimateOrderPrice(items));
+    }
+
+    @PostMapping("/{orderId}/items")
+    public ResponseEntity<Order> addItemsToOrder(
+            @PathVariable Long orderId,
+            @RequestBody List<AddOrderItemRequestDTO> items) {
+        Order updatedOrder = orderService.addItemsToOrder(orderId, items);
+        return ResponseEntity.ok(updatedOrder);
     }
 
     // READ - GET /api/orders
