@@ -3,6 +3,7 @@ package com.team27.amazon.order.service;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
+import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Optional;
@@ -14,8 +15,10 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
 import com.team27.amazon.order.dto.OrderAnalyticsDTO;
+import com.team27.amazon.order.dto.OrderDetailsDTO;
 import com.team27.amazon.order.dto.OrderEstimateDTO;
 import com.team27.amazon.order.dto.OrderEstimateItemRequestDTO;
+import com.team27.amazon.order.dto.OrderItemDetailsDTO;
 import com.team27.amazon.order.model.Order;
 import com.team27.amazon.order.model.OrderItem;
 import com.team27.amazon.order.model.OrderStatus;
@@ -24,6 +27,7 @@ import com.team27.amazon.order.repository.ProductJdbcRepository;
 import com.team27.amazon.order.repository.ShipmentJdbcRepository;
 import com.team27.amazon.order.repository.ShippingAddressJdbcRepository;
 import com.team27.amazon.order.repository.TransactionJdbcRepository;
+
 @Service
 public class OrderService {
 
@@ -90,6 +94,52 @@ public class OrderService {
         return 0.0;
     }
 
+
+    public OrderService(OrderRepository orderRepository) {
+        this.orderRepository = orderRepository;
+    }
+
+    public OrderDetailsDTO getOrderDetails(Long orderId) {
+        Order order = orderRepository.findByIdWithItems(orderId)
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND,
+                        "Order not found with id: " + orderId
+                ));
+
+        List<OrderItem> orderItems = order.getOrderItems() == null
+                ? new ArrayList<>()
+                : new ArrayList<>(order.getOrderItems());
+
+        orderItems.sort(Comparator.comparing(OrderItem::getItemOrder));
+
+        List<OrderItemDetailsDTO> itemDTOs = new ArrayList<>();
+        int totalQuantity = 0;
+
+        for (OrderItem item : orderItems) {
+            itemDTOs.add(new OrderItemDetailsDTO(
+                    item.getId(),
+                    item.getItemOrder(),
+                    item.getProductId(),
+                    item.getQuantity(),
+                    item.getPriceAtPurchase(),
+                    item.getMetadata()
+            ));
+
+            totalQuantity += item.getQuantity();
+        }
+
+        return new OrderDetailsDTO(
+                order.getId(),
+                order.getUserId(),
+                order.getShippingAddressId(),
+                order.getStatus().name(),
+                order.getTotalAmount(),
+                order.getMetadata(),
+                itemDTOs,
+                itemDTOs.size(),
+                totalQuantity
+        );
+    }
     // READ - Get all orders
     public List<Order> getAllOrders() {
         return orderRepository.findAll();
