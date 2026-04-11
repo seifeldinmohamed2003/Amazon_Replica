@@ -1,6 +1,9 @@
 [
   {"studentId":"55-25195","name":"AmrNegm","githubUsername":"AmrAhmedNegm","service":"user-service"},
+  {"studentId":"55-25394","name":"OmarWalid","githubUsername":"Elbasha3omarr","service":"user-service"},
   {"studentId":"55-0428","name":"SeifeldinMohamed","githubUsername":"seifeldinmohamed2003","service":"billing-service"},
+  {"studentId":"55-24856","name":"OmarElShazly","githubUsername":"1Oomar","service":"billing-service"},
   {"studentId":"55-13686","name":"ahmedSamehHelmy","githubUsername":"odyjo","service":"shipping-service"},
-  {"studentId":"55-8447","name":"SeifElsherbiny","githubUsername":"Sefo1666","service":"shipping-service"}
+  {"studentId":"55-8447","name":"SeifElsherbiny","githubUsername":"Sefo1666","service":"shipping-service"},
+  {"studentId":"55-5077", "name": "OmarAshraf", "githubUsername": "omarashrafz","service": "shipping-service"}
 ]
