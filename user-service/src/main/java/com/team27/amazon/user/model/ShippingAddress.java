@@ -42,7 +42,7 @@ public class ShippingAddress {
     @Column(nullable = false)
     private String zipCode;
 
-    @Column(nullable = false)
+    @Column(nullable = false, columnDefinition = "boolean default false")
     private Boolean isDefault = false;
 
     @JdbcTypeCode(SqlTypes.JSON)

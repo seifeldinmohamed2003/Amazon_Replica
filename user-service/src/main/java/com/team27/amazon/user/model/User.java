@@ -5,7 +5,9 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
+import org.hibernate.annotations.JdbcType;
 import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.dialect.type.PostgreSQLEnumJdbcType;
 import org.hibernate.type.SqlTypes;
 
 import jakarta.persistence.CascadeType;
@@ -20,9 +22,17 @@ import jakarta.persistence.Id;
 import jakarta.persistence.OneToMany;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.Table;
+import jakarta.persistence.UniqueConstraint;
+
+import org.springframework.data.rest.core.annotation.RestResource;
 
 @Entity
-@Table(name = "users")
+@Table(
+        name = "users",
+        uniqueConstraints = {
+                @UniqueConstraint(name = "uk_users_email", columnNames = {"email"}),
+                @UniqueConstraint(name = "uk_users_phone", columnNames = {"phone"})
+        })
 public class User {
 
     @Id
@@ -32,21 +42,23 @@ public class User {
     @Column(nullable = false)
     private String name;
 
-    @Column(nullable = false, unique = true)
+    @Column(nullable = false)
     private String email;
 
     @Column(nullable = false)
     private String password;
 
-    @Column(nullable = false, unique = true)
+    @Column(nullable = false)
     private String phone;
 
     @Enumerated(EnumType.STRING)
-    @Column(columnDefinition = "varchar(20)", nullable = false)
+    @JdbcType(PostgreSQLEnumJdbcType.class)
+    @Column(nullable = false)
     private Role role;
 
     @Enumerated(EnumType.STRING)
-    @Column(columnDefinition = "varchar(20)", nullable = false)
+    @JdbcType(PostgreSQLEnumJdbcType.class)
+    @Column(nullable = false)
     private Status status = Status.ACTIVE;
 
     @JdbcTypeCode(SqlTypes.JSON)
@@ -57,6 +69,7 @@ public class User {
     private LocalDateTime createdAt;
 
     @OneToMany(mappedBy = "user", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
+    @RestResource(path = "addresses")
     private List<ShippingAddress> shippingAddresses = new ArrayList<>();
 
     @PrePersist

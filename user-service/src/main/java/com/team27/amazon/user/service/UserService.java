@@ -88,7 +88,7 @@ public class UserService {
 
     public List<ShippingAddress> getAllAddresses(Long userId) {
         getUserById(userId);
-        return shippingAddressRepository.findByUserId(userId);
+        return shippingAddressRepository.findByUser_Id(userId);
     }
 
     public ShippingAddress updateAddress(Long userId, Long addressId, ShippingAddress updated) {
@@ -139,7 +139,8 @@ public class UserService {
     public UserOrderSummaryDTO getUserOrderSummary(Long userId) {
         getUserById(userId); // throws 404 if not found
 
-        Object[] row = userRepository.getUserOrderSummary(userId);
+        List<Object[]> rows = userRepository.getUserOrderSummaryRows(userId);
+        Object[] row = rows.isEmpty() ? null : rows.get(0);
 
         if (row == null || row.length == 0) {
             // User exists but has no orders
@@ -245,7 +246,7 @@ public class UserService {
 
         // If LAZY not loaded, force fetch (safe fallback)
         if (addresses == null || addresses.isEmpty()) {
-            addresses = shippingAddressRepository.findByUserId(userId);
+            addresses = shippingAddressRepository.findByUser_Id(userId);
         }
 
         // 4. Reset all

@@ -1,15 +1,61 @@
 services:
-  postgres:
+  db:
     image: postgres:15
-    container_name: amazon-db
-    ports:
-      - "5432:5432"
     environment:
+      POSTGRES_DB: amazondb
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
-      POSTGRES_DB: amazondb
     volumes:
-      - pgdata:/var/lib/postgresql/data
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d amazondb"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  user-service:
+    build: ./user-service
+    ports:
+      - "8081:8081"
+    environment:
+      - SPRING_DATASOURCE_URL=jdbc:postgresql://db:5432/amazondb
+      - SPRING_DATASOURCE_USERNAME=postgres
+      - SPRING_DATASOURCE_PASSWORD=postgres
+    depends_on:
+      db:
+        condition: service_healthy   # ← waits for DB to be truly ready
+
+  product-service:
+      build: ./product-service
+      ports: [ "8082:8082" ]
+      environment:
+        - SPRING_DATASOURCE_URL=jdbc:postgresql://db:5432/amazondb
+      depends_on:
+        db: { condition: service_healthy }
+
+  shipping-service:
+    build: ./shipping-service
+    ports: [ "8084:8084" ]
+    environment:
+      - SPRING_DATASOURCE_URL=jdbc:postgresql://db:5432/amazondb
+    depends_on:
+      db: { condition: service_healthy }
+
+  order-service:
+    build: ./order-service
+    ports: [ "8083:8083" ]
+    environment:
+      - SPRING_DATASOURCE_URL=jdbc:postgresql://db:5432/amazondb
+    depends_on:
+      db: { condition: service_healthy }
+
+  billing-service:
+    build: ./billing-service
+    ports: [ "8085:8085" ]
+    environment:
+      - SPRING_DATASOURCE_URL=jdbc:postgresql://db:5432/amazondb
+    depends_on:
+      db: { condition: service_healthy }
 
 volumes:
-  pgdata:
+  postgres_data:
