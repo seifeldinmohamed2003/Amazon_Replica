@@ -149,5 +149,24 @@ class ProductServiceTest {
                 LocalDate.parse("2026-03-31")
         ));
     }
+
+    @Test
+    void updateSpecificationsAccumulatesAcrossSequentialUpdates() {
+        Product existing = new Product();
+        existing.setId(5L);
+        existing.setSpecifications(new java.util.HashMap<>());
+
+        when(productRepository.findById(5L)).thenReturn(Optional.of(existing));
+        when(productRepository.save(any(Product.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        productService.updateSpecifications(5L, Map.of("screenSize", "6.1in"));
+        productService.updateSpecifications(5L, Map.of("RAM", "8GB"));
+        productService.updateSpecifications(5L, Map.of("color", "Black"));
+
+        Map<String, Object> result = existing.getSpecifications();
+        assertEquals("6.1in", result.get("screenSize"));
+        assertEquals("8GB", result.get("RAM"));
+        assertEquals("Black", result.get("color"));
+    }
 }
 

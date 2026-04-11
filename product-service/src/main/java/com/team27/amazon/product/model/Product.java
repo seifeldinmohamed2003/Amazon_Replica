@@ -148,7 +148,11 @@ public class Product {
             this.category = ProductCategory.OTHER;
             return;
         }
-        this.category = ProductCategory.valueOf(category.trim().toUpperCase());
+        try {
+            this.category = ProductCategory.valueOf(category.trim().toUpperCase());
+        } catch (IllegalArgumentException ex) {
+            this.category = ProductCategory.OTHER;
+        }
     }
 
     public ProductCategory getCategoryEnum() {

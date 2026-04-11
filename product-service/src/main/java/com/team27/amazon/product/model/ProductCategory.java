@@ -1,14 +1,31 @@
 package com.team27.amazon.product.model;
 
+import java.util.Locale;
+
 public enum ProductCategory {
     ELECTRONICS,
-    CLOTHING,
     BOOKS,
+    CLOTHING,
     HOME,
     BEAUTY,
-    TOYS,
     SPORTS,
-    GROCERY,
+    TOYS,
+    GROCERIES,
+    HEALTH,
     AUTOMOTIVE,
-    OTHER
+    OTHER;
+
+    public static ProductCategory fromValue(String value) {
+        if (value == null || value.isBlank()) {
+            return null;
+        }
+
+        String normalized = value
+                .trim()
+                .replace('-', '_')
+                .replace(' ', '_')
+                .toUpperCase(Locale.ROOT);
+
+        return ProductCategory.valueOf(normalized);
+    }
 }

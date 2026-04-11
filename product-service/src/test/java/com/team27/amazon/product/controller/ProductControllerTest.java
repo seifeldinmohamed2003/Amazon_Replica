@@ -2,10 +2,12 @@ package com.team27.amazon.product.controller;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.team27.amazon.product.dto.ProductRequest;
+import com.team27.amazon.product.dto.ProductReviewRequest;
 import com.team27.amazon.product.dto.ProductSalesDTO;
 import com.team27.amazon.product.exception.GlobalExceptionHandler;
 import com.team27.amazon.product.exception.ProductNotFoundException;
 import com.team27.amazon.product.model.Product;
+import com.team27.amazon.product.model.ProductReview;
 import com.team27.amazon.product.model.ProductStatus;
 import com.team27.amazon.product.service.ProductService;
 import org.junit.jupiter.api.BeforeEach;
@@ -253,4 +255,32 @@ class ProductControllerTest {
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.message").value("Product not found with id: 404"));
     }
+
+        @Test
+        void addReviewReturns2xxAndGeneratedId() throws Exception {
+                Product product = new Product();
+                product.setId(1L);
+
+                ProductReview review = new ProductReview();
+                review.setId(101L);
+                review.setProduct(product);
+                review.setUserId(123L);
+                review.setRating(5);
+                review.setTitle("Excellent");
+                review.setComment("Works perfectly");
+                review.setVerified(false);
+
+                when(productService.addReview(anyLong(), any(ProductReviewRequest.class))).thenReturn(review);
+
+                mockMvc.perform(post("/api/products/1/reviews")
+                                                .contentType(MediaType.APPLICATION_JSON)
+                                                .content(objectMapper.writeValueAsString(Map.of(
+                                                                "userId", 123,
+                                                                "rating", 5,
+                                                                "title", "Excellent",
+                                                                "comment", "Works perfectly"
+                                                ))))
+                                .andExpect(status().is2xxSuccessful())
+                                .andExpect(jsonPath("$.id").value(101L));
+        }
 }

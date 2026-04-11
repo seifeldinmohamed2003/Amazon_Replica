@@ -16,6 +16,7 @@ public class LowStockAlertDTO {
     private Integer totalRatings;
     private Integer reviewCount;
     private Integer verifiedReviewCount;
+    private Boolean hasNegativeReviews;
     private String alertMessage;
 
     public static LowStockAlertDTO from(Product product) {
@@ -31,17 +32,22 @@ public class LowStockAlertDTO {
 
         int reviewCount = product.getProductReviews() == null ? 0 : product.getProductReviews().size();
         int verifiedReviewCount = 0;
+        boolean hasNegativeReviews = false;
 
         if (product.getProductReviews() != null) {
             for (ProductReview review : product.getProductReviews()) {
                 if (Boolean.TRUE.equals(review.getVerified())) {
                     verifiedReviewCount++;
                 }
+                if (review.getRating() != null && review.getRating() <= 2) {
+                    hasNegativeReviews = true;
+                }
             }
         }
 
         dto.setReviewCount(reviewCount);
         dto.setVerifiedReviewCount(verifiedReviewCount);
+        dto.setHasNegativeReviews(hasNegativeReviews);
         dto.setAlertMessage("Low stock alert: only " + product.getStockQuantity() + " item(s) left.");
 
         return dto;
@@ -125,6 +131,14 @@ public class LowStockAlertDTO {
 
     public void setVerifiedReviewCount(Integer verifiedReviewCount) {
         this.verifiedReviewCount = verifiedReviewCount;
+    }
+
+    public Boolean getHasNegativeReviews() {
+        return hasNegativeReviews;
+    }
+
+    public void setHasNegativeReviews(Boolean hasNegativeReviews) {
+        this.hasNegativeReviews = hasNegativeReviews;
     }
 
     public String getAlertMessage() {
