@@ -21,6 +21,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 import com.team27.amazon.order.dto.AddOrderItemRequestDTO;
 import com.team27.amazon.order.dto.OrderAnalyticsDTO;
+import com.team27.amazon.order.dto.OrderDetailsDTO;
 import com.team27.amazon.order.dto.OrderEstimateDTO;
 import com.team27.amazon.order.dto.OrderEstimateItemRequestDTO;
 import com.team27.amazon.order.model.Order;
@@ -77,6 +78,16 @@ public class OrderController {
     public ResponseEntity<List<Order>> getOrdersByUserId(@PathVariable Long userId) {
         List<Order> orders = orderService.getOrdersByUserId(userId);
         return ResponseEntity.ok(orders);
+    }
+
+
+    public OrderController(OrderService orderService) {
+        this.orderService = orderService;
+    }
+
+    @GetMapping("/{orderId}/details")
+    public OrderDetailsDTO getOrderDetails(@PathVariable Long orderId) {
+        return orderService.getOrderDetails(orderId);
     }
 
     // READ - GET /api/orders/status/{status}

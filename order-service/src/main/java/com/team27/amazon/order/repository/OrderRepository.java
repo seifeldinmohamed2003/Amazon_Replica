@@ -6,6 +6,10 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Optional;
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import com.team27.amazon.order.dto.OrderAnalyticsDTO;
@@ -30,5 +34,14 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
         WHERE metadata ->> :key = :value
         """, nativeQuery = true)
     List<Order> findByMetadataField(@Param("key") String key, @Param("value") String value);
+
+    // ✅ S3-F9 QUERY
+    @Query("""
+           SELECT DISTINCT o
+           FROM Order o
+           LEFT JOIN FETCH o.orderItems oi
+           WHERE o.id = :orderId
+           """)
+    Optional<Order> findByIdWithItems(@Param("orderId") Long orderId);
 }
 
