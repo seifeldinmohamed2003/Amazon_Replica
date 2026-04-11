@@ -42,7 +42,54 @@ public class BillingService {
         return transactionRepository.searchTransactions(status, startDate, endDate);
     }
 
+    public List<Transaction> getAllTransactions() {
+        return transactionRepository.findAll();
+    }
+
+    public Transaction getTransactionById(Long id) {
+        return transactionRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("Transaction not found"));
+    }
+    public Voucher getVoucherById(Long id) {
+        return voucherRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("Voucher not found"));
+    }
+
+    public Transaction updateTransaction(Long id, Transaction updated) {
+        Transaction t = getTransactionById(id);
+        t.setAmount(updated.getAmount());
+        t.setMethod(updated.getMethod());
+        t.setStatus(updated.getStatus());
+        t.setTransactionDetails(updated.getTransactionDetails());
+        return transactionRepository.save(t);
+    }
+
+    public void deleteTransaction(Long id) {
+        transactionRepository.deleteById(id);
+    }
+
+    public TransactionVoucher createTransactionVoucher(TransactionVoucher tv) {
+        if (tv.getAppliedAt() == null) tv.setAppliedAt(java.time.LocalDateTime.now());
+        return transactionVoucherRepository.save(tv);
+    }
+
+    public TransactionVoucher getTransactionVoucherById(Long id) {
+        return transactionVoucherRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("TransactionVoucher not found"));
+    }
+
+    public List<TransactionVoucher> getAllTransactionVouchers() {
+        return transactionVoucherRepository.findAll();
+    }
+
+    public void deleteTransactionVoucher(Long id) {
+        transactionVoucherRepository.deleteById(id);
+    }
+
     public Transaction saveTransaction(Transaction transaction) {
+        if (transaction.getCreatedAt() == null) {
+            transaction.setCreatedAt(LocalDateTime.now());
+        }
         return transactionRepository.save(transaction);
     }
 
@@ -100,7 +147,8 @@ public class BillingService {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Order not found");
         }
         if (!orderStatus.equals("DELIVERED")) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Order must be DELIVERED to process payment");
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "Order must be DELIVERED to process payment");
         }
 
         int completedCount = transactionRepository.countCompletedTransactionsByOrderId(orderId);
@@ -108,20 +156,26 @@ public class BillingService {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "already paid");
         }
 
-        Transaction transaction = transactionRepository.findPendingTransactionByOrderId(orderId)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "No pending transaction found for this order"));
+        Double amount = transactionRepository.findOrderTotalAmountById(orderId);
+        Long userId = transactionRepository.findUserIdByOrderId(orderId);
 
-        transaction.setStatus(TransactionStatus.COMPLETED);
-        transaction.setMethod(TransactionMethod.valueOf(method));
-
-        Map<String, Object> details = transaction.getTransactionDetails();
-        if (details == null) details = new HashMap<>();
+        Map<String, Object> details = new HashMap<>();
         details.put("gatewayResponse", "approved");
         if (cardLastFour != null) details.put("cardLastFour", cardLastFour);
+
+        Transaction transaction = new Transaction();
+        transaction.setOrderId(orderId);
+        transaction.setUserId(userId);
+        transaction.setAmount(amount != null ? amount : 0.0);
+        transaction.setMethod(TransactionMethod.valueOf(method));
+        transaction.setStatus(TransactionStatus.COMPLETED);
         transaction.setTransactionDetails(details);
+        transaction.setCreatedAt(LocalDateTime.now());
 
         return transactionRepository.save(transaction);
     }
+
+
 
     @Transactional
     public Transaction applyVoucherToTransaction(Long transactionId, Long voucherId) {

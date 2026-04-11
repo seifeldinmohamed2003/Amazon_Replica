@@ -71,4 +71,10 @@ public class Transaction {
 
     public List<TransactionVoucher> getTransactionVouchers() { return transactionVouchers; }
     public void setTransactionVouchers(List<TransactionVoucher> transactionVouchers) { this.transactionVouchers = transactionVouchers; }
+    @PrePersist
+    protected void onCreate() {
+        if (createdAt == null) {
+            createdAt = LocalDateTime.now();
+        }
+    }
 }
