@@ -15,7 +15,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
-import com.team27.amazon.order.dto.AddOrderItemRequestDTO;
 import com.team27.amazon.order.dto.OrderAnalyticsDTO;
 import com.team27.amazon.order.dto.OrderDetailsDTO;
 import com.team27.amazon.order.dto.OrderEstimateDTO;
@@ -420,64 +419,6 @@ public class OrderService {
 
         order.setStatus(OrderStatus.CANCELLED);
         return orderRepository.save(order);
-    }
-    public Order addItemsToOrder(Long orderId, List<AddOrderItemRequestDTO> items) {
-        if (items == null || items.isEmpty()) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Items list must not be empty");
-        }
-
-        Order order = orderRepository.findById(orderId)
-                .orElseThrow(() -> new ResponseStatusException(
-                        HttpStatus.NOT_FOUND, "Order not found"
-                ));
-
-        if (order.getStatus() != OrderStatus.PENDING) {
-            throw new ResponseStatusException(
-                    HttpStatus.BAD_REQUEST,
-                    "Cannot add items to orders that are not pending"
-            );
-        }
-
-        // Determine the next itemOrder
-        int nextItemOrder = order.getOrderItems() != null && !order.getOrderItems().isEmpty()
-                ? order.getOrderItems().stream()
-                        .mapToInt(OrderItem::getItemOrder)
-                        .max()
-                        .orElse(0) + 1
-                : 1;
-
-        for (AddOrderItemRequestDTO itemRequest : items) {
-            if (itemRequest.getProductId() == null || itemRequest.getQuantity() == null || itemRequest.getQuantity() < 1) {
-                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Each item must include productId and quantity >= 1");
-            }
-
-            Double currentPrice = productJdbcRepository.findCurrentPriceByProductId(itemRequest.getProductId());
-            if (currentPrice == null) {
-                throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Product not found");
-            }
-
-            OrderItem orderItem = new OrderItem();
-            orderItem.setProductId(itemRequest.getProductId());
-            orderItem.setQuantity(itemRequest.getQuantity());
-            orderItem.setPriceAtPurchase(currentPrice);
-            orderItem.setItemOrder(nextItemOrder++);
-            orderItem.setMetadata(itemRequest.getMetadata() != null ? itemRequest.getMetadata() : Collections.emptyMap());
-            orderItem.setOrder(order);
-
-            if (order.getOrderItems() == null) {
-                order.setOrderItems(new java.util.ArrayList<>());
-            }
-            order.getOrderItems().add(orderItem);
-        }
-
-        Order savedOrder = orderRepository.save(order);
-
-        // Sort items by itemOrder
-        if (savedOrder.getOrderItems() != null) {
-            savedOrder.getOrderItems().sort(Comparator.comparing(OrderItem::getItemOrder));
-        }
-
-        return savedOrder;
     }
 }
 
