@@ -146,12 +146,16 @@ public class OrderController {
     @PutMapping("/{id}/cancel")
     public ResponseEntity<?> cancelOrder(@PathVariable Long id) {
         Order cancelledOrder = orderService.cancelOrder(id);
+        return ResponseEntity.ok(cancelledOrder);
+    }
+
     @GetMapping("/metadata/search")
     public ResponseEntity<List<Order>> searchOrdersByMetadata(
             @RequestParam String key,
             @RequestParam String value) {
         return ResponseEntity.ok(orderService.searchOrdersByMetadata(key, value));
     }
+
     @GetMapping("/analytics")
     public ResponseEntity<OrderAnalyticsDTO> getOrderAnalytics(
             @RequestParam LocalDate startDate,
