@@ -27,11 +27,13 @@ public class Transaction {
     private Double amount;
 
     @Enumerated(EnumType.STRING)
-    @Column(columnDefinition = "varchar(255)", nullable = false)
+    @JdbcTypeCode(SqlTypes.NAMED_ENUM)
+    @Column(name = "method", nullable = false)
     private TransactionMethod method;
 
     @Enumerated(EnumType.STRING)
-    @Column(columnDefinition = "varchar(255)", nullable = false)
+    @JdbcTypeCode(SqlTypes.NAMED_ENUM)
+    @Column(name = "status", nullable = false)
     private TransactionStatus status;
 
     @JdbcTypeCode(SqlTypes.JSON)
@@ -71,4 +73,10 @@ public class Transaction {
 
     public List<TransactionVoucher> getTransactionVouchers() { return transactionVouchers; }
     public void setTransactionVouchers(List<TransactionVoucher> transactionVouchers) { this.transactionVouchers = transactionVouchers; }
+    @PrePersist
+    protected void onCreate() {
+        if (createdAt == null) {
+            createdAt = LocalDateTime.now();
+        }
+    }
 }

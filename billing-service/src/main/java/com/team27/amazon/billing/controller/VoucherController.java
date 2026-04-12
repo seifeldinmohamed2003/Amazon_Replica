@@ -5,6 +5,7 @@ import com.team27.amazon.billing.repository.VoucherRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.util.List;
 
@@ -28,7 +29,8 @@ public class VoucherController {
     @GetMapping("/{id}")
     public ResponseEntity<Voucher> getVoucherById(@PathVariable Long id) {
         return ResponseEntity.ok(voucherRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("Voucher not found")));
+                .orElseThrow(() -> new ResponseStatusException(
+                        org.springframework.http.HttpStatus.NOT_FOUND, "Voucher not found")));
     }
 
     @PutMapping("/{id}")

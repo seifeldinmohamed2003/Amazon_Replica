@@ -18,25 +18,27 @@ import java.util.Map;
 
 @RestController
 @RequestMapping("/api/transactions")
-public class BillingController {
+public class TransactionController {
 
     @Autowired
     private BillingService billingService;
 
-    // ── existing ─────────────────────────────────────────────────────────────
 
     @GetMapping("/search")
     public ResponseEntity<List<Transaction>> searchTransactions(
             @RequestParam(required = false) String status,
-            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
-            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate) {
-        return ResponseEntity.ok(
-                billingService.searchTransactions(
-                        status,
-                        startDate.atStartOfDay(),
-                        endDate.atTime(23, 59, 59)
-                )
-        );
+            @RequestParam(required = false) String startDate,
+            @RequestParam(required = false) String endDate) {
+
+        LocalDateTime start = (startDate != null)
+                ? LocalDate.parse(startDate).atStartOfDay()
+                : LocalDateTime.of(2000, 1, 1, 0, 0);
+
+        LocalDateTime end = (endDate != null)
+                ? LocalDate.parse(endDate).atTime(23, 59, 59)
+                : LocalDateTime.now();
+
+        return ResponseEntity.ok(billingService.searchTransactions(status, start, end));
     }
 
     @PutMapping("/{id}/refund")
@@ -65,24 +67,26 @@ public class BillingController {
     }
 
     @PostMapping("/{transactionId}/voucher/{voucherId}")
-    public ResponseEntity<Transaction> applyVoucher(
+    public ResponseEntity<TransactionDetailsDTO> applyVoucher(
             @PathVariable Long transactionId,
             @PathVariable Long voucherId) {
-        return ResponseEntity.ok(billingService.applyVoucherToTransaction(transactionId, voucherId));
+        billingService.applyVoucherToTransaction(transactionId, voucherId);
+        return ResponseEntity.ok(billingService.getTransactionDetails(transactionId));
     }
 
     @PostMapping
     public ResponseEntity<Transaction> createTransaction(@RequestBody Transaction transaction) {
-        return ResponseEntity.ok(billingService.saveTransaction(transaction));
+        return ResponseEntity.status(201).body(billingService.saveTransaction(transaction));
     }
-
     // ── S5-F6 ── GET /api/transactions/reports/revenue?startDate=&endDate= ──
 
     @GetMapping("/reports/revenue")
     public ResponseEntity<RevenueReportDTO> getRevenueReport(
-            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime startDate,
-            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime endDate) {
-        return ResponseEntity.ok(billingService.getRevenueReport(startDate, endDate));
+            @RequestParam String startDate,
+            @RequestParam String endDate) {
+        LocalDateTime start = LocalDate.parse(startDate).atStartOfDay();
+        LocalDateTime end = LocalDate.parse(endDate).atTime(23, 59, 59);
+        return ResponseEntity.ok(billingService.getRevenueReport(start, end));
     }
 
     // ── S5-F7 ── PUT /api/transactions/{id}/retry ────────────────────────────
@@ -107,4 +111,28 @@ public class BillingController {
             @RequestParam int limit) {
         return ResponseEntity.ok(billingService.getTopUsedVouchers(limit));
     }
+
+    @GetMapping
+    public ResponseEntity<List<Transaction>> getAllTransactions() {
+        return ResponseEntity.ok(billingService.getAllTransactions());
+    }
+
+    @GetMapping("/{id}")
+    public ResponseEntity<Transaction> getTransactionById(@PathVariable Long id) {
+        return ResponseEntity.ok(billingService.getTransactionById(id));
+    }
+
+    @PutMapping("/{id}")
+    public ResponseEntity<Transaction> updateTransaction(
+            @PathVariable Long id,
+            @RequestBody Transaction transaction) {
+        return ResponseEntity.ok(billingService.updateTransaction(id, transaction));
+    }
+
+    @DeleteMapping("/{id}")
+    public ResponseEntity<Void> deleteTransaction(@PathVariable Long id) {
+        billingService.deleteTransaction(id);
+        return ResponseEntity.noContent().build();
+    }
+
 }

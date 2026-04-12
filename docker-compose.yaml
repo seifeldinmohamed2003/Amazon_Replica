@@ -11,5 +11,16 @@ services:
     volumes:
       - pgdata:/var/lib/postgresql/data
 
+  billing-service:
+    build: ./billing-service
+    ports:
+      - "8085:8080"
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/amazondb
+      SPRING_DATASOURCE_USERNAME: postgres
+      SPRING_DATASOURCE_PASSWORD: postgres
+    depends_on:
+      - postgres
+
 volumes:
   pgdata:
