@@ -82,9 +82,11 @@ public class TransactionController {
 
     @GetMapping("/reports/revenue")
     public ResponseEntity<RevenueReportDTO> getRevenueReport(
-            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime startDate,
-            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime endDate) {
-        return ResponseEntity.ok(billingService.getRevenueReport(startDate, endDate));
+            @RequestParam String startDate,
+            @RequestParam String endDate) {
+        LocalDateTime start = LocalDate.parse(startDate).atStartOfDay();
+        LocalDateTime end = LocalDate.parse(endDate).atTime(23, 59, 59);
+        return ResponseEntity.ok(billingService.getRevenueReport(start, end));
     }
 
     // ── S5-F7 ── PUT /api/transactions/{id}/retry ────────────────────────────

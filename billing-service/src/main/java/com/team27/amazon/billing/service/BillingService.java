@@ -48,7 +48,8 @@ public class BillingService {
 
     public Transaction getTransactionById(Long id) {
         return transactionRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("Transaction not found"));
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND, "Transaction not found"));
     }
     public Voucher getVoucherById(Long id) {
         return voucherRepository.findById(id)
@@ -57,10 +58,12 @@ public class BillingService {
 
     public Transaction updateTransaction(Long id, Transaction updated) {
         Transaction t = getTransactionById(id);
-        t.setAmount(updated.getAmount());
-        t.setMethod(updated.getMethod());
-        t.setStatus(updated.getStatus());
-        t.setTransactionDetails(updated.getTransactionDetails());
+        if (updated.getAmount() != null) t.setAmount(updated.getAmount());
+        if (updated.getMethod() != null) t.setMethod(updated.getMethod());
+        if (updated.getStatus() != null) t.setStatus(updated.getStatus());
+        if (updated.getTransactionDetails() != null) t.setTransactionDetails(updated.getTransactionDetails());
+        if (updated.getOrderId() != null) t.setOrderId(updated.getOrderId());
+        if (updated.getUserId() != null) t.setUserId(updated.getUserId());
         return transactionRepository.save(t);
     }
 
@@ -238,12 +241,19 @@ public class BillingService {
                     "startDate must not be after endDate");
         }
 
-        Double totalRevenue   = transactionRepository.sumCompletedRevenue(startDate, endDate);
-        Long   totalTx        = transactionRepository.countCompleted(startDate, endDate);
+        Double totalRevenue = transactionRepository.sumCompletedRevenue(startDate, endDate);
+        Long totalTx = transactionRepository.countCompleted(startDate, endDate);
         Double refundedAmount = transactionRepository.sumRefundedAmount(startDate, endDate);
-        Long   refundCount    = transactionRepository.countRefunded(startDate, endDate);
+        Long refundCount = transactionRepository.countRefunded(startDate, endDate);
 
-        double average = (totalTx != null && totalTx > 0) ? totalRevenue / totalTx : 0.0;
+        // null-safe defaults
+        if (totalRevenue == null) totalRevenue = 0.0;
+        if (totalTx == null) totalTx = 0L;
+        if (refundedAmount == null) refundedAmount = 0.0;
+        if (refundCount == null) refundCount = 0L;
+
+
+        double average = totalTx > 0 ? totalRevenue / totalTx : 0.0;
 
         return new RevenueReportDTO(totalRevenue, totalTx, average, refundedAmount, refundCount);
     }
@@ -328,7 +338,7 @@ public class BillingService {
             Integer timesUsed     = ((Number) row[1]).intValue();
             Double  totalDiscount = ((Number) row[2]).doubleValue();
             boolean expired       = v.getExpiryDate() != null &&
-                                    v.getExpiryDate().isBefore(LocalDateTime.now());
+                    v.getExpiryDate().isBefore(LocalDateTime.now());
 
             result.add(new VoucherUsageDTO(
                     v.getId(),

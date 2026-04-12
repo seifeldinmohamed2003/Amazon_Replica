@@ -21,7 +21,8 @@ public class Voucher {
     private String code;
 
     @Enumerated(EnumType.STRING)
-    @Column(name = "discount_type", columnDefinition = "varchar(255)", nullable = false)
+    @JdbcTypeCode(SqlTypes.NAMED_ENUM)
+    @Column(name = "discount_type", nullable = false)
     private DiscountType discountType;
 
     @Column(name = "discount_value", nullable = false)
@@ -36,8 +37,15 @@ public class Voucher {
     @Column(name = "expiry_date", nullable = false)
     private LocalDateTime expiryDate;
 
-    @Column
+    @Column(nullable = false)
     private Boolean active = true;
+
+    @PrePersist
+    public void setDefaults() {
+        if (active == null) {
+            active = true;
+        }
+    }
 
     @JdbcTypeCode(SqlTypes.JSON)
     @Column(columnDefinition = "jsonb")
@@ -68,9 +76,12 @@ public class Voucher {
     public LocalDateTime getExpiryDate() { return expiryDate; }
     public void setExpiryDate(LocalDateTime expiryDate) { this.expiryDate = expiryDate; }
 
-    public Boolean getActive() { return active; }
-    public void setActive(Boolean active) { this.active = active; }
-
+    public Boolean getActive() {
+        return active == null ? true : active;
+    }
+    public void setActive(Boolean active) {
+        this.active = (active == null) ? true : active;
+    }
     public Map<String, Object> getMetadata() { return metadata; }
     public void setMetadata(Map<String, Object> metadata) { this.metadata = metadata; }
 
