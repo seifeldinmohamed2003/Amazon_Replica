@@ -15,6 +15,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
+import com.team27.amazon.order.dto.AddOrderItemRequest;
 import com.team27.amazon.order.dto.OrderAnalyticsDTO;
 import com.team27.amazon.order.dto.OrderDetailsDTO;
 import com.team27.amazon.order.dto.OrderEstimateDTO;
@@ -23,6 +24,7 @@ import com.team27.amazon.order.dto.OrderItemDetailsDTO;
 import com.team27.amazon.order.model.Order;
 import com.team27.amazon.order.model.OrderItem;
 import com.team27.amazon.order.model.OrderStatus;
+import com.team27.amazon.order.repository.OrderItemRepository;
 import com.team27.amazon.order.repository.OrderRepository;
 import com.team27.amazon.order.repository.ProductJdbcRepository;
 import com.team27.amazon.order.repository.ShipmentJdbcRepository;
@@ -34,6 +36,8 @@ public class OrderService {
 
     private static final double SHIPPING_THRESHOLD = 500.0;
     private static final double SHIPPING_FLAT_RATE = 50.0;
+    private OrderItemRepository orderItemRepository;
+
 
     @Autowired
     private OrderRepository orderRepository;
@@ -45,7 +49,20 @@ public class OrderService {
 
     @Autowired
     private ProductJdbcRepository productJdbcRepository;
+    
+    private Order reloadOrderWithSortedItems(Long orderId) {
+        Order updatedOrder = orderRepository.findById(orderId)
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND,
+                        "Order not found"
+                ));
 
+        if (updatedOrder.getOrderItems() != null) {
+            updatedOrder.getOrderItems().sort(Comparator.comparing(OrderItem::getItemOrder));
+        }
+
+        return updatedOrder;
+}
     @Autowired
     private TransactionJdbcRepository transactionJdbcRepository;
     // CREATE
@@ -54,6 +71,80 @@ public class OrderService {
             order.setStatus(OrderStatus.PENDING);
         }
         return orderRepository.save(order);
+    }
+    @Transactional
+    public Order addItemsToExistingOrder(Long orderId, List<AddOrderItemRequest> requests) {
+        Order order = orderRepository.findById(orderId)
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND,
+                        "Order not found"
+                ));
+
+        if (order.getStatus() != OrderStatus.PENDING) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Only pending orders can be updated with new items"
+            );
+        }
+
+        if (requests == null || requests.isEmpty()) {
+            return reloadOrderWithSortedItems(orderId);
+        }
+
+        List<OrderItem> currentItems = order.getOrderItems();
+        if (currentItems == null) {
+            currentItems = new ArrayList<>();
+            order.setOrderItems(currentItems);
+        }
+
+        int nextItemOrder = currentItems.stream()
+                .map(OrderItem::getItemOrder)
+                .max(Integer::compareTo)
+                .orElse(0) + 1;
+
+        for (AddOrderItemRequest request : requests) {
+            if (request == null || request.getProductId() == null) {
+                throw new ResponseStatusException(
+                        HttpStatus.BAD_REQUEST,
+                        "Each item must include productId"
+                );
+            }
+
+            if (request.getQuantity() == null || request.getQuantity() <= 0) {
+                throw new ResponseStatusException(
+                        HttpStatus.BAD_REQUEST,
+                        "Each item must include quantity greater than 0"
+                );
+            }
+
+            if (!productJdbcRepository.existsByProductId(request.getProductId())) {
+                throw new ResponseStatusException(
+                        HttpStatus.NOT_FOUND,
+                        "Product not found"
+                );
+            }
+
+            Double currentPrice = productJdbcRepository.findCurrentPriceByProductId(request.getProductId());
+            if (currentPrice == null) {
+                throw new ResponseStatusException(
+                        HttpStatus.NOT_FOUND,
+                        "Product not found"
+                );
+            }
+
+            OrderItem orderItem = new OrderItem();
+            orderItem.setOrder(order);
+            orderItem.setProductId(request.getProductId());
+            orderItem.setQuantity(request.getQuantity());
+            orderItem.setPriceAtPurchase(currentPrice);
+            orderItem.setItemOrder(nextItemOrder++);
+            orderItem.setMetadata(request.getMetadata());
+
+            currentItems.add(orderItem);
+        }
+
+        orderRepository.save(order);
+        return reloadOrderWithSortedItems(orderId);
     }
 
     public OrderEstimateDTO estimateOrderPrice(List<OrderEstimateItemRequestDTO> items) {
@@ -96,9 +187,6 @@ public class OrderService {
     }
 
 
-    public OrderService(OrderRepository orderRepository) {
-        this.orderRepository = orderRepository;
-    }
 
     public OrderDetailsDTO getOrderDetails(Long orderId) {
         Order order = orderRepository.findByIdWithItems(orderId)
