@@ -18,6 +18,10 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import com.team27.amazon.order.dto.AddOrderItemRequest;
+import com.team27.amazon.order.model.Order;
+import com.team27.amazon.order.service.OrderService;
+import org.springframework.web.bind.annotation.*;
 
 import com.team27.amazon.order.dto.OrderAnalyticsDTO;
 import com.team27.amazon.order.dto.OrderDetailsDTO;
@@ -48,7 +52,7 @@ public class OrderController {
             @RequestBody List<OrderEstimateItemRequestDTO> items) {
         return ResponseEntity.ok(orderService.estimateOrderPrice(items));
     }
-
+    
     // READ - GET /api/orders
     @GetMapping
     public ResponseEntity<List<Order>> getAllOrders() {
@@ -74,6 +78,11 @@ public class OrderController {
 
     public OrderController(OrderService orderService) {
         this.orderService = orderService;
+    }
+    @PostMapping("/{orderId}/items")
+    public Order addItemsToExistingOrder(@PathVariable Long orderId,
+                                         @RequestBody List<AddOrderItemRequest> requests) {
+        return orderService.addItemsToExistingOrder(orderId, requests);
     }
 
     @GetMapping("/{orderId}/details")

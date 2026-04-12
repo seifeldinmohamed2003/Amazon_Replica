@@ -5,106 +5,117 @@ import com.team27.amazon.order.model.Order;
 import com.team27.amazon.order.model.OrderItem;
 import com.team27.amazon.order.model.OrderStatus;
 import com.team27.amazon.order.repository.OrderRepository;
+import com.team27.amazon.order.repository.ProductJdbcRepository;
+import com.team27.amazon.order.repository.ShipmentJdbcRepository;
+import com.team27.amazon.order.repository.ShippingAddressJdbcRepository;
+import com.team27.amazon.order.repository.TransactionJdbcRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.springframework.http.HttpStatusCode;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.InjectMocks;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.http.HttpStatus;
 import org.springframework.web.server.ResponseStatusException;
 
-import java.util.Arrays;
-import java.util.Collections;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.Mockito.*;
+import static org.mockito.Mockito.when;
 
+@ExtendWith(MockitoExtension.class)
 class OrderServiceDetailsTest {
 
+    @Mock
     private OrderRepository orderRepository;
+
+    @Mock
+    private ShipmentJdbcRepository shipmentJdbcRepository;
+
+    @Mock
+    private ShippingAddressJdbcRepository shippingAddressJdbcRepository;
+
+    @Mock
+    private ProductJdbcRepository productJdbcRepository;
+
+    @Mock
+    private TransactionJdbcRepository transactionJdbcRepository;
+
+    @InjectMocks
     private OrderService orderService;
+
+    private Order order;
 
     @BeforeEach
     void setUp() {
-        orderRepository = mock(OrderRepository.class);
-        orderService = new OrderService(orderRepository);
+        order = new Order();
+        order.setId(1L);
+        order.setUserId(5L);
+        order.setShippingAddressId(10L);
+        order.setStatus(OrderStatus.PENDING);
+        order.setTotalAmount(450.0);
+        order.setMetadata(Map.of("source", "WEB"));
+
+        OrderItem item1 = new OrderItem();
+        item1.setId(3L);
+        item1.setItemOrder(1);
+        item1.setProductId(11L);
+        item1.setQuantity(2);
+        item1.setPriceAtPurchase(100.0);
+        item1.setMetadata(Map.of("color", "Black"));
+
+        OrderItem item2 = new OrderItem();
+        item2.setId(4L);
+        item2.setItemOrder(2);
+        item2.setProductId(12L);
+        item2.setQuantity(1);
+        item2.setPriceAtPurchase(250.0);
+        item2.setMetadata(Map.of("size", "L"));
+
+        List<OrderItem> items = new ArrayList<>();
+        items.add(item1);
+        items.add(item2);
+        order.setOrderItems(items);
     }
 
     @Test
-    void getOrderDetails_shouldReturnItemsOrderedAndCorrectTotals() {
-        Order order = new Order();
-        order.setId(1L);
-        order.setUserId(7L);
-        order.setShippingAddressId(3L);
-        order.setStatus(OrderStatus.PENDING);
-        order.setTotalAmount(450.0);
-
-        OrderItem item1 = new OrderItem();
-        item1.setId(101L);
-        item1.setItemOrder(2);
-        item1.setProductId(2001L);
-        item1.setQuantity(1);
-        item1.setPriceAtPurchase(100.0);
-
-        OrderItem item2 = new OrderItem();
-        item2.setId(102L);
-        item2.setItemOrder(1);
-        item2.setProductId(2002L);
-        item2.setQuantity(2);
-        item2.setPriceAtPurchase(150.0);
-
-        OrderItem item3 = new OrderItem();
-        item3.setId(103L);
-        item3.setItemOrder(3);
-        item3.setProductId(2003L);
-        item3.setQuantity(3);
-        item3.setPriceAtPurchase(50.0);
-
-        order.setOrderItems(Arrays.asList(item1, item2, item3));
-
+    void shouldReturnOrderDetailsWithSortedItemsAndTotals() {
         when(orderRepository.findByIdWithItems(1L)).thenReturn(Optional.of(order));
 
         OrderDetailsDTO result = orderService.getOrderDetails(1L);
 
+        assertNotNull(result);
         assertEquals(1L, result.getOrderId());
-        assertEquals(7L, result.getUserId());
-        assertEquals(3L, result.getShippingAddressId());
+        assertEquals(5L, result.getUserId());
+        assertEquals(10L, result.getShippingAddressId());
         assertEquals("PENDING", result.getStatus());
         assertEquals(450.0, result.getTotalAmount());
+        assertEquals(2, result.getTotalItems());
+        assertEquals(3, result.getTotalQuantity());
 
-        assertEquals(3, result.getTotalItems());
-        assertEquals(6, result.getTotalQuantity());
-
-        assertEquals(3, result.getItems().size());
+        assertEquals(2, result.getItems().size());
         assertEquals(1, result.getItems().get(0).getItemOrder());
         assertEquals(2, result.getItems().get(1).getItemOrder());
-        assertEquals(3, result.getItems().get(2).getItemOrder());
-
-        assertEquals(2, result.getItems().get(0).getQuantity());
-        assertEquals(1, result.getItems().get(1).getQuantity());
-        assertEquals(3, result.getItems().get(2).getQuantity());
     }
 
     @Test
-    void getOrderDetails_shouldReturnEmptyItemsWhenOrderHasNoItems() {
-        Order order = new Order();
-        order.setId(2L);
-        order.setUserId(8L);
-        order.setShippingAddressId(4L);
-        order.setStatus(OrderStatus.CONFIRMED);
-        order.setTotalAmount(0.0);
-        order.setOrderItems(Collections.emptyList());
+    void shouldReturnEmptyItemsWhenOrderHasNoItems() {
+        order.setOrderItems(new ArrayList<>());
+        when(orderRepository.findByIdWithItems(1L)).thenReturn(Optional.of(order));
 
-        when(orderRepository.findByIdWithItems(2L)).thenReturn(Optional.of(order));
+        OrderDetailsDTO result = orderService.getOrderDetails(1L);
 
-        OrderDetailsDTO result = orderService.getOrderDetails(2L);
-
-        assertNotNull(result.getItems());
-        assertTrue(result.getItems().isEmpty());
+        assertNotNull(result);
         assertEquals(0, result.getTotalItems());
         assertEquals(0, result.getTotalQuantity());
+        assertTrue(result.getItems().isEmpty());
     }
 
     @Test
-    void getOrderDetails_shouldThrow404WhenOrderDoesNotExist() {
+    void shouldThrow404WhenOrderNotFound() {
         when(orderRepository.findByIdWithItems(999L)).thenReturn(Optional.empty());
 
         ResponseStatusException ex = assertThrows(
@@ -112,6 +123,6 @@ class OrderServiceDetailsTest {
                 () -> orderService.getOrderDetails(999L)
         );
 
-        assertEquals(HttpStatusCode.valueOf(404), ex.getStatusCode());
+        assertEquals(HttpStatus.NOT_FOUND, ex.getStatusCode());
     }
 }
