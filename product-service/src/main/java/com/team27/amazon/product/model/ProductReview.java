@@ -48,7 +48,7 @@ public class ProductReview {
     private String comment;
 
     @NotNull
-    @Column(nullable = false)
+    @Column(nullable = false, columnDefinition = "boolean default false")
     private Boolean verified = false;
 
     @JdbcTypeCode(SqlTypes.JSON)
@@ -121,7 +121,7 @@ public class ProductReview {
     }
 
     public void setVerified(Boolean verified) {
-        this.verified = verified;
+        this.verified = verified == null ? false : verified;
     }
 
     public Map<String, Object> getMetadata() {

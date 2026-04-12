@@ -89,10 +89,19 @@ public class ProductService {
         Map<String, Object> currentSpecifications = existing.getSpecifications();
         if (currentSpecifications == null) {
             currentSpecifications = new HashMap<>();
+        } else {
+            currentSpecifications = new HashMap<>(currentSpecifications);
         }
 
         if (newSpecifications != null) {
-            currentSpecifications.putAll(newSpecifications);
+            Object nestedSpecifications = newSpecifications.get("specifications");
+            if (nestedSpecifications instanceof Map<?, ?> nestedMap) {
+                for (Map.Entry<?, ?> entry : nestedMap.entrySet()) {
+                    currentSpecifications.put(String.valueOf(entry.getKey()), entry.getValue());
+                }
+            } else {
+                currentSpecifications.putAll(newSpecifications);
+            }
         }
 
         existing.setSpecifications(currentSpecifications);

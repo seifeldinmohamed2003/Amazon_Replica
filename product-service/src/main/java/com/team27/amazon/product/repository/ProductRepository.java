@@ -14,7 +14,12 @@ public interface ProductRepository extends JpaRepository<Product, Long> {
 
     List<Product> findByStatus(ProductStatus status);
 
-    List<Product> findByCategoryIgnoreCase(String category);
+    @Query(value = """
+            SELECT *
+            FROM products p
+            WHERE LOWER(p.category::text) = LOWER(:category)
+            """, nativeQuery = true)
+    List<Product> findByCategoryIgnoreCase(@Param("category") String category);
 
    @Query(value = """
         SELECT 
@@ -41,12 +46,17 @@ List<Object[]> findTopRatedProducts(@Param("limit") int limit);
         """, nativeQuery = true)
     boolean existsInPendingOrders(@Param("productId") Long productId);
 
-    List<Product> findByStockQuantityLessThanOrderByStockQuantityAsc(Integer threshold);
+        @Query("SELECT p FROM Product p WHERE p.status = com.team27.amazon.product.model.ProductStatus.ACTIVE AND p.stockQuantity < :threshold ORDER BY p.stockQuantity ASC")
+        List<Product> findByStockQuantityLessThanOrderByStockQuantityAsc(@Param("threshold") Integer threshold);
 
-    @Query("SELECT p FROM Product p WHERE " +
-           "(:category IS NULL OR LOWER(p.category) = LOWER(:category)) " +
-           "AND p.price >= :minPrice AND p.price <= :maxPrice " +
-           "ORDER BY p.price ASC")
+    @Query(value = """
+            SELECT *
+            FROM products p
+            WHERE (:category IS NULL OR LOWER(p.category::text) = LOWER(:category))
+              AND p.price >= :minPrice
+              AND p.price <= :maxPrice
+            ORDER BY p.price ASC
+            """, nativeQuery = true)
     List<Product> searchByPriceRange(
             @Param("minPrice") Double minPrice,
             @Param("maxPrice") Double maxPrice,
@@ -58,8 +68,8 @@ List<Object[]> findTopRatedProducts(@Param("limit") int limit);
             "FROM order_items oi " +
             "JOIN orders o ON oi.order_id = o.id " +
             "WHERE oi.product_id = :productId " +
-            "AND o.status = 'DELIVERED' " +
-            "AND o.delivered_at BETWEEN :startDateTime AND :endDateTime",
+            "AND o.status::text = 'DELIVERED' " +
+            "AND o.ordered_at BETWEEN :startDateTime AND :endDateTime",
             nativeQuery = true)
     Object[] getProductSalesSummary(
             @Param("productId") Long productId,
@@ -97,7 +107,7 @@ List<Object[]> findTopRatedProducts(@Param("limit") int limit);
          SELECT *
             FROM products p
             WHERE p.specifications ->> :key = :value
-              AND (:status IS NULL OR p.status = CAST(:status AS VARCHAR))
+                                                        AND (:status IS NULL OR p.status::text = :status)
             """, nativeQuery = true)
     List<Product> findBySpecificationKeyValueAndOptionalStatus(
             @Param("key") String key,
