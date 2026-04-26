@@ -1,0 +1,25 @@
+spring:
+  application:
+    name: billing-service
+  datasource:
+    url: jdbc:postgresql://postgres:5432/amazondb
+    username: postgres
+    password: postgres
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: true
+  data:
+    mongodb:
+      uri: mongodb://root:rootpass@amazon-mongo:27017/amazonmongo?authSource=admin
+    redis:
+      host: amazon-redis
+      port: 6379
+      password: redispass
+
+server:
+  port: 8085
+
+jwt:
+  secret: "bXlTdXBlclNlY3JldEtleUZvckpXVEF1dGhlbnRpY2F0aW9uMjAyNg=="
+  expiration: 86400000

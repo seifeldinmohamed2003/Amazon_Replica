@@ -4,10 +4,10 @@ import com.team27.amazon.billing.model.Transaction;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
-import java.util.Optional;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Optional;
 
 public interface TransactionRepository extends JpaRepository<Transaction, Long> {
 
@@ -77,4 +77,62 @@ public interface TransactionRepository extends JpaRepository<Transaction, Long> 
     @Query(value = "SELECT user_id FROM orders WHERE id = :orderId", nativeQuery = true)
     Long findUserIdByOrderId(@Param("orderId") Long orderId);
 
+    // ── S5-F10: category revenue aggregation ─────────────────────────────
+    @Query(value = """
+        SELECT
+            p.category,
+            SUM(oi.quantity * oi.price_at_purchase)                        AS grossRevenue,
+            COUNT(DISTINCT t.id)                                            AS transactionCount,
+            COUNT(DISTINCT CASE WHEN t.status::text = 'REFUNDED' THEN t.id END) AS refundCount
+        FROM transactions t
+        JOIN orders o       ON o.id = t.order_id
+        JOIN order_items oi ON oi.order_id = o.id
+        JOIN products p     ON p.id = oi.product_id
+        WHERE o.ordered_at BETWEEN :startDate AND :endDate
+          AND t.status::text IN ('COMPLETED','REFUNDED')
+        GROUP BY p.category
+        """, nativeQuery = true)
+    List<Object[]> getCategoryRevenue(
+            @Param("startDate") LocalDateTime startDate,
+            @Param("endDate") LocalDateTime endDate
+    );
+
+    // ── S5-F10: fetch REFUNDED transactions with transactionDetails for partial refund calc
+    @Query(value = """
+        SELECT t.id, t.transaction_details, t.amount, p.category
+        FROM transactions t
+        JOIN orders o       ON o.id = t.order_id
+        JOIN order_items oi ON oi.order_id = o.id
+        JOIN products p     ON p.id = oi.product_id
+        WHERE o.ordered_at BETWEEN :startDate AND :endDate
+          AND t.status::text = 'REFUNDED'
+        """, nativeQuery = true)
+    List<Object[]> getRefundedTransactionDetails(
+            @Param("startDate") LocalDateTime startDate,
+            @Param("endDate") LocalDateTime endDate
+    );
+
+    // ── S5-F11: get shipment IDs for an order ─────────────────────────────
+    @Query(value = "SELECT id FROM shipments WHERE order_id = :orderId", nativeQuery = true)
+    List<Long> findShipmentIdsByOrderId(@Param("orderId") Long orderId);
+
+    // ── S5-F12: get order items for a transaction's order ─────────────────
+    @Query(value = """
+        SELECT oi.id, oi.price_at_purchase, oi.quantity, oi.product_id
+        FROM order_items oi
+        JOIN transactions t ON t.order_id = oi.order_id
+        WHERE t.id = :transactionId
+        """, nativeQuery = true)
+    List<Object[]> getOrderItemsByTransactionId(@Param("transactionId") Long transactionId);
+
+    // ── S5-F12: validate that orderItemIds belong to this transaction's order
+    @Query(value = """
+        SELECT COUNT(*) FROM order_items oi
+        JOIN transactions t ON t.order_id = oi.order_id
+        WHERE t.id = :transactionId AND oi.id = :orderItemId
+        """, nativeQuery = true)
+    int countOrderItemBelongsToTransaction(
+            @Param("transactionId") Long transactionId,
+            @Param("orderItemId") Long orderItemId
+    );
 }
