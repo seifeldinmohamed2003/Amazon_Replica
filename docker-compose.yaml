@@ -1,6 +1,6 @@
 services:
   postgres:
-    image: postgres:15
+    image: postgres:17
     container_name: amazon-db
     ports:
       - "5432:5432"
@@ -10,6 +10,49 @@ services:
       POSTGRES_DB: amazondb
     volumes:
       - pgdata:/var/lib/postgresql/data
+  user-service:
+    build: ./user-service
+    ports:
+      - "8081:8080"
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/amazondb
+      SPRING_DATASOURCE_USERNAME: postgres
+      SPRING_DATASOURCE_PASSWORD: postgres
+    depends_on:
+      - postgres
+
+  product-service:
+    build: ./product-service
+    ports:
+        - "8082:8080"
+    environment:
+        SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/amazondb
+        SPRING_DATASOURCE_USERNAME: postgres
+        SPRING_DATASOURCE_PASSWORD: postgres
+    depends_on:
+        - postgres
+
+  order-service:
+    build: ./order-service
+    ports:
+        - "8083:8080"
+    environment:
+        SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/amazondb
+        SPRING_DATASOURCE_USERNAME: postgres
+        SPRING_DATASOURCE_PASSWORD: postgres
+    depends_on:
+        - postgres
+
+  shipping-service:
+    build: ./shipping-service
+    ports:
+        - "8084:8080"
+    environment:
+        SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/amazondb
+        SPRING_DATASOURCE_USERNAME: postgres
+        SPRING_DATASOURCE_PASSWORD: postgres
+    depends_on:
+        - postgres
 
   billing-service:
     build: ./billing-service
