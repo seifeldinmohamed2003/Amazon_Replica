@@ -4,6 +4,13 @@ import java.io.IOException;
 import java.util.Collections;
 
 import com.team27.amazon.billing.security.JwtService;
+import com.team27.amazon.billing.security.auth.AuthContext;
+import com.team27.amazon.billing.security.auth.AuthHandler;
+import com.team27.amazon.billing.security.auth.AuthResult;
+import com.team27.amazon.billing.security.auth.RoleAuthorizationHandler;
+import com.team27.amazon.billing.security.auth.SignatureValidationHandler;
+import com.team27.amazon.billing.security.auth.TokenExtractionHandler;
+import com.team27.amazon.billing.security.auth.UserLoaderHandler;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -43,31 +50,21 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain)
             throws ServletException, IOException {
-        String authorizationHeader = request.getHeader(HttpHeaders.AUTHORIZATION);
-        if (authorizationHeader == null || !authorizationHeader.startsWith("Bearer ")) {
-            response.sendError(HttpServletResponse.SC_UNAUTHORIZED, "Missing or invalid Authorization header");
+        AuthContext context = new AuthContext(request);
+        AuthHandler head = buildHandlerChain();
+        AuthResult result = head.handle(context);
+
+        if (!result.isSuccess()) {
+            response.sendError(result.getStatus(), result.getMessage());
             return;
         }
 
-        String token = authorizationHeader.substring(7).trim();
-        if (token.isEmpty() || !jwtService.validateToken(token)) {
-            response.sendError(HttpServletResponse.SC_UNAUTHORIZED, "Invalid or expired token");
-            return;
-        }
-
-        Long userId = jwtService.extractUserId(token);
-        if (userId == null || !userExists(userId)) {
-            response.sendError(HttpServletResponse.SC_UNAUTHORIZED, "User not found");
-            return;
-        }
-
-        String role = jwtService.extractRole(token);
         UsernamePasswordAuthenticationToken authentication = UsernamePasswordAuthenticationToken.authenticated(
-                userId,
-                token,
-                role == null
+                context.getUserId(),
+                context.getToken(),
+                context.getRole() == null
                         ? Collections.emptyList()
-                        : Collections.singletonList(new SimpleGrantedAuthority("ROLE_" + role))
+                        : Collections.singletonList(new SimpleGrantedAuthority("ROLE_" + context.getRole()))
         );
         authentication.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
         SecurityContextHolder.getContext().setAuthentication(authentication);
@@ -75,8 +72,15 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         filterChain.doFilter(request, response);
     }
 
-    private boolean userExists(Long userId) {
-        Integer matches = jdbcTemplate.queryForObject("SELECT COUNT(1) FROM users WHERE id = ?", Integer.class, userId);
-        return matches != null && matches > 0;
+    private AuthHandler buildHandlerChain() {
+        AuthHandler tokenExtractionHandler = new TokenExtractionHandler();
+        AuthHandler signatureValidationHandler = new SignatureValidationHandler(jwtService);
+        AuthHandler userLoaderHandler = new UserLoaderHandler(jwtService, jdbcTemplate);
+        AuthHandler roleAuthorizationHandler = new RoleAuthorizationHandler();
+
+        tokenExtractionHandler.setNext(signatureValidationHandler);
+        signatureValidationHandler.setNext(userLoaderHandler);
+        userLoaderHandler.setNext(roleAuthorizationHandler);
+        return tokenExtractionHandler;
     }
 }
