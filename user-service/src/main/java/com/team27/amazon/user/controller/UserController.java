@@ -5,7 +5,6 @@ import java.util.List;
 import java.util.Map;
 
 import com.team27.amazon.user.dto.TopBuyerDTO;
-import com.team27.amazon.user.dto.RoleUpdateRequest;
 import com.team27.amazon.user.dto.UserOrderSummaryDTO;
 import com.team27.amazon.user.dto.UserProfileDTO;
 import org.springframework.format.annotation.DateTimeFormat;
@@ -47,12 +46,6 @@ public class UserController {
     @PutMapping("/{id}")
     public ResponseEntity<User> updateUser(@PathVariable Long id, @RequestBody User user) {
         return ResponseEntity.ok(userService.updateUser(id, user));
-    }
-
-    @PutMapping("/{id}/role")
-    public ResponseEntity<User> updateUserRole(@PathVariable Long id,
-                                              @RequestBody RoleUpdateRequest request) {
-        return ResponseEntity.ok(userService.changeUserRole(id, request.getRole()));
     }
 
     @DeleteMapping("/{id}")
