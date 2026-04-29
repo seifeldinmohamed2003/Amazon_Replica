@@ -2,7 +2,7 @@ spring:
   application:
     name: shipping-service
   datasource:
-    url: jdbc:postgresql://localhost:5432/amazondb
+    url: jdbc:postgresql://postgres:5432/amazondb
     username: postgres
     password: postgres
   jpa:
@@ -12,6 +12,23 @@ spring:
     properties:
       hibernate:
         dialect: org.hibernate.dialect.PostgreSQLDialect
+  cassandra:
+    contact-points: cassandra
+    port: 9042
+    local-datacenter: datacenter1
+    keyspace-name: amazonks
+    schema-action: CREATE_IF_NOT_EXISTS
+  mongodb:
+    uri: mongodb://root:rootpass@mongo:27017/amazonmongo?authSource=admin
+  data:
+    redis:
+      host: redis
+      port: 6379
+      password: redispass
+  autoconfigure:
+    exclude:
+      - org.springframework.boot.cassandra.autoconfigure.CassandraAutoConfiguration
+      - org.springframework.boot.data.cassandra.autoconfigure.DataCassandraAutoConfiguration
 server:
   port: 8080
 jwt:
