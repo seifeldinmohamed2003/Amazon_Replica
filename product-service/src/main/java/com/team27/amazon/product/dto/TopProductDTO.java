@@ -1,6 +1,7 @@
 package com.team27.amazon.product.dto;
 
 public class TopProductDTO {
+
     private Long productId;
     private String name;
     private Double rating;
@@ -16,35 +17,57 @@ public class TopProductDTO {
         this.totalSales = totalSales;
     }
 
-    public Long getProductId() {
-        return productId;
+    // ✅ ADD ONLY
+    public static Builder builder() {
+        return new Builder();
     }
 
-    public void setProductId(Long productId) {
-        this.productId = productId;
-    }
+    public Long getProductId() { return productId; }
+    public void setProductId(Long productId) { this.productId = productId; }
 
-    public String getName() {
-        return name;
-    }
+    public String getName() { return name; }
+    public void setName(String name) { this.name = name; }
 
-    public Double getRating() {
-        return rating;
-    }
+    public Double getRating() { return rating; }
+    public void setRating(Double rating) { this.rating = rating; }
 
-    public Long getTotalSales() {
-        return totalSales;
-    }
+    public Long getTotalSales() { return totalSales; }
+    public void setTotalSales(Long totalSales) { this.totalSales = totalSales; }
 
-    public void setName(String name) {
-        this.name = name;
-    }
+    // ✅ ADD ONLY
+    public static class Builder {
+        private Long productId;
+        private String name;
+        private Double rating;
+        private Long totalSales;
 
-    public void setRating(Double rating) {
-        this.rating = rating;
-    }
+        public Builder productId(Long productId) {
+            this.productId = productId;
+            return this;
+        }
 
-    public void setTotalSales(Long totalSales) {
-        this.totalSales = totalSales;
+        public Builder name(String name) {
+            this.name = name;
+            return this;
+        }
+
+        public Builder rating(Double rating) {
+            this.rating = rating;
+            return this;
+        }
+
+        public Builder totalSales(Long totalSales) {
+            this.totalSales = totalSales;
+            return this;
+        }
+
+        public TopProductDTO build() {
+            return new TopProductDTO(
+                    productId,
+                    name,
+                    rating,
+                    totalSales
+            );
+        }
     }
 }

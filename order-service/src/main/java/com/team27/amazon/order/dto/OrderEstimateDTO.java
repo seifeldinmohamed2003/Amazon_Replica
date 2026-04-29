@@ -24,6 +24,10 @@ public class OrderEstimateDTO {
         this.discountApplied = discountApplied;
     }
 
+    public static Builder builder() {
+        return new Builder();
+    }
+
     public Integer getItemCount() {
         return itemCount;
     }
@@ -62,5 +66,48 @@ public class OrderEstimateDTO {
 
     public void setDiscountApplied(Double discountApplied) {
         this.discountApplied = discountApplied;
+    }
+
+    public static class Builder {
+        private Integer itemCount;
+        private Double subtotal;
+        private Double shippingCost;
+        private Double estimatedTotal;
+        private Double discountApplied;
+
+        public Builder itemCount(Integer itemCount) {
+            this.itemCount = itemCount;
+            return this;
+        }
+
+        public Builder subtotal(Double subtotal) {
+            this.subtotal = subtotal;
+            return this;
+        }
+
+        public Builder shippingCost(Double shippingCost) {
+            this.shippingCost = shippingCost;
+            return this;
+        }
+
+        public Builder estimatedTotal(Double estimatedTotal) {
+            this.estimatedTotal = estimatedTotal;
+            return this;
+        }
+
+        public Builder discountApplied(Double discountApplied) {
+            this.discountApplied = discountApplied;
+            return this;
+        }
+
+        public OrderEstimateDTO build() {
+            return new OrderEstimateDTO(
+                    itemCount,
+                    subtotal,
+                    shippingCost,
+                    estimatedTotal,
+                    discountApplied
+            );
+        }
     }
 }

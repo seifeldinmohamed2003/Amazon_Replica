@@ -140,7 +140,12 @@ public class BillingService {
             totalAmount += sum;
         }
 
-        return new UserTransactionSummaryDTO(userId, totalTransactions, totalAmount, methodBreakdown);
+        return UserTransactionSummaryDTO.builder()
+                .userId(userId)
+                .totalTransactions(totalTransactions)
+                .totalAmount(totalAmount)
+                .methodBreakdown(methodBreakdown)
+                .build();
     }
 
     @Transactional
@@ -255,7 +260,13 @@ public class BillingService {
 
         double average = totalTx > 0 ? totalRevenue / totalTx : 0.0;
 
-        return new RevenueReportDTO(totalRevenue, totalTx, average, refundedAmount, refundCount);
+        return RevenueReportDTO.builder()
+                .totalRevenue(totalRevenue)
+                .totalTransactions(totalTx)
+                .averageTransaction(average)
+                .refundedAmount(refundedAmount)
+                .refundCount(refundCount)
+                .build();
     }
 
     // ── S5-F7 ── Retry Failed Transaction ────────────────────────────────────
@@ -308,19 +319,18 @@ public class BillingService {
             totalDiscount += tv.getDiscountApplied();
         }
 
-        TransactionDetailsDTO dto = new TransactionDetailsDTO();
-        dto.setTransactionId(tx.getId());
-        dto.setOrderId(tx.getOrderId());
-        dto.setUserId(tx.getUserId());
-        dto.setOriginalAmount(tx.getAmount());
-        dto.setMethod(tx.getMethod().name());
-        dto.setStatus(tx.getStatus().name());
-        dto.setTransactionDetails(tx.getTransactionDetails());
-        dto.setAppliedVouchers(appliedVouchers);
-        dto.setTotalDiscount(totalDiscount);
-        dto.setFinalAmount(tx.getAmount() - totalDiscount);
-
-        return dto;
+        return TransactionDetailsDTO.builder()
+                .transactionId(tx.getId())
+                .orderId(tx.getOrderId())
+                .userId(tx.getUserId())
+                .originalAmount(tx.getAmount())
+                .method(tx.getMethod().name())
+                .status(tx.getStatus().name())
+                .transactionDetails(tx.getTransactionDetails())
+                .appliedVouchers(appliedVouchers)
+                .totalDiscount(totalDiscount)
+                .finalAmount(tx.getAmount() - totalDiscount)
+                .build();
     }
 
     // ── S5-F9 ── Get Most Used Vouchers Report ───────────────────────────────
@@ -340,16 +350,16 @@ public class BillingService {
             boolean expired       = v.getExpiryDate() != null &&
                     v.getExpiryDate().isBefore(LocalDateTime.now());
 
-            result.add(new VoucherUsageDTO(
-                    v.getId(),
-                    v.getCode(),
-                    v.getDiscountType().name(),
-                    v.getDiscountValue(),
-                    timesUsed,
-                    totalDiscount,
-                    v.getActive(),
-                    expired
-            ));
+            result.add(VoucherUsageDTO.builder()
+                    .voucherId(v.getId())
+                    .code(v.getCode())
+                    .discountType(v.getDiscountType().name())
+                    .discountValue(v.getDiscountValue())
+                    .timesUsed(timesUsed)
+                    .totalDiscountGiven(totalDiscount)
+                    .active(v.getActive())
+                    .expired(expired)
+                    .build());
             count++;
         }
 

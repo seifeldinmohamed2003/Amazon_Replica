@@ -22,6 +22,10 @@ public class NearbyShipmentDTO {
         this.distanceKm = distanceKm;
     }
 
+    public static Builder builder() {
+        return new Builder();
+    }
+
     public Long getShipmentId() { return shipmentId; }
     public void setShipmentId(Long shipmentId) { this.shipmentId = shipmentId; }
 
@@ -42,4 +46,61 @@ public class NearbyShipmentDTO {
 
     public Double getDistanceKm() { return distanceKm; }
     public void setDistanceKm(Double distanceKm) { this.distanceKm = distanceKm; }
+
+    public static class Builder {
+        private Long shipmentId;
+        private Long orderId;
+        private String carrier;
+        private String trackingNumber;
+        private Double latitude;
+        private Double longitude;
+        private Double distanceKm;
+
+        public Builder shipmentId(Long shipmentId) {
+            this.shipmentId = shipmentId;
+            return this;
+        }
+
+        public Builder orderId(Long orderId) {
+            this.orderId = orderId;
+            return this;
+        }
+
+        public Builder carrier(String carrier) {
+            this.carrier = carrier;
+            return this;
+        }
+
+        public Builder trackingNumber(String trackingNumber) {
+            this.trackingNumber = trackingNumber;
+            return this;
+        }
+
+        public Builder latitude(Double latitude) {
+            this.latitude = latitude;
+            return this;
+        }
+
+        public Builder longitude(Double longitude) {
+            this.longitude = longitude;
+            return this;
+        }
+
+        public Builder distanceKm(Double distanceKm) {
+            this.distanceKm = distanceKm;
+            return this;
+        }
+
+        public NearbyShipmentDTO build() {
+            return new NearbyShipmentDTO(
+                    shipmentId,
+                    orderId,
+                    carrier,
+                    trackingNumber,
+                    latitude,
+                    longitude,
+                    distanceKm
+            );
+        }
+    }
 }

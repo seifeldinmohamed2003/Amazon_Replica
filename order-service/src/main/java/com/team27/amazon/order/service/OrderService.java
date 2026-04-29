@@ -173,7 +173,13 @@ public class OrderService {
         double shippingCost = subtotal >= SHIPPING_THRESHOLD ? 0.0 : SHIPPING_FLAT_RATE;
         double estimatedTotal = (subtotal * (1 - (discountApplied / 100.0))) + shippingCost;
 
-        return new OrderEstimateDTO(itemCount, subtotal, shippingCost, estimatedTotal, discountApplied);
+        return OrderEstimateDTO.builder()
+                .itemCount(itemCount)
+                .subtotal(subtotal)
+                .shippingCost(shippingCost)
+                .estimatedTotal(estimatedTotal)
+                .discountApplied(discountApplied)
+                .build();
     }
 
     private double calculateDiscountPercent(int itemCount) {
@@ -217,17 +223,17 @@ public class OrderService {
             totalQuantity += item.getQuantity();
         }
 
-        return new OrderDetailsDTO(
-                order.getId(),
-                order.getUserId(),
-                order.getShippingAddressId(),
-                order.getStatus().name(),
-                order.getTotalAmount(),
-                order.getMetadata(),
-                itemDTOs,
-                itemDTOs.size(),
-                totalQuantity
-        );
+        return OrderDetailsDTO.builder()
+                .orderId(order.getId())
+                .userId(order.getUserId())
+                .shippingAddressId(order.getShippingAddressId())
+                .status(order.getStatus().name())
+                .totalAmount(order.getTotalAmount())
+                .metadata(order.getMetadata())
+                .items(itemDTOs)
+                .totalItems(itemDTOs.size())
+                .totalQuantity(totalQuantity)
+                .build();
     }
     // READ - Get all orders
     public List<Order> getAllOrders() {
@@ -400,14 +406,14 @@ public class OrderService {
 
         double completionRate = totalOrders == 0 ? 0.0 : (deliveredOrders * 100.0) / totalOrders;
 
-        return new OrderAnalyticsDTO(
-                totalOrders,
-                deliveredOrders,
-                cancelledOrders,
-                totalRevenue,
-                averageOrderValue,
-                completionRate
-        );
+        return OrderAnalyticsDTO.builder()
+                .totalOrders(totalOrders)
+                .deliveredOrders(deliveredOrders)
+                .cancelledOrders(cancelledOrders)
+                .totalRevenue(totalRevenue)
+                .averageOrderValue(averageOrderValue)
+                .completionRate(completionRate)
+                .build();
     }
 
     @Transactional

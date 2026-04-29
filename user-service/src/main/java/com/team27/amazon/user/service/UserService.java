@@ -25,7 +25,7 @@ import com.team27.amazon.user.repository.ShippingAddressRepository;
 import com.team27.amazon.user.repository.UserRepository;
 import com.team27.amazon.user.dto.ShippingAddressDTO;
 import com.team27.amazon.user.dto.UserProfileDTO;
-
+import com.team27.amazon.user.dto.UserProfileDTOBuilder;
 
 @Service
 public class UserService {
@@ -153,18 +153,25 @@ public class UserService {
         if (row == null || row.length == 0) {
             // User exists but has no orders
             User user = getUserById(userId);
-            return new UserOrderSummaryDTO(userId, user.getName(), 0L, 0L, 0L, 0.0, 0.0);
-        }
+            return UserOrderSummaryDTO.builder()
+                    .userId(userId)
+                    .name(user.getName())
+                    .totalOrders(0L)
+                    .completedOrders(0L)
+                    .cancelledOrders(0L)
+                    .totalSpent(0.0)
+                    .averageOrderValue(0.0)
+                    .build();  }
 
-        return new UserOrderSummaryDTO(
-                ((Number) row[0]).longValue(),
-                (String) row[1],
-                ((Number) row[2]).longValue(),
-                ((Number) row[3]).longValue(),
-                ((Number) row[4]).longValue(),
-                ((Number) row[5]).doubleValue(),
-                ((Number) row[6]).doubleValue()
-        );
+        return UserOrderSummaryDTO.builder()
+                .userId(((Number) row[0]).longValue())
+                .name((String) row[1])
+                .totalOrders(((Number) row[2]).longValue())
+                .completedOrders(((Number) row[3]).longValue())
+                .cancelledOrders(((Number) row[4]).longValue())
+                .totalSpent(((Number) row[5]).doubleValue())
+                .averageOrderValue(((Number) row[6]).doubleValue())
+                .build();
     }
 
     //S1-F4
@@ -233,7 +240,12 @@ public class UserService {
             Double totalSpent = ((Number) row[2]).doubleValue();
             Long orderCount = ((Number) row[3]).longValue();
 
-            result.add(new TopBuyerDTO(userId, name, totalSpent, orderCount));
+            result.add(TopBuyerDTO.builder()
+                    .userId(userId)
+                    .name(name)
+                    .totalSpent(totalSpent)
+                    .orderCount(orderCount)
+                    .build());
         }
 
         return result;
@@ -288,15 +300,15 @@ public class UserService {
                 ))
                 .toList();
 
-        return new UserProfileDTO(
-                user.getId(),
-                user.getName(),
-                user.getEmail(),
-                user.getPhone(),
-                user.getPreferences(),
-                addresses,
-                addresses.size()
-        );
+        return UserProfileDTOBuilder.builder()
+                .userId(user.getId())
+                .name(user.getName())
+                .email(user.getEmail())
+                .phone(user.getPhone())
+                .preferences(user.getPreferences())
+                .shippingAddresses(addresses)
+                .totalAddresses(addresses.size())
+                .build();
     }
 
     public List<User> findUsersByLanguage(String lang, long minOrders) {

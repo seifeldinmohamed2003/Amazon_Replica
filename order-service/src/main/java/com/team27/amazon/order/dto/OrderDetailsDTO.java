@@ -32,6 +32,10 @@ public class OrderDetailsDTO {
         this.totalQuantity = totalQuantity;
     }
 
+    public static Builder builder() {
+        return new Builder();
+    }
+
     public Long getOrderId() {
         return orderId;
     }
@@ -102,5 +106,76 @@ public class OrderDetailsDTO {
 
     public void setTotalQuantity(Integer totalQuantity) {
         this.totalQuantity = totalQuantity;
+    }
+
+    public static class Builder {
+        private Long orderId;
+        private Long userId;
+        private Long shippingAddressId;
+        private String status;
+        private Double totalAmount;
+        private Map<String, Object> metadata;
+        private List<OrderItemDetailsDTO> items;
+        private Integer totalItems;
+        private Integer totalQuantity;
+
+        public Builder orderId(Long orderId) {
+            this.orderId = orderId;
+            return this;
+        }
+
+        public Builder userId(Long userId) {
+            this.userId = userId;
+            return this;
+        }
+
+        public Builder shippingAddressId(Long shippingAddressId) {
+            this.shippingAddressId = shippingAddressId;
+            return this;
+        }
+
+        public Builder status(String status) {
+            this.status = status;
+            return this;
+        }
+
+        public Builder totalAmount(Double totalAmount) {
+            this.totalAmount = totalAmount;
+            return this;
+        }
+
+        public Builder metadata(Map<String, Object> metadata) {
+            this.metadata = metadata;
+            return this;
+        }
+
+        public Builder items(List<OrderItemDetailsDTO> items) {
+            this.items = items;
+            return this;
+        }
+
+        public Builder totalItems(Integer totalItems) {
+            this.totalItems = totalItems;
+            return this;
+        }
+
+        public Builder totalQuantity(Integer totalQuantity) {
+            this.totalQuantity = totalQuantity;
+            return this;
+        }
+
+        public OrderDetailsDTO build() {
+            return new OrderDetailsDTO(
+                    orderId,
+                    userId,
+                    shippingAddressId,
+                    status,
+                    totalAmount,
+                    metadata,
+                    items,
+                    totalItems,
+                    totalQuantity
+            );
+        }
     }
 }

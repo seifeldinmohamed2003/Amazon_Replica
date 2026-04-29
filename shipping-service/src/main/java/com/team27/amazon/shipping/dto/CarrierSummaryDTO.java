@@ -23,6 +23,10 @@ public class CarrierSummaryDTO {
         this.onTimeRate = onTimeRate;
     }
 
+    public static Builder builder() {
+        return new Builder();
+    }
+
     public String getCarrier() {
         return carrier;
     }
@@ -61,5 +65,48 @@ public class CarrierSummaryDTO {
 
     public void setOnTimeRate(double onTimeRate) {
         this.onTimeRate = onTimeRate;
+    }
+
+    public static class Builder {
+        private String carrier;
+        private long totalShipments;
+        private long deliveredCount;
+        private double averageDeliveryDays;
+        private double onTimeRate;
+
+        public Builder carrier(String carrier) {
+            this.carrier = carrier;
+            return this;
+        }
+
+        public Builder totalShipments(long totalShipments) {
+            this.totalShipments = totalShipments;
+            return this;
+        }
+
+        public Builder deliveredCount(long deliveredCount) {
+            this.deliveredCount = deliveredCount;
+            return this;
+        }
+
+        public Builder averageDeliveryDays(double averageDeliveryDays) {
+            this.averageDeliveryDays = averageDeliveryDays;
+            return this;
+        }
+
+        public Builder onTimeRate(double onTimeRate) {
+            this.onTimeRate = onTimeRate;
+            return this;
+        }
+
+        public CarrierSummaryDTO build() {
+            return new CarrierSummaryDTO(
+                    carrier,
+                    totalShipments,
+                    deliveredCount,
+                    averageDeliveryDays,
+                    onTimeRate
+            );
+        }
     }
 }

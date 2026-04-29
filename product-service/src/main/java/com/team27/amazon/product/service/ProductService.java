@@ -126,13 +126,13 @@ public class ProductService {
 
         double averageSellingPrice = totalUnitsSold == 0 ? 0.0 : totalRevenue / totalUnitsSold;
 
-        return new ProductSalesDTO(
-                product.getId(),
-                product.getName(),
-                totalUnitsSold,
-                totalRevenue,
-                averageSellingPrice
-        );
+        return ProductSalesDTO.builder()
+                .productId(product.getId())
+                .name(product.getName())
+                .totalUnitsSold(totalUnitsSold)
+                .totalRevenue(totalRevenue)
+                .averageSellingPrice(averageSellingPrice)
+                .build();
     }
 
     public void deleteProduct(Long id) {
@@ -261,12 +261,13 @@ public class ProductService {
     List<Object[]> rows = productRepository.findTopRatedProducts(limit);
 
     return rows.stream()
-            .map(row -> new TopProductDTO(
-                    ((Number) row[0]).longValue(),
-                    (String) row[1],
-                    row[2] == null ? 0.0 : ((Number) row[2]).doubleValue(),
-                    row[3] == null ? 0L : ((Number) row[3]).longValue()
-            ))
+            .map(row -> TopProductDTO.builder()
+                    .productId(((Number) row[0]).longValue())
+                    .name((String) row[1])
+                    .rating(row[2] == null ? 0.0 : ((Number) row[2]).doubleValue())
+                    .totalSales(row[3] == null ? 0L : ((Number) row[3]).longValue())
+                    .build()
+            )
             .toList();
     }
 
