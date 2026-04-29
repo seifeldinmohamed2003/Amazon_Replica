@@ -1,6 +1,8 @@
 package com.team27.amazon.shipping.service;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.team27.amazon.common.events.AbstractEventSubject;
+import com.team27.amazon.common.events.MongoEventLogger;
 import com.team27.amazon.shipping.dto.BatchStatusUpdateRequest;
 import com.team27.amazon.shipping.dto.CarrierSummaryDTO;
 import com.team27.amazon.shipping.dto.CreateShipmentRequest;
@@ -9,12 +11,15 @@ import com.team27.amazon.shipping.dto.NearbyShipmentDTO;
 import com.team27.amazon.shipping.model.Shipment;
 import com.team27.amazon.shipping.model.ShipmentStatus;
 import com.team27.amazon.shipping.repository.ShipmentRepository;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.http.HttpStatus;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
+import jakarta.annotation.PostConstruct;
 import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
 import java.util.Comparator;
@@ -24,11 +29,15 @@ import java.util.Map;
 import java.util.stream.Collectors;
 
 @Service
-public class ShipmentService {
+public class ShipmentService extends AbstractEventSubject {
 
     private final ShipmentRepository shipmentRepository;
     private final JdbcTemplate jdbcTemplate;
     private final ObjectMapper objectMapper;
+
+    @Autowired
+    @Qualifier("shipmentEventLogger")
+    private MongoEventLogger mongoEventLogger;
 
     public ShipmentService(
             ShipmentRepository shipmentRepository,
@@ -40,8 +49,18 @@ public class ShipmentService {
         this.objectMapper = objectMapper;
     }
 
+    @PostConstruct
+    public void initObserver() {
+        register(mongoEventLogger);
+    }
+
     public Shipment createShipment(Shipment shipment) {
-        return shipmentRepository.save(shipment);
+        Shipment savedShipment = shipmentRepository.save(shipment);
+        notifyObservers("SHIPMENT_CREATED", shipmentEventPayload(savedShipment.getId(), Map.of(
+                "orderId", savedShipment.getOrderId(),
+                "status", savedShipment.getStatus() == null ? null : savedShipment.getStatus().name()
+        )));
+        return savedShipment;
     }
 
     public List<Shipment> getAllShipments() {
@@ -67,7 +86,12 @@ public class ShipmentService {
         existing.setActualDelivery(updatedShipment.getActualDelivery());
         existing.setMetadata(updatedShipment.getMetadata());
 
-        return shipmentRepository.save(existing);
+        Shipment savedShipment = shipmentRepository.save(existing);
+        notifyObservers("SHIPMENT_UPDATED", shipmentEventPayload(savedShipment.getId(), Map.of(
+            "orderId", savedShipment.getOrderId(),
+            "status", savedShipment.getStatus() == null ? null : savedShipment.getStatus().name()
+        )));
+        return savedShipment;
     }
 
     public void deleteShipment(Long id) {
@@ -75,6 +99,7 @@ public class ShipmentService {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Shipment not found");
         }
         shipmentRepository.deleteById(id);
+        notifyObservers("SHIPMENT_DELETED", shipmentEventPayload(id, Map.of()));
     }
 
     public Shipment getLatestShipmentByOrderId(Long orderId) {
@@ -115,7 +140,12 @@ public class ShipmentService {
             shipment.setMetadata(request.getMetadata());
         }
 
-        return shipmentRepository.save(shipment);
+        Shipment savedShipment = shipmentRepository.save(shipment);
+        notifyObservers("SHIPMENT_CREATED", shipmentEventPayload(savedShipment.getId(), Map.of(
+                "orderId", savedShipment.getOrderId(),
+                "status", savedShipment.getStatus() == null ? null : savedShipment.getStatus().name()
+        )));
+        return savedShipment;
     }
 
     public List<NearbyShipmentDTO> findNearbyOutForDelivery(Double lat, Double lon, Double radiusKm) {
@@ -184,6 +214,10 @@ public class ShipmentService {
         LocalDateTime cutoff = LocalDateTime.now().minusDays(olderThanDays);
         int count = shipmentRepository.countOlderThan(cutoff);
         shipmentRepository.deleteOlderThan(cutoff);
+        notifyObservers("OLD_DATA_PURGED", shipmentEventPayload(null, Map.of(
+            "olderThanDays", olderThanDays,
+            "deletedCount", count
+        )));
         return count;
     }
 
@@ -367,7 +401,21 @@ public class ShipmentService {
         // Save all updated shipments
         shipmentRepository.saveAll(existingShipments);
 
+        notifyObservers("BATCH_STATUS_UPDATED", shipmentEventPayload(null, Map.of(
+                "count", existingShipments.size(),
+                "shipmentIds", shipmentIds
+        )));
+
         return existingShipments.size();
+    }
+
+    private Map<String, Object> shipmentEventPayload(Long shipmentId, Map<String, Object> details) {
+        Map<String, Object> payload = new HashMap<>();
+        if (shipmentId != null) {
+            payload.put("shipmentId", shipmentId);
+        }
+        payload.put("details", details == null ? new HashMap<>() : new HashMap<>(details));
+        return payload;
     }
 
     private void validateCoordinates(Double latitude, Double longitude) {

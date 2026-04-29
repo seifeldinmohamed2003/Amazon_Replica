@@ -1,11 +1,10 @@
 package com.team27.amazon.billing.controller;
 
 import com.team27.amazon.billing.model.Voucher;
-import com.team27.amazon.billing.repository.VoucherRepository;
+import com.team27.amazon.billing.service.BillingService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
-import org.springframework.web.server.ResponseStatusException;
 
 import java.util.List;
 
@@ -14,34 +13,31 @@ import java.util.List;
 public class VoucherController {
 
     @Autowired
-    private VoucherRepository voucherRepository;
+    private BillingService billingService;
 
     @PostMapping
     public ResponseEntity<Voucher> createVoucher(@RequestBody Voucher voucher) {
-        return ResponseEntity.status(201).body(voucherRepository.save(voucher));
+        return ResponseEntity.status(201).body(billingService.createVoucher(voucher));
     }
 
     @GetMapping
     public ResponseEntity<List<Voucher>> getAllVouchers() {
-        return ResponseEntity.ok(voucherRepository.findAll());
+        return ResponseEntity.ok(billingService.getAllVouchers());
     }
 
     @GetMapping("/{id}")
     public ResponseEntity<Voucher> getVoucherById(@PathVariable Long id) {
-        return ResponseEntity.ok(voucherRepository.findById(id)
-                .orElseThrow(() -> new ResponseStatusException(
-                        org.springframework.http.HttpStatus.NOT_FOUND, "Voucher not found")));
+        return ResponseEntity.ok(billingService.getVoucherById(id));
     }
 
     @PutMapping("/{id}")
     public ResponseEntity<Voucher> updateVoucher(@PathVariable Long id, @RequestBody Voucher voucher) {
-        voucher.setId(id);
-        return ResponseEntity.ok(voucherRepository.save(voucher));
+        return ResponseEntity.ok(billingService.updateVoucher(id, voucher));
     }
 
     @DeleteMapping("/{id}")
     public ResponseEntity<Void> deleteVoucher(@PathVariable Long id) {
-        voucherRepository.deleteById(id);
+        billingService.deleteVoucher(id);
         return ResponseEntity.noContent().build();
     }
 }

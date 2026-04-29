@@ -3,11 +3,15 @@ package com.team27.amazon.product.service;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import com.team27.amazon.common.events.AbstractEventSubject;
+import com.team27.amazon.common.events.MongoEventLogger;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
@@ -31,10 +35,11 @@ import com.team27.amazon.product.model.ProductStatus;
 import com.team27.amazon.product.repository.ProductRepository;
 import com.team27.amazon.product.repository.ProductReviewRepository;
 
+import jakarta.annotation.PostConstruct;
 import jakarta.transaction.Transactional;
 
 @Service
-public class ProductService {
+public class ProductService extends AbstractEventSubject {
 
     @Autowired
     private ProductRepository productRepository;
@@ -42,10 +47,24 @@ public class ProductService {
     @Autowired
     private ProductReviewRepository productReviewRepository;
 
+    @Autowired
+    @Qualifier("productEventLogger")
+    private MongoEventLogger mongoEventLogger;
+
+    @PostConstruct
+    public void initObserver() {
+        register(mongoEventLogger);
+    }
+
     public Product createProduct(ProductRequest request) {
         Product product = new Product();
         applyRequest(product, request);
-        return productRepository.save(product);
+        Product savedProduct = productRepository.save(product);
+        notifyObservers("PRODUCT_CREATED", productEventPayload(savedProduct.getId(), Map.of(
+                "name", savedProduct.getName(),
+                "status", savedProduct.getStatus() == null ? null : savedProduct.getStatus().name()
+        )));
+        return savedProduct;
     }
 
     public Product getProductById(Long id) {
@@ -79,7 +98,12 @@ public class ProductService {
     public Product updateProduct(Long id, ProductRequest request) {
         Product existing = getProductById(id);
         applyRequest(existing, request);
-        return productRepository.save(existing);
+        Product savedProduct = productRepository.save(existing);
+        notifyObservers("PRODUCT_UPDATED", productEventPayload(savedProduct.getId(), Map.of(
+                "name", savedProduct.getName(),
+                "status", savedProduct.getStatus() == null ? null : savedProduct.getStatus().name()
+        )));
+        return savedProduct;
     }
 
     public Product updateSpecifications(Long id, Map<String, Object> newSpecifications) {
@@ -105,7 +129,11 @@ public class ProductService {
         }
 
         existing.setSpecifications(currentSpecifications);
-        return productRepository.save(existing);
+        Product savedProduct = productRepository.save(existing);
+        notifyObservers("SPECIFICATIONS_UPDATED", productEventPayload(savedProduct.getId(), Map.of(
+            "details", new HashMap<>(currentSpecifications)
+        )));
+        return savedProduct;
     }
 
     public ProductSalesDTO getProductSalesSummary(Long productId, LocalDate startDate, LocalDate endDate) {
@@ -138,6 +166,7 @@ public class ProductService {
     public void deleteProduct(Long id) {
         Product existing = getProductById(id);
         productRepository.delete(existing);
+        notifyObservers("PRODUCT_DELETED", productEventPayload(id, Map.of()));
 
     }
 
@@ -165,8 +194,8 @@ public class ProductService {
         review.setVerified(false);
         review.setMetadata(new HashMap<>());
 
-        product.addReview(review);
-        productReviewRepository.save(review);
+        ProductReview savedReview = productReviewRepository.save(review);
+        product.addReview(savedReview);
 
         int oldCount = product.getTotalRatings() == null ? 0 : product.getTotalRatings();
         double oldAverage = product.getRating() == null ? 0.0 : product.getRating();
@@ -178,8 +207,13 @@ public class ProductService {
         product.setRating(newAverage);
 
         productRepository.save(product);
+        notifyObservers("REVIEW_ADDED", productReviewEventPayload(product.getId(), savedReview.getId(), Map.of(
+            "userId", savedReview.getUserId(),
+            "rating", savedReview.getRating(),
+            "details", reviewDetails(savedReview)
+        )));
 
-        return review;
+        return savedReview;
     }
 
     @Transactional
@@ -223,6 +257,10 @@ public class ProductService {
         review.setMetadata(metadata);
 
         productReviewRepository.save(review);
+        notifyObservers("REVIEW_VERIFIED", productReviewEventPayload(productId, reviewId, Map.of(
+            "verifiedBy", request.getVerifiedBy(),
+            "details", new HashMap<>(metadata)
+        )));
         return product;
     }
 
@@ -296,7 +334,40 @@ public class ProductService {
     }
 
     product.setStatus(ProductStatus.INACTIVE);
-    return productRepository.save(product);
+    Product savedProduct = productRepository.save(product);
+    notifyObservers("STATUS_CHANGED", productEventPayload(savedProduct.getId(), Map.of(
+            "status", savedProduct.getStatus() == null ? null : savedProduct.getStatus().name()
+    )));
+    return savedProduct;
 }
+
+    private Map<String, Object> productEventPayload(Long productId, Map<String, Object> details) {
+        Map<String, Object> payload = new HashMap<>();
+        payload.put("productId", productId);
+        payload.put("details", details == null ? new HashMap<>() : new HashMap<>(details));
+        return payload;
+    }
+
+    private Map<String, Object> productReviewEventPayload(Long productId, Long reviewId, Map<String, Object> details) {
+        Map<String, Object> payload = new HashMap<>();
+        payload.put("productId", productId);
+        if (reviewId != null) {
+            payload.put("reviewId", reviewId);
+        }
+        payload.put("details", details == null ? new HashMap<>() : new HashMap<>(details));
+        return payload;
+    }
+
+    private Map<String, Object> reviewDetails(ProductReview review) {
+        Map<String, Object> details = new HashMap<>();
+        if (review == null) {
+            return details;
+        }
+
+        details.put("userId", review.getUserId());
+        details.put("rating", review.getRating());
+        details.put("title", review.getTitle());
+        return details;
+    }
     
 }
