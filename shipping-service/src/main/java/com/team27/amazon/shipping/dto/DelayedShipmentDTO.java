@@ -31,6 +31,10 @@ public class DelayedShipmentDTO {
         this.deliveryAttempts = deliveryAttempts;
     }
 
+    public static Builder builder() {
+        return new Builder();
+    }
+
     public Long getShipmentId() {
         return shipmentId;
     }
@@ -85,5 +89,62 @@ public class DelayedShipmentDTO {
 
     public void setDeliveryAttempts(int deliveryAttempts) {
         this.deliveryAttempts = deliveryAttempts;
+    }
+
+    public static class Builder {
+        private Long shipmentId;
+        private Long orderId;
+        private String carrier;
+        private String trackingNumber;
+        private LocalDate estimatedDelivery;
+        private long daysOverdue;
+        private int deliveryAttempts;
+
+        public Builder shipmentId(Long shipmentId) {
+            this.shipmentId = shipmentId;
+            return this;
+        }
+
+        public Builder orderId(Long orderId) {
+            this.orderId = orderId;
+            return this;
+        }
+
+        public Builder carrier(String carrier) {
+            this.carrier = carrier;
+            return this;
+        }
+
+        public Builder trackingNumber(String trackingNumber) {
+            this.trackingNumber = trackingNumber;
+            return this;
+        }
+
+        public Builder estimatedDelivery(LocalDate estimatedDelivery) {
+            this.estimatedDelivery = estimatedDelivery;
+            return this;
+        }
+
+        public Builder daysOverdue(long daysOverdue) {
+            this.daysOverdue = daysOverdue;
+            return this;
+        }
+
+        public Builder deliveryAttempts(int deliveryAttempts) {
+            this.deliveryAttempts = deliveryAttempts;
+            return this;
+        }
+
+        public DelayedShipmentDTO build() {
+            return new DelayedShipmentDTO(
+                    shipmentId,
+                    orderId,
+                    carrier,
+                    trackingNumber,
+                    estimatedDelivery,
+                    daysOverdue,
+                    deliveryAttempts
+            );
+        }
     }
 }

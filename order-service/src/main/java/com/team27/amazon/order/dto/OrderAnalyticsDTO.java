@@ -22,6 +22,10 @@ public class OrderAnalyticsDTO {
         this.completionRate = completionRate;
     }
 
+    public static Builder builder() {
+        return new Builder();
+    }
+
     public long getTotalOrders() {
         return totalOrders;
     }
@@ -68,5 +72,55 @@ public class OrderAnalyticsDTO {
 
     public void setCompletionRate(double completionRate) {
         this.completionRate = completionRate;
+    }
+
+    public static class Builder {
+        private long totalOrders;
+        private long deliveredOrders;
+        private long cancelledOrders;
+        private double totalRevenue;
+        private double averageOrderValue;
+        private double completionRate;
+
+        public Builder totalOrders(long totalOrders) {
+            this.totalOrders = totalOrders;
+            return this;
+        }
+
+        public Builder deliveredOrders(long deliveredOrders) {
+            this.deliveredOrders = deliveredOrders;
+            return this;
+        }
+
+        public Builder cancelledOrders(long cancelledOrders) {
+            this.cancelledOrders = cancelledOrders;
+            return this;
+        }
+
+        public Builder totalRevenue(double totalRevenue) {
+            this.totalRevenue = totalRevenue;
+            return this;
+        }
+
+        public Builder averageOrderValue(double averageOrderValue) {
+            this.averageOrderValue = averageOrderValue;
+            return this;
+        }
+
+        public Builder completionRate(double completionRate) {
+            this.completionRate = completionRate;
+            return this;
+        }
+
+        public OrderAnalyticsDTO build() {
+            return new OrderAnalyticsDTO(
+                    totalOrders,
+                    deliveredOrders,
+                    cancelledOrders,
+                    totalRevenue,
+                    averageOrderValue,
+                    completionRate
+            );
+        }
     }
 }

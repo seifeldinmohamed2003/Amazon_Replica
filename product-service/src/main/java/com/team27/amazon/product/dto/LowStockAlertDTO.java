@@ -19,17 +19,32 @@ public class LowStockAlertDTO {
     private Boolean hasNegativeReviews;
     private String alertMessage;
 
-    public static LowStockAlertDTO from(Product product) {
-        LowStockAlertDTO dto = new LowStockAlertDTO();
-        dto.setProductId(product.getId());
-        dto.setName(product.getName());
-        dto.setBrand(product.getBrand());
-        dto.setCategory(product.getCategory());
-        dto.setStockQuantity(product.getStockQuantity());
-        dto.setStatus(product.getStatus());
-        dto.setRating(product.getRating());
-        dto.setTotalRatings(product.getTotalRatings());
+    public LowStockAlertDTO() {
+    }
 
+    public LowStockAlertDTO(Long productId, String name, String brand, String category,
+                            Integer stockQuantity, ProductStatus status, Double rating,
+                            Integer totalRatings, Integer reviewCount, Integer verifiedReviewCount,
+                            Boolean hasNegativeReviews, String alertMessage) {
+        this.productId = productId;
+        this.name = name;
+        this.brand = brand;
+        this.category = category;
+        this.stockQuantity = stockQuantity;
+        this.status = status;
+        this.rating = rating;
+        this.totalRatings = totalRatings;
+        this.reviewCount = reviewCount;
+        this.verifiedReviewCount = verifiedReviewCount;
+        this.hasNegativeReviews = hasNegativeReviews;
+        this.alertMessage = alertMessage;
+    }
+
+    public static Builder builder() {
+        return new Builder();
+    }
+
+    public static LowStockAlertDTO from(Product product) {
         int reviewCount = product.getProductReviews() == null ? 0 : product.getProductReviews().size();
         int verifiedReviewCount = 0;
         boolean hasNegativeReviews = false;
@@ -45,107 +60,147 @@ public class LowStockAlertDTO {
             }
         }
 
-        dto.setReviewCount(reviewCount);
-        dto.setVerifiedReviewCount(verifiedReviewCount);
-        dto.setHasNegativeReviews(hasNegativeReviews);
-        dto.setAlertMessage("Low stock alert: only " + product.getStockQuantity() + " item(s) left.");
-
-        return dto;
+        return LowStockAlertDTO.builder()
+                .productId(product.getId())
+                .name(product.getName())
+                .brand(product.getBrand())
+                .category(product.getCategory())
+                .stockQuantity(product.getStockQuantity())
+                .status(product.getStatus())
+                .rating(product.getRating())
+                .totalRatings(product.getTotalRatings())
+                .reviewCount(reviewCount)
+                .verifiedReviewCount(verifiedReviewCount)
+                .hasNegativeReviews(hasNegativeReviews)
+                .alertMessage("Low stock alert: only " + product.getStockQuantity() + " item(s) left.")
+                .build();
     }
 
-    public Long getProductId() {
-        return productId;
-    }
+    public Long getProductId() { return productId; }
+    public void setProductId(Long productId) { this.productId = productId; }
 
-    public void setProductId(Long productId) {
-        this.productId = productId;
-    }
+    public String getName() { return name; }
+    public void setName(String name) { this.name = name; }
 
-    public String getName() {
-        return name;
-    }
+    public String getBrand() { return brand; }
+    public void setBrand(String brand) { this.brand = brand; }
 
-    public void setName(String name) {
-        this.name = name;
-    }
+    public String getCategory() { return category; }
+    public void setCategory(String category) { this.category = category; }
 
-    public String getBrand() {
-        return brand;
-    }
+    public Integer getStockQuantity() { return stockQuantity; }
+    public void setStockQuantity(Integer stockQuantity) { this.stockQuantity = stockQuantity; }
 
-    public void setBrand(String brand) {
-        this.brand = brand;
-    }
+    public ProductStatus getStatus() { return status; }
+    public void setStatus(ProductStatus status) { this.status = status; }
 
-    public String getCategory() {
-        return category;
-    }
+    public Double getRating() { return rating; }
+    public void setRating(Double rating) { this.rating = rating; }
 
-    public void setCategory(String category) {
-        this.category = category;
-    }
+    public Integer getTotalRatings() { return totalRatings; }
+    public void setTotalRatings(Integer totalRatings) { this.totalRatings = totalRatings; }
 
-    public Integer getStockQuantity() {
-        return stockQuantity;
-    }
+    public Integer getReviewCount() { return reviewCount; }
+    public void setReviewCount(Integer reviewCount) { this.reviewCount = reviewCount; }
 
-    public void setStockQuantity(Integer stockQuantity) {
-        this.stockQuantity = stockQuantity;
-    }
+    public Integer getVerifiedReviewCount() { return verifiedReviewCount; }
+    public void setVerifiedReviewCount(Integer verifiedReviewCount) { this.verifiedReviewCount = verifiedReviewCount; }
 
-    public ProductStatus getStatus() {
-        return status;
-    }
+    public Boolean getHasNegativeReviews() { return hasNegativeReviews; }
+    public void setHasNegativeReviews(Boolean hasNegativeReviews) { this.hasNegativeReviews = hasNegativeReviews; }
 
-    public void setStatus(ProductStatus status) {
-        this.status = status;
-    }
+    public String getAlertMessage() { return alertMessage; }
+    public void setAlertMessage(String alertMessage) { this.alertMessage = alertMessage; }
 
-    public Double getRating() {
-        return rating;
-    }
+    public static class Builder {
+        private Long productId;
+        private String name;
+        private String brand;
+        private String category;
+        private Integer stockQuantity;
+        private ProductStatus status;
+        private Double rating;
+        private Integer totalRatings;
+        private Integer reviewCount;
+        private Integer verifiedReviewCount;
+        private Boolean hasNegativeReviews;
+        private String alertMessage;
 
-    public void setRating(Double rating) {
-        this.rating = rating;
-    }
+        public Builder productId(Long productId) {
+            this.productId = productId;
+            return this;
+        }
 
-    public Integer getTotalRatings() {
-        return totalRatings;
-    }
+        public Builder name(String name) {
+            this.name = name;
+            return this;
+        }
 
-    public void setTotalRatings(Integer totalRatings) {
-        this.totalRatings = totalRatings;
-    }
+        public Builder brand(String brand) {
+            this.brand = brand;
+            return this;
+        }
 
-    public Integer getReviewCount() {
-        return reviewCount;
-    }
+        public Builder category(String category) {
+            this.category = category;
+            return this;
+        }
 
-    public void setReviewCount(Integer reviewCount) {
-        this.reviewCount = reviewCount;
-    }
+        public Builder stockQuantity(Integer stockQuantity) {
+            this.stockQuantity = stockQuantity;
+            return this;
+        }
 
-    public Integer getVerifiedReviewCount() {
-        return verifiedReviewCount;
-    }
+        public Builder status(ProductStatus status) {
+            this.status = status;
+            return this;
+        }
 
-    public void setVerifiedReviewCount(Integer verifiedReviewCount) {
-        this.verifiedReviewCount = verifiedReviewCount;
-    }
+        public Builder rating(Double rating) {
+            this.rating = rating;
+            return this;
+        }
 
-    public Boolean getHasNegativeReviews() {
-        return hasNegativeReviews;
-    }
+        public Builder totalRatings(Integer totalRatings) {
+            this.totalRatings = totalRatings;
+            return this;
+        }
 
-    public void setHasNegativeReviews(Boolean hasNegativeReviews) {
-        this.hasNegativeReviews = hasNegativeReviews;
-    }
+        public Builder reviewCount(Integer reviewCount) {
+            this.reviewCount = reviewCount;
+            return this;
+        }
 
-    public String getAlertMessage() {
-        return alertMessage;
-    }
+        public Builder verifiedReviewCount(Integer verifiedReviewCount) {
+            this.verifiedReviewCount = verifiedReviewCount;
+            return this;
+        }
 
-    public void setAlertMessage(String alertMessage) {
-        this.alertMessage = alertMessage;
+        public Builder hasNegativeReviews(Boolean hasNegativeReviews) {
+            this.hasNegativeReviews = hasNegativeReviews;
+            return this;
+        }
+
+        public Builder alertMessage(String alertMessage) {
+            this.alertMessage = alertMessage;
+            return this;
+        }
+
+        public LowStockAlertDTO build() {
+            return new LowStockAlertDTO(
+                    productId,
+                    name,
+                    brand,
+                    category,
+                    stockQuantity,
+                    status,
+                    rating,
+                    totalRatings,
+                    reviewCount,
+                    verifiedReviewCount,
+                    hasNegativeReviews,
+                    alertMessage
+            );
+        }
     }
 }
