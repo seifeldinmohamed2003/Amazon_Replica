@@ -1,5 +1,7 @@
 package com.team27.amazon.billing.service;
 
+import com.team27.amazon.common.events.AbstractEventSubject;
+import com.team27.amazon.common.events.MongoEventLogger;
 import com.team27.amazon.billing.dto.RevenueReportDTO;
 import com.team27.amazon.billing.dto.TransactionDetailsDTO;
 import com.team27.amazon.billing.dto.UserTransactionSummaryDTO;
@@ -15,10 +17,12 @@ import com.team27.amazon.billing.repository.TransactionVoucherRepository;
 import com.team27.amazon.billing.repository.VoucherRepository;
 import jakarta.transaction.Transactional;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
 
+import jakarta.annotation.PostConstruct;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -27,7 +31,7 @@ import java.util.Map;
 import java.util.Optional;
 
 @Service
-public class BillingService {
+public class BillingService extends AbstractEventSubject {
 
     @Autowired
     private TransactionRepository transactionRepository;
@@ -35,6 +39,15 @@ public class BillingService {
     private VoucherRepository voucherRepository;
     @Autowired
     private TransactionVoucherRepository transactionVoucherRepository;
+
+    @Autowired
+    @Qualifier("billingEventLogger")
+    private MongoEventLogger mongoEventLogger;
+
+    @PostConstruct
+    public void initObserver() {
+        register(mongoEventLogger);
+    }
 
     // ── existing ─────────────────────────────────────────────────────────────
 
@@ -44,6 +57,10 @@ public class BillingService {
 
     public List<Transaction> getAllTransactions() {
         return transactionRepository.findAll();
+    }
+
+    public List<Voucher> getAllVouchers() {
+        return voucherRepository.findAll();
     }
 
     public Transaction getTransactionById(Long id) {
@@ -56,6 +73,32 @@ public class BillingService {
                 .orElseThrow(() -> new RuntimeException("Voucher not found"));
     }
 
+    public Voucher createVoucher(Voucher voucher) {
+        Voucher savedVoucher = voucherRepository.save(voucher);
+        notifyObservers("VOUCHER_CREATED", billingEventPayload(null, null, null, Map.of(
+                "voucherId", savedVoucher.getId(),
+                "code", savedVoucher.getCode(),
+                "details", voucherDetails(savedVoucher)
+        )));
+        return savedVoucher;
+    }
+
+    public Voucher updateVoucher(Long id, Voucher voucher) {
+        voucher.setId(id);
+        Voucher savedVoucher = voucherRepository.save(voucher);
+        notifyObservers("VOUCHER_UPDATED", billingEventPayload(null, null, null, Map.of(
+                "voucherId", savedVoucher.getId(),
+                "code", savedVoucher.getCode(),
+                "details", voucherDetails(savedVoucher)
+        )));
+        return savedVoucher;
+    }
+
+    public void deleteVoucher(Long id) {
+        voucherRepository.deleteById(id);
+        notifyObservers("VOUCHER_DELETED", billingEventPayload(null, null, null, Map.of("voucherId", id)));
+    }
+
     public Transaction updateTransaction(Long id, Transaction updated) {
         Transaction t = getTransactionById(id);
         if (updated.getAmount() != null) t.setAmount(updated.getAmount());
@@ -64,16 +107,32 @@ public class BillingService {
         if (updated.getTransactionDetails() != null) t.setTransactionDetails(updated.getTransactionDetails());
         if (updated.getOrderId() != null) t.setOrderId(updated.getOrderId());
         if (updated.getUserId() != null) t.setUserId(updated.getUserId());
-        return transactionRepository.save(t);
+        Transaction savedTransaction = transactionRepository.save(t);
+        notifyObservers("TRANSACTION_UPDATED", billingEventPayload(savedTransaction.getId(), savedTransaction.getMethod() == null ? null : savedTransaction.getMethod().name(), savedTransaction.getAmount(), Map.of(
+            "status", savedTransaction.getStatus() == null ? null : savedTransaction.getStatus().name(),
+            "details", transactionDetails(savedTransaction)
+        )));
+        return savedTransaction;
     }
 
     public void deleteTransaction(Long id) {
         transactionRepository.deleteById(id);
+        notifyObservers("TRANSACTION_DELETED", billingEventPayload(id, null, null, Map.of()));
     }
 
     public TransactionVoucher createTransactionVoucher(TransactionVoucher tv) {
         if (tv.getAppliedAt() == null) tv.setAppliedAt(java.time.LocalDateTime.now());
-        return transactionVoucherRepository.save(tv);
+        TransactionVoucher saved = transactionVoucherRepository.save(tv);
+        notifyObservers("TRANSACTION_VOUCHER_CREATED", billingEventPayload(
+            saved.getTransaction() == null ? null : saved.getTransaction().getId(),
+            null,
+            null,
+            Map.of(
+                "voucherId", saved.getVoucher() == null ? null : saved.getVoucher().getId(),
+                "discountApplied", saved.getDiscountApplied()
+            )
+        ));
+        return saved;
     }
 
     public TransactionVoucher getTransactionVoucherById(Long id) {
@@ -87,13 +146,22 @@ public class BillingService {
 
     public void deleteTransactionVoucher(Long id) {
         transactionVoucherRepository.deleteById(id);
+        notifyObservers("TRANSACTION_VOUCHER_DELETED", billingEventPayload(null, null, null, Map.of("transactionVoucherId", id)));
     }
 
     public Transaction saveTransaction(Transaction transaction) {
         if (transaction.getCreatedAt() == null) {
             transaction.setCreatedAt(LocalDateTime.now());
         }
-        return transactionRepository.save(transaction);
+        Transaction savedTransaction = transactionRepository.save(transaction);
+        String action = savedTransaction.getStatus() == null || savedTransaction.getStatus().name().equals("PENDING")
+                ? "CREATED"
+                : savedTransaction.getStatus().name();
+        notifyObservers(action, billingEventPayload(savedTransaction.getId(), savedTransaction.getMethod() == null ? null : savedTransaction.getMethod().name(), savedTransaction.getAmount(), Map.of(
+                "status", savedTransaction.getStatus() == null ? null : savedTransaction.getStatus().name(),
+                "details", transactionDetails(savedTransaction)
+        )));
+        return savedTransaction;
     }
 
     @Transactional
@@ -116,7 +184,13 @@ public class BillingService {
         details.put("refundedAt", LocalDateTime.now().toString());
         transaction.setTransactionDetails(details);
 
-        return transactionRepository.save(transaction);
+        Transaction savedTransaction = transactionRepository.save(transaction);
+        notifyObservers("REFUNDED", billingEventPayload(savedTransaction.getId(), savedTransaction.getMethod() == null ? null : savedTransaction.getMethod().name(), savedTransaction.getAmount(), Map.of(
+            "reason", reason,
+            "status", savedTransaction.getStatus().name(),
+            "details", transactionDetails(savedTransaction)
+        )));
+        return savedTransaction;
     }
 
     public UserTransactionSummaryDTO getUserTransactionSummary(Long userId) {
@@ -180,7 +254,16 @@ public class BillingService {
         transaction.setTransactionDetails(details);
         transaction.setCreatedAt(LocalDateTime.now());
 
-        return transactionRepository.save(transaction);
+        Transaction savedTransaction = transactionRepository.save(transaction);
+        notifyObservers("CREATED", billingEventPayload(savedTransaction.getId(), savedTransaction.getMethod().name(), savedTransaction.getAmount(), Map.of(
+            "status", "PENDING",
+            "details", transactionDetails(savedTransaction)
+        )));
+        notifyObservers("COMPLETED", billingEventPayload(savedTransaction.getId(), savedTransaction.getMethod().name(), savedTransaction.getAmount(), Map.of(
+            "status", savedTransaction.getStatus().name(),
+            "details", transactionDetails(savedTransaction)
+        )));
+        return savedTransaction;
     }
 
 
@@ -234,6 +317,12 @@ public class BillingService {
 
         voucher.setCurrentUses(voucher.getCurrentUses() + 1);
         voucherRepository.save(voucher);
+
+        notifyObservers("VOUCHER_APPLIED", billingEventPayload(transactionId, transaction.getMethod() == null ? null : transaction.getMethod().name(), transaction.getAmount(), Map.of(
+            "voucherId", voucherId,
+            "discount", discount,
+            "details", transactionDetails(transaction)
+        )));
 
         return transactionRepository.findById(transactionId).get();
     }
@@ -295,7 +384,13 @@ public class BillingService {
         details.put("gatewayResponse", "approved");
         tx.setTransactionDetails(details);
 
-        return transactionRepository.save(tx);
+        Transaction savedTransaction = transactionRepository.save(tx);
+        notifyObservers("RETRY_ATTEMPTED", billingEventPayload(savedTransaction.getId(), savedTransaction.getMethod() == null ? null : savedTransaction.getMethod().name(), savedTransaction.getAmount(), Map.of(
+            "retryAttempt", currentRetry + 1,
+            "status", savedTransaction.getStatus().name(),
+            "details", transactionDetails(savedTransaction)
+        )));
+        return savedTransaction;
     }
 
     // ── S5-F8 ── Get Transaction Details with Applied Vouchers ───────────────
@@ -364,5 +459,49 @@ public class BillingService {
         }
 
         return result;
+    }
+
+    private Map<String, Object> billingEventPayload(Long transactionId,
+                                                    String method,
+                                                    Double amount,
+                                                    Map<String, Object> details) {
+        Map<String, Object> payload = new HashMap<>();
+        if (transactionId != null) {
+            payload.put("transactionId", transactionId);
+        }
+        if (method != null) {
+            payload.put("method", method);
+        }
+        if (amount != null) {
+            payload.put("amount", amount);
+        }
+        payload.put("details", details == null ? new HashMap<>() : new HashMap<>(details));
+        return payload;
+    }
+
+    private Map<String, Object> transactionDetails(Transaction transaction) {
+        Map<String, Object> details = new HashMap<>();
+        if (transaction == null) {
+            return details;
+        }
+
+        details.put("orderId", transaction.getOrderId());
+        details.put("userId", transaction.getUserId());
+        details.put("status", transaction.getStatus() == null ? null : transaction.getStatus().name());
+        details.put("transactionDetails", transaction.getTransactionDetails() == null ? new HashMap<>() : new HashMap<>(transaction.getTransactionDetails()));
+        return details;
+    }
+
+    private Map<String, Object> voucherDetails(Voucher voucher) {
+        Map<String, Object> details = new HashMap<>();
+        if (voucher == null) {
+            return details;
+        }
+
+        details.put("code", voucher.getCode());
+        details.put("discountType", voucher.getDiscountType() == null ? null : voucher.getDiscountType().name());
+        details.put("discountValue", voucher.getDiscountValue());
+        details.put("active", voucher.getActive());
+        return details;
     }
 }

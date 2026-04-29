@@ -3,11 +3,14 @@ package com.team27.amazon.user.service;
 
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.Map;
 
+import com.team27.amazon.common.events.AbstractEventSubject;
+import com.team27.amazon.common.events.MongoEventLogger;
 import com.team27.amazon.user.dto.TopBuyerDTO;
 import com.team27.amazon.user.model.Role;
 import com.team27.amazon.user.dto.UserOrderSummaryDTO;
@@ -28,25 +31,34 @@ import com.team27.amazon.user.dto.UserProfileDTO;
 import com.team27.amazon.user.dto.UserProfileDTOBuilder;
 
 @Service
-public class UserService {
+public class UserService extends AbstractEventSubject {
 
     private final UserRepository userRepository;
     private final ShippingAddressRepository shippingAddressRepository;
     private final PasswordEncoder passwordEncoder;
+    private final MongoEventLogger mongoEventLogger;
 
     public UserService(UserRepository userRepository,
                        ShippingAddressRepository shippingAddressRepository,
-                       PasswordEncoder passwordEncoder) {
+                       PasswordEncoder passwordEncoder,
+                       MongoEventLogger mongoEventLogger) {
         this.userRepository = userRepository;
         this.shippingAddressRepository = shippingAddressRepository;
         this.passwordEncoder = passwordEncoder;
+        this.mongoEventLogger = mongoEventLogger;
+        register(mongoEventLogger);
     }
 
     // ─── User CRUD ───────────────────────────────────────────────
 
     public User createUser(User user) {
         encodePasswordIfNeeded(user);
-        return userRepository.save(user);
+        User savedUser = userRepository.save(user);
+        notifyObservers("USER_CREATED", userEventPayload(savedUser.getId(), Map.of(
+                "email", savedUser.getEmail(),
+                "status", savedUser.getStatus() == null ? null : savedUser.getStatus().name()
+        )));
+        return savedUser;
     }
 
     public User getUserById(Long id) {
@@ -69,12 +81,18 @@ public class UserService {
         user.setRole(updated.getRole());
         user.setStatus(updated.getStatus());
         user.setPreferences(updated.getPreferences());
-        return userRepository.save(user);
+        User savedUser = userRepository.save(user);
+        notifyObservers("USER_UPDATED", userEventPayload(savedUser.getId(), Map.of(
+            "email", savedUser.getEmail(),
+            "status", savedUser.getStatus() == null ? null : savedUser.getStatus().name()
+        )));
+        return savedUser;
     }
 
     public void deleteUser(Long id) {
         getUserById(id);
         userRepository.deleteById(id);
+        notifyObservers("USER_DELETED", userEventPayload(id, Map.of()));
     }
 
     // ─── ShippingAddress CRUD ─────────────────────────────────────
@@ -82,7 +100,11 @@ public class UserService {
     public ShippingAddress createAddress(Long userId, ShippingAddress address) {
         User user = getUserById(userId);
         address.setUser(user);
-        return shippingAddressRepository.save(address);
+        ShippingAddress savedAddress = shippingAddressRepository.save(address);
+        Map<String, Object> eventDetails = addressDetails(savedAddress);
+        eventDetails.put("addressId", savedAddress.getId());
+        notifyObservers("ADDRESS_CREATED", userEventPayload(userId, eventDetails));
+        return savedAddress;
     }
 
     public ShippingAddress getAddressById(Long userId, Long addressId) {
@@ -109,12 +131,17 @@ public class UserService {
         address.setZipCode(updated.getZipCode());
         address.setIsDefault(updated.getIsDefault());
         address.setMetadata(updated.getMetadata());
-        return shippingAddressRepository.save(address);
+        ShippingAddress savedAddress = shippingAddressRepository.save(address);
+        Map<String, Object> eventDetails = addressDetails(savedAddress);
+        eventDetails.put("addressId", savedAddress.getId());
+        notifyObservers("ADDRESS_UPDATED", userEventPayload(userId, eventDetails));
+        return savedAddress;
     }
 
     public void deleteAddress(Long userId, Long addressId) {
         ShippingAddress address = getAddressById(userId, addressId);
         shippingAddressRepository.delete(address);
+        notifyObservers("ADDRESS_DELETED", userEventPayload(userId, Map.of("addressId", addressId)));
     }
 
     // S1-F1
@@ -141,7 +168,9 @@ public class UserService {
             user.setPreferences(existing);
         }
 
-        return userRepository.save(user);
+        User savedUser = userRepository.save(user);
+        notifyObservers("PREFERENCES_UPDATED", userEventPayload(savedUser.getId(), savedUser.getPreferences() == null ? new HashMap<>() : new HashMap<>(savedUser.getPreferences())));
+        return savedUser;
     }
 
     // S1-F3
@@ -192,7 +221,11 @@ public class UserService {
         }
 
         user.setStatus(Status.DEACTIVATED);
-        return userRepository.save(user);
+        User savedUser = userRepository.save(user);
+        notifyObservers("USER_DEACTIVATED", userEventPayload(savedUser.getId(), Map.of(
+            "status", savedUser.getStatus().name()
+        )));
+        return savedUser;
     }
 
     //S1-F5
@@ -280,6 +313,8 @@ public class UserService {
         // 6. Save (ensures persistence)
         shippingAddressRepository.saveAll(addresses);
 
+        notifyObservers("DEFAULT_ADDRESS_SET", userEventPayload(userId, Map.of("addressId", addressId, "defaultAddressId", addressId)));
+
         return user;
     }
 
@@ -325,7 +360,31 @@ public class UserService {
 
         User user = getUserById(id);
         user.setRole(role);
-        return userRepository.save(user);
+        User savedUser = userRepository.save(user);
+        notifyObservers("ROLE_CHANGED", userEventPayload(savedUser.getId(), Map.of(
+                "role", savedUser.getRole() == null ? null : savedUser.getRole().name()
+        )));
+        return savedUser;
+    }
+
+    private Map<String, Object> userEventPayload(Long userId, Map<String, Object> details) {
+        Map<String, Object> payload = new HashMap<>();
+        payload.put("userId", userId);
+        payload.put("details", details == null ? new HashMap<>() : new HashMap<>(details));
+        return payload;
+    }
+
+    private Map<String, Object> addressDetails(ShippingAddress address) {
+        Map<String, Object> details = new HashMap<>();
+        if (address == null) {
+            return details;
+        }
+
+        details.put("label", address.getLabel());
+        details.put("city", address.getCity());
+        details.put("country", address.getCountry());
+        details.put("isDefault", address.getIsDefault());
+        return details;
     }
 
     private void encodePasswordIfNeeded(User user) {
