@@ -23,7 +23,14 @@ public class TransactionAuditEvent implements MongoEvent {
 
     public TransactionAuditEvent() {}
 
-    public TransactionAuditEvent(Long transactionId, String action, LocalDateTime timestamp,String method,Double amount, Map<String, Object> details) {
+    public TransactionAuditEvent(Long transactionId, String action, LocalDateTime timestamp, Map<String, Object> details) {
+        this.transactionId = transactionId;
+        this.action = action;
+        this.timestamp = timestamp;
+        this.details = details != null ? details : new HashMap<>();
+    }
+
+    public TransactionAuditEvent(Long transactionId, String action, LocalDateTime timestamp, String method, Double amount, Map<String, Object> details) {
         this.transactionId = transactionId;
         this.action = action;
         this.timestamp = timestamp;
@@ -48,11 +55,11 @@ public class TransactionAuditEvent implements MongoEvent {
 
         return new TransactionAuditEvent(transactionId, action, timestamp, method, amount, details);
     }
+
     public static TransactionAuditEvent analyticsViewed(LocalDateTime timestamp, Map<String, Object> details) {
         return new TransactionAuditEvent(null, "ANALYTICS_VIEWED", timestamp, null, null, details);
     }
 
-    // getters & setters
     @Override
     public String getId() { return id; }
 
@@ -65,24 +72,18 @@ public class TransactionAuditEvent implements MongoEvent {
     @Override
     public Map<String, Object> getDetails() { return details; }
 
-    public String getMethod() {
-        return method;
-    }
-
-    public Double getAmount() {
-        return amount;
-    }
     public Long getTransactionId() { return transactionId; }
 
     public void setTransactionId(Long transactionId) { this.transactionId = transactionId; }
+
+    public String getMethod() { return method; }
+    public void setMethod(String method) { this.method = method; }
+
+    public Double getAmount() { return amount; }
+    public void setAmount(Double amount) { this.amount = amount; }
+
     public void setId(String id) { this.id = id; }
     public void setAction(String action) { this.action = action; }
     public void setTimestamp(LocalDateTime timestamp) { this.timestamp = timestamp; }
-    public void setMethod(String method) {
-        this.method = method;
-    }
-    public void setAmount(Double amount) {
-        this.amount = amount;
-    }
     public void setDetails(Map<String, Object> details) { this.details = details != null ? details : new HashMap<>(); }
 }
