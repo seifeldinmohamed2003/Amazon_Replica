@@ -2,6 +2,8 @@ package com.team27.amazon.billing.model.mongo;
 
 import com.team27.amazon.common.events.EventFactory;
 import com.team27.amazon.common.events.EventType;
+import com.team27.amazon.common.events.MongoEvent;
+import com.team27.amazon.common.events.TransactionAuditEvent;
 import org.junit.jupiter.api.Test;
 
 import java.time.LocalDateTime;
@@ -16,7 +18,7 @@ class EventFactoryTest {
     @Test
     void createEventCreatesTransactionAuditEvent() {
         LocalDateTime timestamp = LocalDateTime.of(2026, 4, 29, 13, 30);
-        com.team27.amazon.common.events.MongoEvent event = factory.createEvent(EventType.TRANSACTION_AUDIT, Map.of(
+        MongoEvent event = factory.createEvent(EventType.TRANSACTION_AUDIT, Map.of(
                 "transactionId", 500L,
                 "action", "REFUNDED",
                 "timestamp", timestamp,
@@ -26,7 +28,6 @@ class EventFactoryTest {
         ));
 
         assertInstanceOf(TransactionAuditEvent.class, event);
-        assertTrue(MongoEvent.class.isAssignableFrom(TransactionAuditEvent.class));
 
         TransactionAuditEvent auditEvent = (TransactionAuditEvent) event;
         assertEquals(500L, auditEvent.getTransactionId());

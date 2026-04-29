@@ -1,7 +1,5 @@
 package com.team27.amazon.common.events;
 
-import java.lang.reflect.Constructor;
-import java.lang.reflect.Method;
 import java.time.LocalDateTime;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
@@ -9,78 +7,89 @@ import java.util.Map;
 
 public class EventFactory {
 
-    private static final Map<EventType, String> EVENT_CLASS_NAMES = Map.of(
-            EventType.AUTH, "com.team27.amazon.user.model.mongo.AuthEvent",
-            EventType.PRODUCT, "com.team27.amazon.product.model.mongo.ProductEvent",
-            EventType.ORDER, "com.team27.amazon.order.model.mongo.OrderEvent",
-            EventType.SHIPMENT, "com.team27.amazon.shipping.model.mongo.ShipmentEvent",
-            EventType.TRANSACTION_AUDIT, "com.team27.amazon.billing.model.mongo.TransactionAuditEvent"
-    );
-
     public MongoEvent createEvent(EventType type, Map<String, Object> params) {
         if (type == null) {
             throw new IllegalArgumentException("Event type must not be null");
         }
 
         Map<String, Object> safeParams = params == null ? new HashMap<>() : new LinkedHashMap<>(params);
-        MongoEvent event = instantiateEvent(type);
+        return switch (type) {
+            case AUTH -> buildAuthEvent(safeParams);
+            case PRODUCT -> buildProductEvent(safeParams);
+            case ORDER -> buildOrderEvent(safeParams);
+            case SHIPMENT -> buildShipmentEvent(safeParams);
+            case TRANSACTION_AUDIT -> buildTransactionAuditEvent(safeParams);
+        };
+    }
 
-        invokeIfPresent(event, "setAction", asString(safeParams.get("action")));
-        invokeIfPresent(event, "setTimestamp", asLocalDateTime(safeParams.get("timestamp"), LocalDateTime.now()));
-        invokeIfPresent(event, "setDetails", asDetailsMap(safeParams.get("details")));
-        invokeIfPresent(event, "setUserId", asLong(safeParams.get("userId")));
-        invokeIfPresent(event, "setProductId", asLong(safeParams.get("productId")));
-        invokeIfPresent(event, "setOrderId", asLong(safeParams.get("orderId")));
-        invokeIfPresent(event, "setShipmentId", asLong(safeParams.get("shipmentId")));
-        invokeIfPresent(event, "setTransactionId", asLong(safeParams.get("transactionId")));
-        invokeIfPresent(event, "setEmail", asString(safeParams.get("email")));
-        invokeIfPresent(event, "setMethod", asString(safeParams.get("method")));
-        invokeIfPresent(event, "setAmount", asDouble(safeParams.get("amount")));
-
+    private AuthEvent buildAuthEvent(Map<String, Object> params) {
+        AuthEvent event = new AuthEvent();
+        event.setUserId(asLong(params.get("userId")));
+        event.setEmail(asString(params.get("email")));
+        applyCommonFields(event, params);
         return event;
     }
 
-    private MongoEvent instantiateEvent(EventType type) {
-        String className = EVENT_CLASS_NAMES.get(type);
-        if (className == null) {
-            throw new IllegalArgumentException("Unsupported event type: " + type);
-        }
-
-        try {
-            Class<?> eventClass = Class.forName(className);
-            Constructor<?> constructor = eventClass.getDeclaredConstructor();
-            constructor.setAccessible(true);
-            return (MongoEvent) constructor.newInstance();
-        } catch (ReflectiveOperationException ex) {
-            throw new IllegalStateException("Failed to create event for type: " + type, ex);
-        }
+    private ProductEvent buildProductEvent(Map<String, Object> params) {
+        ProductEvent event = new ProductEvent();
+        event.setProductId(asLong(params.get("productId")));
+        applyCommonFields(event, params);
+        return event;
     }
 
-    private void invokeIfPresent(Object target, String methodName, Object value) {
-        if (value == null) {
-            return;
-        }
-
-        Method method = findSingleArgumentMethod(target.getClass(), methodName);
-        if (method == null) {
-            return;
-        }
-
-        try {
-            method.setAccessible(true);
-            method.invoke(target, value);
-        } catch (ReflectiveOperationException ex) {
-            throw new IllegalStateException("Failed to invoke " + methodName + " on " + target.getClass().getName(), ex);
-        }
+    private OrderEvent buildOrderEvent(Map<String, Object> params) {
+        OrderEvent event = new OrderEvent();
+        event.setOrderId(asLong(params.get("orderId")));
+        applyCommonFields(event, params);
+        return event;
     }
 
-    private Method findSingleArgumentMethod(Class<?> targetClass, String methodName) {
-        for (Method method : targetClass.getMethods()) {
-            if (method.getName().equals(methodName) && method.getParameterCount() == 1) {
-                return method;
-            }
+    private ShipmentEvent buildShipmentEvent(Map<String, Object> params) {
+        ShipmentEvent event = new ShipmentEvent();
+        event.setShipmentId(asLong(params.get("shipmentId")));
+        applyCommonFields(event, params);
+        return event;
+    }
+
+    private TransactionAuditEvent buildTransactionAuditEvent(Map<String, Object> params) {
+        TransactionAuditEvent event = new TransactionAuditEvent();
+        event.setTransactionId(asLong(params.get("transactionId")));
+        event.setMethod(asString(params.get("method")));
+        event.setAmount(asDouble(params.get("amount")));
+        applyCommonFields(event, params);
+        return event;
+    }
+
+    private void applyCommonFields(MongoEvent event, Map<String, Object> params) {
+        if (event instanceof AuthEvent authEvent) {
+            authEvent.setAction(asString(params.get("action")));
+            authEvent.setTimestamp(asLocalDateTime(params.get("timestamp"), LocalDateTime.now()));
+            authEvent.setDetails(asDetailsMap(params.get("details")));
+            return;
         }
-        return null;
+        if (event instanceof ProductEvent productEvent) {
+            productEvent.setAction(asString(params.get("action")));
+            productEvent.setTimestamp(asLocalDateTime(params.get("timestamp"), LocalDateTime.now()));
+            productEvent.setDetails(asDetailsMap(params.get("details")));
+            return;
+        }
+        if (event instanceof OrderEvent orderEvent) {
+            orderEvent.setAction(asString(params.get("action")));
+            orderEvent.setTimestamp(asLocalDateTime(params.get("timestamp"), LocalDateTime.now()));
+            orderEvent.setDetails(asDetailsMap(params.get("details")));
+            return;
+        }
+        if (event instanceof ShipmentEvent shipmentEvent) {
+            shipmentEvent.setAction(asString(params.get("action")));
+            shipmentEvent.setTimestamp(asLocalDateTime(params.get("timestamp"), LocalDateTime.now()));
+            shipmentEvent.setDetails(asDetailsMap(params.get("details")));
+            return;
+        }
+        if (event instanceof TransactionAuditEvent transactionAuditEvent) {
+            transactionAuditEvent.setAction(asString(params.get("action")));
+            transactionAuditEvent.setTimestamp(asLocalDateTime(params.get("timestamp"), LocalDateTime.now()));
+            transactionAuditEvent.setDetails(asDetailsMap(params.get("details")));
+        }
     }
 
     private String asString(Object value) {

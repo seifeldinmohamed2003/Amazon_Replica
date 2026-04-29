@@ -1,4 +1,4 @@
-package com.team27.amazon.billing.model.mongo;
+package com.team27.amazon.common.events;
 
 import org.springframework.data.annotation.Id;
 import org.springframework.data.mongodb.core.mapping.Document;
@@ -19,7 +19,6 @@ public class TransactionAuditEvent implements MongoEvent {
     private String method;
     private Double amount;
     private Map<String, Object> details = new HashMap<>();
-
 
     public TransactionAuditEvent() {}
 
@@ -73,7 +72,6 @@ public class TransactionAuditEvent implements MongoEvent {
     public Map<String, Object> getDetails() { return details; }
 
     public Long getTransactionId() { return transactionId; }
-
     public void setTransactionId(Long transactionId) { this.transactionId = transactionId; }
 
     public String getMethod() { return method; }

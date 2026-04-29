@@ -1,4 +1,4 @@
-package com.team27.amazon.product.model.mongo;
+package com.team27.amazon.common.events;
 
 import org.springframework.data.annotation.Id;
 import org.springframework.data.mongodb.core.mapping.Document;
@@ -7,24 +7,24 @@ import java.time.LocalDateTime;
 import java.util.HashMap;
 import java.util.Map;
 
-@Document(collection = "product_events")
-public class ProductEvent implements MongoEvent {
+@Document(collection = "order_events")
+public class OrderEvent implements MongoEvent {
 
     @Id
     private String id;
 
-    private Long productId;
+    private Long orderId;
     private String action;
     private LocalDateTime timestamp;
     private Map<String, Object> details = new HashMap<>();
 
-    public ProductEvent() {}
+    public OrderEvent() {}
 
-    public ProductEvent(Long productId, String action, LocalDateTime timestamp, Map<String, Object> details) {
-        this.productId = productId;
+    public OrderEvent(Long orderId, String action, LocalDateTime timestamp, Map<String, Object> details) {
+        this.orderId = orderId;
         this.action = action;
         this.timestamp = timestamp;
-        this.details = details;
+        this.details = details != null ? details : new HashMap<>();
     }
 
     @Override
@@ -39,15 +39,10 @@ public class ProductEvent implements MongoEvent {
     @Override
     public Map<String, Object> getDetails() { return details; }
 
-    // getters & setters
-    public Long getProductId() { return productId; }
-    public void setProductId(Long productId) { this.productId = productId; }
-
+    public Long getOrderId() { return orderId; }
+    public void setOrderId(Long orderId) { this.orderId = orderId; }
     public void setId(String id) { this.id = id; }
-
     public void setAction(String action) { this.action = action; }
-
     public void setTimestamp(LocalDateTime timestamp) { this.timestamp = timestamp; }
-
-    public void setDetails(Map<String, Object> details) { this.details = details; }
+    public void setDetails(Map<String, Object> details) { this.details = details != null ? details : new HashMap<>(); }
 }

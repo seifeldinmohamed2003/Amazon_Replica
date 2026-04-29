@@ -2,6 +2,8 @@ package com.team27.amazon.user.model.mongo;
 
 import com.team27.amazon.common.events.EventFactory;
 import com.team27.amazon.common.events.EventType;
+import com.team27.amazon.common.events.AuthEvent;
+import com.team27.amazon.common.events.MongoEvent;
 import org.junit.jupiter.api.Test;
 
 import java.util.Map;
@@ -14,14 +16,13 @@ class EventFactoryTest {
 
     @Test
     void createEventCreatesAuthEventAndAppliesDefaults() {
-        com.team27.amazon.common.events.MongoEvent event = factory.createEvent(EventType.AUTH, Map.of(
+        MongoEvent event = factory.createEvent(EventType.AUTH, Map.of(
                 "userId", 15,
                 "email", "auth@example.com",
                 "action", "REGISTERED"
         ));
 
         assertInstanceOf(AuthEvent.class, event);
-        assertTrue(MongoEvent.class.isAssignableFrom(AuthEvent.class));
 
         AuthEvent authEvent = (AuthEvent) event;
         assertEquals(15L, authEvent.getUserId());
@@ -34,7 +35,7 @@ class EventFactoryTest {
 
     @Test
     void createEventWithNullParamsStillAppliesDefaults() {
-        com.team27.amazon.common.events.MongoEvent event = factory.createEvent(EventType.AUTH, null);
+        MongoEvent event = factory.createEvent(EventType.AUTH, null);
 
         assertInstanceOf(AuthEvent.class, event);
 
