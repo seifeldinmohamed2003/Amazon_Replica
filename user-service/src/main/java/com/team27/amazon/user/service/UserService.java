@@ -24,12 +24,16 @@ import com.team27.amazon.user.repository.UserRepository;
 import com.team27.amazon.user.dto.ShippingAddressDTO;
 import com.team27.amazon.user.dto.UserProfileDTO;
 
+import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
+import com.team27.amazon.user.model.Role;
+
 
 @Service
 public class UserService {
 
     private final UserRepository userRepository;
     private final ShippingAddressRepository shippingAddressRepository;
+    private final BCryptPasswordEncoder passwordEncoder = new BCryptPasswordEncoder();
 
     public UserService(UserRepository userRepository, ShippingAddressRepository shippingAddressRepository) {
         this.userRepository = userRepository;
@@ -39,7 +43,12 @@ public class UserService {
     // ─── User CRUD ───────────────────────────────────────────────
 
     public User createUser(User user) {
-        return userRepository.save(user);
+    user.setPassword(passwordEncoder.encode(user.getPassword()));
+    if (user.getRole() == null) {
+        user.setRole(Role.CUSTOMER);
+    }
+
+    return userRepository.save(user);
     }
 
     public User getUserById(Long id) {
@@ -55,7 +64,9 @@ public class UserService {
         User user = getUserById(id);
         user.setName(updated.getName());
         user.setEmail(updated.getEmail());
-        user.setPassword(updated.getPassword());
+        if (updated.getPassword() != null && !updated.getPassword().isBlank()) {
+            user.setPassword(passwordEncoder.encode(updated.getPassword()));
+        }
         user.setPhone(updated.getPhone());
         user.setRole(updated.getRole());
         user.setStatus(updated.getStatus());
