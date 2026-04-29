@@ -5,6 +5,12 @@ spring:
     url: jdbc:postgresql://postgres:5432/amazondb
     username: postgres
     password: postgres
+  data:
+    redis:
+      host: amazon-redis
+      port: 6379
+      password: redispass
+
   jpa:
     hibernate:
       ddl-auto: update

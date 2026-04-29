@@ -57,11 +57,13 @@ public class TransactionController {
     @PostMapping("/order/{orderId}")
     public ResponseEntity<Transaction> processTransactionForOrder(
             @PathVariable Long orderId,
+            @RequestParam(defaultValue = "false") boolean simulateFailure,
             @RequestBody Map<String, String> body) {
         Transaction t = billingService.processTransactionForOrder(
                 orderId,
                 body.get("method"),
-                body.get("cardLastFour")
+                body.get("cardLastFour"),
+                simulateFailure
         );
         return ResponseEntity.status(201).body(t);
     }
