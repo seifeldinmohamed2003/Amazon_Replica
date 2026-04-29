@@ -72,13 +72,6 @@ public class TransactionAuditEvent implements MongoEvent {
     @Override
     public Map<String, Object> getDetails() { return details; }
 
-    public String getMethod() {
-        return method;
-    }
-
-    public Double getAmount() {
-        return amount;
-    }
     public Long getTransactionId() { return transactionId; }
 
     public void setTransactionId(Long transactionId) { this.transactionId = transactionId; }
