@@ -135,4 +135,31 @@ public interface TransactionRepository extends JpaRepository<Transaction, Long> 
             @Param("transactionId") Long transactionId,
             @Param("orderItemId") Long orderItemId
     );
+
+    @Query(value = """
+    SELECT SUM(oi.quantity * oi.price_at_purchase)
+    FROM transactions t
+    JOIN orders o ON o.id = t.order_id
+    JOIN order_items oi ON oi.order_id = o.id
+    JOIN products p ON p.id = oi.product_id
+    WHERE t.status::text = 'REFUNDED'
+    AND p.category = :category
+    AND o.ordered_at BETWEEN :startDate AND :endDate
+    """, nativeQuery = true)
+    Double getRefundedRevenueByCategory(
+            @Param("category") String category,
+            @Param("startDate") LocalDateTime startDate,
+            @Param("endDate") LocalDateTime endDate
+    );
+
+    @Query(value = "SELECT id FROM order_items WHERE order_id = :orderId", nativeQuery = true)
+    List<Long> findOrderItemIdsByOrderId(@Param("orderId") Long orderId);
+
+    @Query(value = "SELECT COALESCE(SUM(price_at_purchase * quantity), 0) FROM order_items WHERE id IN (:ids)", nativeQuery = true)
+    double sumPriceForItems(@Param("ids") List<Long> ids);
+
+    @Query(value = "SELECT COUNT(*) FROM order_items WHERE id IN (:ids) AND order_id = :orderId", nativeQuery = true)
+    int countItemsBelongingToOrder(@Param("ids") List<Long> ids, @Param("orderId") Long orderId);
+
+
 }

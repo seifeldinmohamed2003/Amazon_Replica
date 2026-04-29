@@ -34,6 +34,8 @@ import java.util.concurrent.TimeUnit;
 @Service
 public class BillingService {
 
+    @Autowired
+    private CacheService cacheService;
     private static final Logger log = LoggerFactory.getLogger(BillingService.class);
 
     // ── repositories ──────────────────────────────────────────────────────
@@ -57,6 +59,7 @@ public class BillingService {
         MongoEventLogger logger = new MongoEventLogger(auditRepo, EventType.TRANSACTION_AUDIT);
         register(logger);
     }
+
 
     public void register(EntityObserver observer)   { observers.add(observer); }
     public void unregister(EntityObserver observer) { observers.remove(observer); }
@@ -117,8 +120,13 @@ public class BillingService {
     // M1 CRUD — save / update / delete with observer + cache invalidation
     // ═══════════════════════════════════════════════════════════════════════
 
-    public List<Transaction> searchTransactions(String status, LocalDateTime start, LocalDateTime end) {
-        return transactionRepository.searchTransactions(status, start, end);
+    public List<Transaction> searchTransactions(String status, LocalDateTime startDate, LocalDateTime endDate) {
+        String key = "billing-service::S5-F1::" + status + "::" + startDate + "::" + endDate;
+        Object cached = cacheService.get(key);
+        if (cached != null) return (List<Transaction>) cached;
+        List<Transaction> result = transactionRepository.searchTransactions(status, startDate, endDate);
+        cacheService.set(key, result, 5);
+        return result;
     }
 
     public List<Transaction> getAllTransactions() {
@@ -157,6 +165,11 @@ public class BillingService {
         if (updated.getOrderId() != null)            t.setOrderId(updated.getOrderId());
         if (updated.getUserId() != null)             t.setUserId(updated.getUserId());
         Transaction saved = transactionRepository.save(t);
+
+        Map<String, Object> payload = new HashMap<>();
+        payload.put("transactionId", t.getId());
+        notifyObservers("TRANSACTION_UPDATED", payload);
+
         invalidate(SVC + "::transaction::" + id);
         invalidatePattern(SVC + "::S5-F8::*");
         invalidatePattern(SVC + "::S5-F10::*");
@@ -166,6 +179,11 @@ public class BillingService {
     }
 
     public void deleteTransaction(Long id) {
+
+        Map<String, Object> payload = new HashMap<>();
+        payload.put("transactionId", id);
+        notifyObservers("TRANSACTION_DELETED", payload);
+
         transactionRepository.deleteById(id);
         invalidate(SVC + "::transaction::" + id);
         invalidatePattern(SVC + "::S5-F8::*");
@@ -176,6 +194,11 @@ public class BillingService {
     public Transaction saveTransaction(Transaction transaction) {
         if (transaction.getCreatedAt() == null) transaction.setCreatedAt(LocalDateTime.now());
         Transaction saved = transactionRepository.save(transaction);
+
+        Map<String, Object> payload = new HashMap<>();
+        payload.put("transactionId", transaction.getId());
+        notifyObservers("TRANSACTION_CREATED", payload);
+
         invalidatePattern(SVC + "::S5-F10::*");
         invalidatePattern(SVC + "::S5-F11::*");
         notifyObservers("TRANSACTION_CREATED", txPayload(saved, "TRANSACTION_CREATED"));
@@ -224,11 +247,22 @@ public class BillingService {
         transaction.setTransactionDetails(details);
         Transaction saved = transactionRepository.save(transaction);
 
+        Map<String, Object> payload = new HashMap<>();
+        payload.put("transactionId", transaction.getId());
+        payload.put("method", transaction.getMethod() != null ? transaction.getMethod().name() : null);
+        payload.put("amount", transaction.getAmount());
+        payload.put("refundReason", reason);
+        payload.put("refundedAt", LocalDateTime.now().toString());
+        notifyObservers("REFUNDED", payload);
+
         invalidate(SVC + "::transaction::" + id);
         invalidatePattern(SVC + "::S5-F10::*");
         invalidatePattern(SVC + "::S5-F11::*");
         notifyObservers("REFUNDED", txPayload(saved, "REFUNDED"));
         return saved;
+
+
+
     }
 
     // ── S5-F3 ── User Transaction Summary ─────────────────────────────────
@@ -352,8 +386,18 @@ public class BillingService {
         tv.setAppliedAt(LocalDateTime.now());
         transactionVoucherRepository.save(tv);
 
+        Map<String, Object> payload = new HashMap<>();
+        payload.put("transactionId", transactionId);
+        payload.put("method", transaction.getMethod() != null ? transaction.getMethod().name() : null);
+        payload.put("amount", transaction.getAmount());
+        payload.put("voucherId", voucherId);
+        payload.put("discountApplied", discount);
+        notifyObservers("VOUCHER_APPLIED", payload);
+
         voucher.setCurrentUses(voucher.getCurrentUses() + 1);
         voucherRepository.save(voucher);
+
+
 
         invalidate(SVC + "::transaction::" + transactionId);
         invalidate(SVC + "::voucher::" + voucherId);
@@ -361,9 +405,9 @@ public class BillingService {
         invalidatePattern(SVC + "::S5-F10::*");
         invalidatePattern(SVC + "::S5-F11::*");
 
-        Map<String, Object> payload = txPayload(transaction, "VOUCHER_APPLIED");
-        payload.put("voucherId", voucherId);
-        notifyObservers("VOUCHER_APPLIED", payload);
+        Map<String, Object> createdPayload = txPayload(transaction, "VOUCHER_APPLIED");
+        createdPayload.put("voucherId", voucherId);
+        notifyObservers("VOUCHER_APPLIED", createdPayload);
 
         return transactionRepository.findById(transactionId).get();
     }
@@ -420,12 +464,18 @@ public class BillingService {
         tx.setTransactionDetails(details);
         Transaction saved = transactionRepository.save(tx);
 
+        Map<String, Object> payload = new HashMap<>();
+        payload.put("transactionId", tx.getId());
+        payload.put("method", tx.getMethod() != null ? tx.getMethod().name() : null);
+        payload.put("amount", tx.getAmount());
+        notifyObservers("RETRY_ATTEMPTED", payload);
+
         invalidate(SVC + "::transaction::" + id);
         invalidatePattern(SVC + "::S5-F10::*");
         invalidatePattern(SVC + "::S5-F11::*");
 
-        Map<String, Object> payload = txPayload(saved, "RETRY_ATTEMPTED");
-        notifyObservers("RETRY_ATTEMPTED", payload);
+        Map<String, Object> createdPayload = txPayload(saved, "RETRY_ATTEMPTED");
+        notifyObservers("RETRY_ATTEMPTED", createdPayload);
         return saved;
     }
 
@@ -718,4 +768,9 @@ public class BillingService {
 
         return saved;
     }
+
+
+
+
+
 }

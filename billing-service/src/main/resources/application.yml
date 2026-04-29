@@ -11,19 +11,15 @@ spring:
     show-sql: true
   data:
     mongodb:
-      host: amazon-mongo
-      port: 27017
-      database: amazonmongo
-      username: root
-      password: rootpass
-      authentication-database: admin
+      uri: mongodb://root:rootpass@mongo:27017/amazonmongo?authSource=admin
     redis:
-      host: amazon-redis
+      host: redis
       port: 6379
       password: redispass
 
+
 server:
-  port: 8085
+  port: 8080
 
 jwt:
   secret: "bXlTdXBlclNlY3JldEtleUZvckpXVEF1dGhlbnRpY2F0aW9uMjAyNg=="

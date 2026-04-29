@@ -100,7 +100,11 @@ public class TransactionController {
             @RequestParam(defaultValue = "false") boolean simulateFailure,
             @RequestBody Map<String, String> body) {
         Transaction t = billingService.processTransactionForOrder(
-                orderId, body.get("method"), body.get("cardLastFour"), simulateFailure);
+                orderId,
+                body.get("method"),
+                body.get("cardLastFour"),
+                simulateFailure
+        );
         return ResponseEntity.status(201).body(t);
     }
 
