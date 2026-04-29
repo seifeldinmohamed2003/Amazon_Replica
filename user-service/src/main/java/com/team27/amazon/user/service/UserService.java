@@ -9,6 +9,7 @@ import java.time.LocalDateTime;
 import java.util.Map;
 
 import com.team27.amazon.user.dto.TopBuyerDTO;
+import com.team27.amazon.user.model.Role;
 import com.team27.amazon.user.dto.UserOrderSummaryDTO;
 import com.team27.amazon.user.model.Status;
 import org.springframework.http.HttpStatus;
@@ -303,6 +304,16 @@ public class UserService {
             throw new IllegalArgumentException("Language cannot be blank");
         }
         return userRepository.findByLanguageAndMinOrders(lang, minOrders);
+    }
+
+    public User changeUserRole(Long id, Role role) {
+        if (role == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Role must be provided");
+        }
+
+        User user = getUserById(id);
+        user.setRole(role);
+        return userRepository.save(user);
     }
 
     private void encodePasswordIfNeeded(User user) {
