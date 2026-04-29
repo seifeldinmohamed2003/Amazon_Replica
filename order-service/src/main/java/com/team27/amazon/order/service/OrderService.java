@@ -3,13 +3,18 @@ package com.team27.amazon.order.service;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
+import java.util.HashMap;
 import java.util.Collections;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Optional;
+import java.util.Map;
 
+import com.team27.amazon.common.events.AbstractEventSubject;
+import com.team27.amazon.common.events.MongoEventLogger;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -31,8 +36,10 @@ import com.team27.amazon.order.repository.ShipmentJdbcRepository;
 import com.team27.amazon.order.repository.ShippingAddressJdbcRepository;
 import com.team27.amazon.order.repository.TransactionJdbcRepository;
 
+import jakarta.annotation.PostConstruct;
+
 @Service
-public class OrderService {
+public class OrderService extends AbstractEventSubject {
 
     private static final double SHIPPING_THRESHOLD = 500.0;
     private static final double SHIPPING_FLAT_RATE = 50.0;
@@ -65,12 +72,28 @@ public class OrderService {
 }
     @Autowired
     private TransactionJdbcRepository transactionJdbcRepository;
+
+    @Autowired
+    @Qualifier("orderEventLogger")
+    private MongoEventLogger mongoEventLogger;
+
+    @PostConstruct
+    public void initObserver() {
+        register(mongoEventLogger);
+    }
+
     // CREATE
     public Order createOrder(Order order) {
         if (order.getStatus() == null) {
             order.setStatus(OrderStatus.PENDING);
         }
-        return orderRepository.save(order);
+        Order savedOrder = orderRepository.save(order);
+        notifyObservers("ORDER_CREATED", orderEventPayload(savedOrder.getId(), Map.of(
+                "userId", savedOrder.getUserId(),
+                "status", savedOrder.getStatus() == null ? null : savedOrder.getStatus().name(),
+                "totalAmount", savedOrder.getTotalAmount()
+        )));
+        return savedOrder;
     }
     @Transactional
     public Order addItemsToExistingOrder(Long orderId, List<AddOrderItemRequest> requests) {
@@ -143,7 +166,10 @@ public class OrderService {
             currentItems.add(orderItem);
         }
 
-        orderRepository.save(order);
+        Order savedOrder = orderRepository.save(order);
+        notifyObservers("ITEMS_ADDED", orderEventPayload(savedOrder.getId(), Map.of(
+                "details", Map.of("addedItems", requests.size())
+        )));
         return reloadOrderWithSortedItems(orderId);
     }
 
@@ -291,7 +317,13 @@ public class OrderService {
             if (orderDetails.getDeliveredAt() != null) {
                 order.setDeliveredAt(orderDetails.getDeliveredAt());
             }
-            return orderRepository.save(order);
+            Order savedOrder = orderRepository.save(order);
+            notifyObservers("ORDER_UPDATED", orderEventPayload(savedOrder.getId(), Map.of(
+                    "status", savedOrder.getStatus() == null ? null : savedOrder.getStatus().name(),
+                    "totalAmount", savedOrder.getTotalAmount(),
+                    "userId", savedOrder.getUserId()
+            )));
+            return savedOrder;
         });
     }
 
@@ -299,6 +331,7 @@ public class OrderService {
     public boolean deleteOrder(Long id) {
         if (orderRepository.existsById(id)) {
             orderRepository.deleteById(id);
+            notifyObservers("ORDER_DELETED", orderEventPayload(id, Map.of()));
             return true;
         }
         return false;
@@ -356,6 +389,12 @@ public class OrderService {
                 amount,
                 LocalDateTime.now()
         );
+
+        notifyObservers("ORDER_DELIVERED", orderEventPayload(savedOrder.getId(), Map.of(
+            "status", savedOrder.getStatus().name(),
+            "userId", savedOrder.getUserId(),
+            "totalAmount", savedOrder.getTotalAmount()
+        )));
 
         return savedOrder;
     }
@@ -476,7 +515,14 @@ public class OrderService {
         order.setShippingAddressId(shippingAddressId);
         order.setStatus(OrderStatus.CONFIRMED);
         order.setTotalAmount(totalAmount);
-        return orderRepository.save(order);
+        Order savedOrder = orderRepository.save(order);
+        notifyObservers("ORDER_CONFIRMED", orderEventPayload(savedOrder.getId(), Map.of(
+            "status", savedOrder.getStatus().name(),
+            "userId", savedOrder.getUserId(),
+            "totalAmount", savedOrder.getTotalAmount(),
+            "shippingAddressId", savedOrder.getShippingAddressId()
+        )));
+        return savedOrder;
     }
 
     @Transactional
@@ -506,7 +552,20 @@ public class OrderService {
         }
 
         order.setStatus(OrderStatus.CANCELLED);
-        return orderRepository.save(order);
+        Order savedOrder = orderRepository.save(order);
+        notifyObservers("ORDER_CANCELLED", orderEventPayload(savedOrder.getId(), Map.of(
+                "status", savedOrder.getStatus().name(),
+                "userId", savedOrder.getUserId(),
+                "totalAmount", savedOrder.getTotalAmount()
+        )));
+        return savedOrder;
+    }
+
+    private Map<String, Object> orderEventPayload(Long orderId, Map<String, Object> details) {
+        Map<String, Object> payload = new HashMap<>();
+        payload.put("orderId", orderId);
+        payload.put("details", details == null ? new HashMap<>() : new HashMap<>(details));
+        return payload;
     }
 }
 
