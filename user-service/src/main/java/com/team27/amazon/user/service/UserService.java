@@ -9,9 +9,11 @@ import java.time.LocalDateTime;
 import java.util.Map;
 
 import com.team27.amazon.user.dto.TopBuyerDTO;
+import com.team27.amazon.user.model.Role;
 import com.team27.amazon.user.dto.UserOrderSummaryDTO;
 import com.team27.amazon.user.model.Status;
 import org.springframework.http.HttpStatus;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
@@ -30,15 +32,20 @@ public class UserService {
 
     private final UserRepository userRepository;
     private final ShippingAddressRepository shippingAddressRepository;
+    private final PasswordEncoder passwordEncoder;
 
-    public UserService(UserRepository userRepository, ShippingAddressRepository shippingAddressRepository) {
+    public UserService(UserRepository userRepository,
+                       ShippingAddressRepository shippingAddressRepository,
+                       PasswordEncoder passwordEncoder) {
         this.userRepository = userRepository;
         this.shippingAddressRepository = shippingAddressRepository;
+        this.passwordEncoder = passwordEncoder;
     }
 
     // ─── User CRUD ───────────────────────────────────────────────
 
     public User createUser(User user) {
+        encodePasswordIfNeeded(user);
         return userRepository.save(user);
     }
 
@@ -55,7 +62,9 @@ public class UserService {
         User user = getUserById(id);
         user.setName(updated.getName());
         user.setEmail(updated.getEmail());
-        user.setPassword(updated.getPassword());
+        if (StringUtils.hasText(updated.getPassword())) {
+            user.setPassword(encodePassword(updated.getPassword()));
+        }
         user.setPhone(updated.getPhone());
         user.setRole(updated.getRole());
         user.setStatus(updated.getStatus());
@@ -295,6 +304,30 @@ public class UserService {
             throw new IllegalArgumentException("Language cannot be blank");
         }
         return userRepository.findByLanguageAndMinOrders(lang, minOrders);
+    }
+
+    public User changeUserRole(Long id, Role role) {
+        if (role == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Role must be provided");
+        }
+
+        User user = getUserById(id);
+        user.setRole(role);
+        return userRepository.save(user);
+    }
+
+    private void encodePasswordIfNeeded(User user) {
+        if (user != null && StringUtils.hasText(user.getPassword()) && !isBCryptHash(user.getPassword())) {
+            user.setPassword(encodePassword(user.getPassword()));
+        }
+    }
+
+    private String encodePassword(String rawPassword) {
+        return passwordEncoder.encode(rawPassword);
+    }
+
+    private boolean isBCryptHash(String value) {
+        return value != null && (value.startsWith("$2a$") || value.startsWith("$2b$") || value.startsWith("$2y$"));
     }
 
 
