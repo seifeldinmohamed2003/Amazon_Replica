@@ -29,6 +29,22 @@ public class AuthEvent implements MongoEvent {
         this.details = details;
     }
 
+    public Long getUserId() {
+        return userId;
+    }
+
+    public void setUserId(Long userId) {
+        this.userId = userId;
+    }
+
+    public String getEmail() {
+        return email;
+    }
+
+    public void setEmail(String email) {
+        this.email = email;
+    }
+
     @Override
     public String getId() { return id; }
 
@@ -41,5 +57,19 @@ public class AuthEvent implements MongoEvent {
     @Override
     public Map<String, Object> getDetails() { return details; }
 
-    // getters & setters
+    public void setId(String id) {
+        this.id = id;
+    }
+
+    public void setAction(String action) {
+        this.action = action;
+    }
+
+    public void setTimestamp(LocalDateTime timestamp) {
+        this.timestamp = timestamp;
+    }
+
+    public void setDetails(Map<String, Object> details) {
+        this.details = details;
+    }
 }
