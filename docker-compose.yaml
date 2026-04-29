@@ -5,11 +5,121 @@ services:
     ports:
       - "5432:5432"
     environment:
+      POSTGRES_DB: amazondb
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
-      POSTGRES_DB: amazondb
     volumes:
       - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U postgres -d amazondb" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  mongo:
+    image: mongo:latest
+    container_name: amazon-mongo
+    ports:
+      - "27017:27017"
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: root
+      MONGO_INITDB_ROOT_PASSWORD: rootpass
+      MONGO_INITDB_DATABASE: amazonmongo
+    volumes:
+      - mongo-data:/data/db
+    healthcheck:
+      test: [ "CMD", "mongosh", "--eval", "db.adminCommand('ping')" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:latest
+    container_name: amazon-redis
+    ports:
+      - "6379:6379"
+    command: redis-server --requirepass redispass --maxmemory 256mb --maxmemory-policy allkeys-lru
+    healthcheck:
+      test: [ "CMD", "redis-cli", "-a", "redispass", "ping" ]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  elasticsearch:
+    image: elasticsearch:8.19.12
+    container_name: amazon-elasticsearch
+    ports:
+      - "9200:9200"
+    environment:
+      - discovery.type=single-node
+      - xpack.security.enabled=false
+      - ES_JAVA_OPTS=-Xms512m -Xmx512m
+    volumes:
+       - es-data:/usr/share/elasticsearch/data
+    healthcheck:
+      test: [ "CMD-SHELL", "curl -f http://localhost:9200/_cluster/health || exit 1" ]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
+  neo4j:
+    image: neo4j:latest
+    container_name: amazon-neo4j
+    ports:
+      - "7474:7474"
+      - "7687:7687"
+    environment:
+      NEO4J_AUTH: neo4j/neo4jpass
+      NEO4J_server_memory_heap_max__size: 512m
+      NEO4J_server_memory_heap_initial__size: 256m
+    volumes:
+      - neo4j-data:/data
+    healthcheck:
+      test: [ "CMD", "neo4j", "status" ]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
+  cassandra:
+    image: cassandra:latest
+    container_name: amazon-cassandra
+    ports:
+      - "9042:9042"
+    environment:
+      CASSANDRA_CLUSTER_NAME: amazoncluster
+      CASSANDRA_DC: datacenter1
+      CASSANDRA_KEYSPACE: amazonks
+      MAX_HEAP_SIZE: 512M
+      HEAP_NEWSIZE: 128M
+    volumes:
+      - cassandra-data:/var/lib/cassandra
+    healthcheck:
+      test: [ "CMD-SHELL", "cqlsh -e 'DESCRIBE KEYSPACES'" ]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+      start_period: 60s
+  cassandra-init:
+    image: cassandra:latest
+    container_name: amazon-cassandra-init
+    depends_on:
+      cassandra:
+        condition: service_healthy
+    command: >
+      bash -c "
+      until cqlsh cassandra -e 'DESCRIBE KEYSPACES'; do
+        echo 'Waiting for Cassandra...';
+        sleep 5;
+      done;
+      cqlsh cassandra -e \"
+      CREATE KEYSPACE IF NOT EXISTS amazonks
+      WITH replication = {'class': 'SimpleStrategy', 'replication_factor': 1};
+      \";
+      echo 'Keyspace amazonks created';
+      "
+
   user-service:
     build: ./user-service
     ports:
@@ -46,14 +156,26 @@ services:
   shipping-service:
     build: ./shipping-service
     ports:
-        - "8084:8080"
+      - "8084:8080"
     environment:
-        SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/amazondb
-        SPRING_DATASOURCE_USERNAME: postgres
-        SPRING_DATASOURCE_PASSWORD: postgres
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/amazondb
+      SPRING_DATASOURCE_USERNAME: postgres
+      SPRING_DATASOURCE_PASSWORD: postgres
+      SPRING_DATA_MONGODB_URI: mongodb://root:rootpass@mongo:27017/amazonmongo?authSource=admin
+      SPRING_DATA_REDIS_HOST: redis
+      SPRING_DATA_REDIS_PORT: 6379
+      SPRING_DATA_REDIS_PASSWORD: redispass
+      JWT_SECRET: MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=
+      JWT_EXPIRATION_MS: 86400000
     depends_on:
-        - postgres
-
+      postgres:
+        condition: service_healthy
+      cassandra-init:
+        condition: service_completed_successfully
+      mongo:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
   billing-service:
     build: ./billing-service
     ports:
@@ -67,3 +189,7 @@ services:
 
 volumes:
   pgdata:
+  mongo-data:
+  es-data:
+  neo4j-data:
+  cassandra-data:
