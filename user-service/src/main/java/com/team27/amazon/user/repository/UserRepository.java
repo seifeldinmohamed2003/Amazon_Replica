@@ -9,7 +9,7 @@ import com.team27.amazon.user.model.User;
 
 import java.time.LocalDateTime;
 import java.util.List;
-
+import java.util.Optional;
 @Repository
 public interface UserRepository extends JpaRepository<User, Long> {
 
@@ -90,4 +90,9 @@ public interface UserRepository extends JpaRepository<User, Long> {
             nativeQuery = true)
     List<User> findByLanguageAndMinOrders(@Param("lang") String lang, @Param("minOrders") long minOrders);
 
+    boolean existsByEmail(String email);
+
+    boolean existsByPhone(String phone);
+
+    Optional<User> findByEmail(String email);
 }
