@@ -4,6 +4,7 @@ import com.team27.amazon.common.events.AbstractEventSubject;
 import com.team27.amazon.common.events.MongoEventLogger;
 import com.team27.amazon.user.config.JwtConfigurationManager;
 import com.team27.amazon.user.dto.AuthResponse;
+import com.team27.amazon.user.dto.LoginRequest;
 import com.team27.amazon.user.dto.RegisterRequest;
 import com.team27.amazon.user.model.Role;
 import com.team27.amazon.user.model.Status;
@@ -39,6 +40,33 @@ public class AuthService extends AbstractEventSubject {
         this.jwtService = jwtService;
         this.mongoEventLogger = mongoEventLogger;
         register(mongoEventLogger);
+    }
+
+    @Transactional
+    public AuthResponse login(LoginRequest request) {
+        if (request == null
+                || !StringUtils.hasText(request.getEmail())
+                || !StringUtils.hasText(request.getPassword())) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Email and password are required");
+        }
+
+        String email = request.getEmail().trim().toLowerCase();
+
+        User user = userRepository.findByEmail(email)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Invalid credentials"));
+
+        if (!passwordEncoder.matches(request.getPassword(), user.getPassword())) {
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Invalid credentials");
+        }
+
+        notifyObservers("LOGGED_IN", authEventPayload(user, Map.of(
+                "email", user.getEmail()
+        )));
+
+        String token = jwtService.generateToken(user);
+        long expiresIn = JwtConfigurationManager.getInstance().getExpirationMs();
+
+        return new AuthResponse(token, expiresIn);
     }
 
     @Transactional
