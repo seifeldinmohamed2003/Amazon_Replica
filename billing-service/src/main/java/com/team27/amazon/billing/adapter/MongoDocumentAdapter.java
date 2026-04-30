@@ -1,12 +1,21 @@
 package com.team27.amazon.billing.adapter;
 
-import org.bson.Document;
+import com.team27.amazon.billing.dto.AuditLogDTO;
+import com.team27.amazon.billing.model.AuditLogDocument;
 import org.springframework.stereotype.Component;
 
 @Component
 public class MongoDocumentAdapter {
+    public AuditLogDTO toDTO(AuditLogDocument doc) {
+        if (doc == null) {
+            return null;
+        }
 
-    public Object adapt(Document document) {
-        return document;
+        return AuditLogDTO.builder()
+                .transactionId(doc.getTransactionId())
+                .eventType(doc.getEventType())
+                .details(doc.getDetails())
+                .timestamp(doc.getTimestamp())
+                .build();
     }
 }

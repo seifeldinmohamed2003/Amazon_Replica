@@ -1,16 +1,22 @@
 package com.team27.amazon.billing.service;
 
+import java.util.stream.Collectors;
 import com.fasterxml.jackson.core.type.TypeReference;
+import com.team27.amazon.billing.adapter.MongoDocumentAdapter;
+import com.team27.amazon.billing.dto.AuditLogDTO;
+import com.team27.amazon.billing.dto.CategoryRevenueDTO;
 import com.team27.amazon.billing.dto.RevenueReportDTO;
 import com.team27.amazon.billing.dto.TransactionDetailsDTO;
 import com.team27.amazon.billing.dto.UserTransactionSummaryDTO;
 import com.team27.amazon.billing.dto.VoucherUsageDTO;
+import com.team27.amazon.billing.model.AuditLogDocument;
 import com.team27.amazon.billing.model.DiscountType;
 import com.team27.amazon.billing.model.Transaction;
 import com.team27.amazon.billing.model.TransactionMethod;
 import com.team27.amazon.billing.model.TransactionStatus;
 import com.team27.amazon.billing.model.TransactionVoucher;
 import com.team27.amazon.billing.model.Voucher;
+import com.team27.amazon.billing.repository.TransactionAuditRepository;
 import com.team27.amazon.billing.repository.TransactionRepository;
 import com.team27.amazon.billing.repository.TransactionVoucherRepository;
 import com.team27.amazon.billing.repository.VoucherRepository;
@@ -19,6 +25,9 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
+import com.team27.amazon.billing.repository.CategoryRepository;
+import com.team27.amazon.billing.logging.MongoEventLogger;
+
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
@@ -26,6 +35,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.stream.Collectors;
 
 @Service
 public class BillingService {
@@ -38,6 +48,14 @@ public class BillingService {
     private TransactionVoucherRepository transactionVoucherRepository;
     @Autowired
     private CacheService cacheService;
+    @Autowired
+    private CategoryRepository categoryRepository;
+    @Autowired
+    private TransactionAuditRepository transactionAuditRepository; 
+    @Autowired
+    private MongoEventLogger mongoEventLogger; 
+    @Autowired
+    private MongoDocumentAdapter mongoDocumentAdapter;
 
     // ── Cache key constants ───────────────────────────────────────────────────
     private static final String SVC = "billing-service";
@@ -50,6 +68,8 @@ public class BillingService {
     private String f6Key(Object... p)  { return SVC + "::S5-F6::" + cacheService.buildParamHash(p); }
     private String f8Key(Long id)      { return SVC + "::S5-F8::" + id; }
     private String f9Key(int limit)    { return SVC + "::S5-F9::" + limit; }
+    private String f10Key() { return SVC + "::S5-F10::report"; }
+    private String f11Key(String txId) { return SVC + "::S5-F11::" + txId; }
 
     // Invalidate all caches that could be affected by a transaction change
     private void invalidateTransactionCaches(Long transactionId) {
@@ -60,7 +80,7 @@ public class BillingService {
         cacheService.deleteByPattern(SVC + "::S5-F6::*");
         cacheService.deleteByPattern(SVC + "::S5-F9::*");
         cacheService.deleteByPattern(SVC + "::S5-F10::*");
-        cacheService.deleteByPattern(SVC + "::S5-F11::*");
+        cacheService.delete(f11Key(transactionId.toString()));
     }
 
     private void invalidateVoucherCaches(Long voucherId) {
@@ -493,4 +513,42 @@ public class BillingService {
         cacheService.set(key, result, 10);
         return result;
     }
+
+    //[S5-F10] Get Category Revenue with Return Impact
+
+    public List<CategoryRevenueDTO> getCategoryRevenueReport() {
+    String key = f10Key();
+    List<CategoryRevenueDTO> cached = cacheService.get(key, new TypeReference<List<CategoryRevenueDTO>>() {});
+    if (cached != null) return cached;
+    List<Object[]> results = categoryRepository.getCategoryRevenueData();
+    List<CategoryRevenueDTO> report = results.stream()
+        .<CategoryRevenueDTO>map(row -> {
+            String category = (row[0] != null) ? row[0].toString() : "Unknown";
+            Double revenue = (row[1] != null) ? ((Number) row[1]).doubleValue() : 0.0;
+
+            return CategoryRevenueDTO.builder()
+                .categoryName(category)
+                .netRevenue(revenue)
+                .build();
+        })
+        .collect(Collectors.toList());
+
+    mongoEventLogger.logEvent("REVENUE_REPORT_GENERATED", "System-Wide");
+    cacheService.set(key, report, 10);
+    return report;
+}
+
+    //[S5-F11] Get Transaction Lifecycle Audit
+    public List<AuditLogDTO> getTransactionAuditTrail(String transactionId) {
+    String key = f11Key(transactionId);
+    List<AuditLogDTO> cached = cacheService.get(key, new TypeReference<List<AuditLogDTO>>() {});
+    if (cached != null) return cached;
+    List<AuditLogDocument> logs = transactionAuditRepository.findAllByTransactionId(transactionId);
+    List<AuditLogDTO> dtos = logs.stream()
+               .map(mongoDocumentAdapter::toDTO)
+               .collect(Collectors.toList());
+
+    cacheService.set(key, dtos, 15);
+    return dtos;
+}
 }
