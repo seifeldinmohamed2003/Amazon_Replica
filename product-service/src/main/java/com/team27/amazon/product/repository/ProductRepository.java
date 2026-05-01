@@ -46,8 +46,13 @@ List<Object[]> findTopRatedProducts(@Param("limit") int limit);
         """, nativeQuery = true)
     boolean existsInPendingOrders(@Param("productId") Long productId);
 
-        @Query("SELECT p FROM Product p WHERE p.status = com.team27.amazon.product.model.ProductStatus.ACTIVE AND p.stockQuantity < :threshold ORDER BY p.stockQuantity ASC")
-        List<Product> findByStockQuantityLessThanOrderByStockQuantityAsc(@Param("threshold") Integer threshold);
+    @Query(value = """
+    SELECT *
+    FROM products p
+    WHERE p.stock_quantity < :threshold
+    ORDER BY p.stock_quantity ASC
+    """, nativeQuery = true)
+    List<Product> findLowStockProducts(@Param("threshold") Integer threshold);
 
     @Query(value = """
             SELECT *

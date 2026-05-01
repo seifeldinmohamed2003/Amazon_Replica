@@ -7,6 +7,7 @@ import java.net.http.HttpResponse;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -42,7 +43,12 @@ import com.team27.amazon.product.model.ProductReview;
 import com.team27.amazon.product.model.ProductStatus;
 import com.team27.amazon.product.repository.ProductRepository;
 import com.team27.amazon.product.repository.ProductReviewRepository;
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.team27.amazon.product.cache.ProductCacheInvalidator;
+import com.team27.amazon.product.cache.ProductCacheKeys;
+import com.team27.amazon.product.cache.RedisCacheService;
 
+import java.time.Duration;
 import jakarta.annotation.PostConstruct;
 import jakarta.transaction.Transactional;
 
@@ -59,6 +65,12 @@ public class ProductService extends AbstractEventSubject {
     @Qualifier("productEventLogger")
     private MongoEventLogger mongoEventLogger;
 
+    @Autowired
+    private RedisCacheService redisCacheService;
+
+    @Autowired
+    private ProductCacheInvalidator productCacheInvalidator;
+
     private static final Logger log = LoggerFactory.getLogger(ProductService.class);
 
     @Autowired
@@ -70,8 +82,8 @@ private String elasticsearchUri;
 private final ObjectMapper objectMapper = new ObjectMapper();
 private final HttpClient httpClient = HttpClient.newHttpClient();
 
-  
-    
+
+
     @PostConstruct
     public void initObserver() {
         register(mongoEventLogger);
@@ -86,12 +98,22 @@ autoIndexProduct(savedProduct, "auto_crud_create");
                 "name", savedProduct.getName(),
                 "status", savedProduct.getStatus() == null ? null : savedProduct.getStatus().name()
         )));
+
+        productCacheInvalidator.invalidateAllProductFeatureCaches();
+
         return savedProduct;
     }
 
     public Product getProductById(Long id) {
-        return productRepository.findById(id)
-                .orElseThrow(() -> new ProductNotFoundException(id));
+        String cacheKey = ProductCacheKeys.productDetail(id);
+
+        return redisCacheService.getOrLoad(
+                cacheKey,
+                Duration.ofMinutes(15),
+                new TypeReference<Product>() {},
+                () -> productRepository.findById(id)
+                        .orElseThrow(() -> new ProductNotFoundException(id))
+        );
     }
 
     public List<Product> getProducts(ProductStatus status, String category) {
@@ -114,7 +136,14 @@ autoIndexProduct(savedProduct, "auto_crud_create");
         Double min = minPrice != null ? minPrice : 0.0;
         Double max = maxPrice != null ? maxPrice : Double.MAX_VALUE;
 
-        return productRepository.searchByPriceRange(min, max, category);
+        String cacheKey = ProductCacheKeys.s2f1Search(category, min, max);
+
+        return redisCacheService.getOrLoad(
+                cacheKey,
+                Duration.ofMinutes(5),
+                new TypeReference<List<Product>>() {},
+                () -> productRepository.searchByPriceRange(min, max, category)
+        );
     }
 
     public Product updateProduct(Long id, ProductRequest request) {
@@ -126,6 +155,9 @@ autoIndexProduct(savedProduct, "auto_crud_create");
                 "name", savedProduct.getName(),
                 "status", savedProduct.getStatus() == null ? null : savedProduct.getStatus().name()
         )));
+
+        productCacheInvalidator.invalidateProduct(id);
+
         return savedProduct;
     }
 
@@ -154,27 +186,41 @@ autoIndexProduct(savedProduct, "auto_crud_create");
         existing.setSpecifications(currentSpecifications);
         Product savedProduct = productRepository.save(existing);
         notifyObservers("SPECIFICATIONS_UPDATED", productEventPayload(savedProduct.getId(), Map.of(
-            "details", new HashMap<>(currentSpecifications)
+                "details", new HashMap<>(currentSpecifications)
         )));
+
+        productCacheInvalidator.invalidateProduct(id);
+
         return savedProduct;
     }
 
     public ProductSalesDTO getProductSalesSummary(Long productId, LocalDate startDate, LocalDate endDate) {
-        Product product = getProductById(productId);
+        String cacheKey = ProductCacheKeys.s2f3Sales(productId, startDate, endDate);
 
-        LocalDateTime startDateTime = startDate.atStartOfDay();
-        LocalDateTime endDateTime = endDate.atTime(LocalTime.MAX);
+        return redisCacheService.getOrLoad(
+                cacheKey,
+                Duration.ofMinutes(10),
+                new TypeReference<ProductSalesDTO>() {
+                },
+                () -> {
+                    Product product = getProductById(productId);
 
-        Object[] result = productRepository.getProductSalesSummary(productId, startDateTime, endDateTime);
+                    LocalDateTime startDateTime = startDate.atStartOfDay();
+                    LocalDateTime endDateTime = endDate.atTime(LocalTime.MAX);
 
-return objectArrayDtoAdapter.toProductSalesDTO(product.getId(), product.getName(), result);
-}
+                    Object[] result = productRepository.getProductSalesSummary(productId, startDateTime, endDateTime);
+
+                    return objectArrayDtoAdapter.toProductSalesDTO(product.getId(), product.getName(), result);
+                }
+        );
+    }
     public void deleteProduct(Long id) {
         Product existing = getProductById(id);
         productRepository.delete(existing);
         autoDeleteProductFromIndex(id);
         notifyObservers("PRODUCT_DELETED", productEventPayload(id, Map.of()));
 
+        productCacheInvalidator.invalidateProduct(id);
     }
 
     @Transactional
@@ -219,7 +265,7 @@ return objectArrayDtoAdapter.toProductSalesDTO(product.getId(), product.getName(
             "rating", savedReview.getRating(),
             "details", reviewDetails(savedReview)
         )));
-
+        productCacheInvalidator.invalidateProductReview(savedReview.getId(), productId);
         return savedReview;
     }
 
@@ -270,44 +316,73 @@ return objectArrayDtoAdapter.toProductSalesDTO(product.getId(), product.getName(
         )));
         return product;
     }
-
+    @Transactional
     public List<LowStockAlertDTO> getLowStockAlerts(Integer threshold) {
         if (threshold == null || threshold < 0) {
-            throw new InvalidProductAlertException("Threshold must be zero or greater.");        }
+            throw new InvalidProductAlertException("Threshold must be zero or greater.");
+        }
 
-        return productRepository.findByStockQuantityLessThanOrderByStockQuantityAsc(threshold)
-                .stream()
-                .map(LowStockAlertDTO::from)
-                .toList();
+        String cacheKey = ProductCacheKeys.s2f9LowStock(threshold);
+
+        return redisCacheService.getOrLoad(
+                cacheKey,
+                Duration.ofMinutes(10),
+                new TypeReference<List<LowStockAlertDTO>>() {},
+                () -> productRepository.findLowStockProducts(threshold)
+                        .stream()
+                        .map(LowStockAlertDTO::from)
+                        .toList()
+        );
     }
     public List<Product> searchBySpecification(String key, String value, ProductStatus status) {
-    if (key == null || key.isBlank() || value == null || value.isBlank()) {
-        throw new ResponseStatusException(
-                HttpStatus.BAD_REQUEST,
-                "Key and value must not be blank"
+        if (key == null || key.isBlank() || value == null || value.isBlank()) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Key and value must not be blank"
+            );
+        }
+
+        String cacheKey = ProductCacheKeys.s2f5Specifications(
+                key,
+                value,
+                status == null ? null : status.name()
+        );
+
+        return redisCacheService.getOrLoad(
+                cacheKey,
+                Duration.ofMinutes(5),
+                new TypeReference<List<Product>>() {},
+                () -> productRepository.findBySpecificationKeyValueAndOptionalStatus(
+                        key,
+                        value,
+                        status == null ? null : status.name()
+                )
         );
     }
 
-    return productRepository.findBySpecificationKeyValueAndOptionalStatus(
-            key,
-            value,
-            status == null ? null : status.name()
-    );
-} 
-        
     public List<TopProductDTO> getTopRatedProducts(Integer limit) {
-    if (limit == null || limit <= 0) {
-        throw new ResponseStatusException(
-                HttpStatus.BAD_REQUEST,
-                "Limit must be greater than 0"
+        if (limit == null || limit <= 0) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Limit must be greater than 0"
+            );
+        }
+
+        String cacheKey = ProductCacheKeys.s2f6TopRated(limit);
+
+        return redisCacheService.getOrLoad(
+                cacheKey,
+                Duration.ofMinutes(10),
+                new TypeReference<List<TopProductDTO>>() {},
+                () -> {
+                    List<Object[]> rows = productRepository.findTopRatedProducts(limit);
+
+                    return rows.stream()
+                            .map(objectArrayDtoAdapter::toTopProductDTO)
+                            .toList();
+                }
         );
     }
-
-    List<Object[]> rows = productRepository.findTopRatedProducts(limit);
-return rows.stream()
-        .map(objectArrayDtoAdapter::toTopProductDTO)
-        .toList();
-}
 
     private void applyRequest(Product product, ProductRequest request) {
         product.setName(request.getName());
@@ -339,7 +414,8 @@ return rows.stream()
     notifyObservers("STATUS_CHANGED", productEventPayload(savedProduct.getId(), Map.of(
             "status", savedProduct.getStatus() == null ? null : savedProduct.getStatus().name()
     )));
-    return savedProduct;
+        productCacheInvalidator.invalidateProduct(productId);
+        return savedProduct;
 }
 
     private Map<String, Object> productEventPayload(Long productId, Map<String, Object> details) {
