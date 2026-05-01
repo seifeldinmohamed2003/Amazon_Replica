@@ -1,7 +1,19 @@
 package com.team27.amazon.billing.service;
 
-import com.team27.amazon.common.events.AbstractEventSubject;
-import com.team27.amazon.common.events.MongoEventLogger;
+import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.http.HttpStatus;
+import org.springframework.stereotype.Service;
+import org.springframework.web.server.ResponseStatusException;
+
+import com.team27.amazon.billing.adapter.ObjectArrayDtoAdapter;
 import com.team27.amazon.billing.dto.RevenueReportDTO;
 import com.team27.amazon.billing.dto.TransactionDetailsDTO;
 import com.team27.amazon.billing.dto.UserTransactionSummaryDTO;
@@ -15,20 +27,11 @@ import com.team27.amazon.billing.model.Voucher;
 import com.team27.amazon.billing.repository.TransactionRepository;
 import com.team27.amazon.billing.repository.TransactionVoucherRepository;
 import com.team27.amazon.billing.repository.VoucherRepository;
-import jakarta.transaction.Transactional;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.beans.factory.annotation.Qualifier;
-import org.springframework.http.HttpStatus;
-import org.springframework.stereotype.Service;
-import org.springframework.web.server.ResponseStatusException;
+import com.team27.amazon.common.events.AbstractEventSubject;
+import com.team27.amazon.common.events.MongoEventLogger;
 
 import jakarta.annotation.PostConstruct;
-import java.time.LocalDateTime;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Optional;
+import jakarta.transaction.Transactional;
 
 @Service
 public class BillingService extends AbstractEventSubject {
@@ -43,6 +46,9 @@ public class BillingService extends AbstractEventSubject {
     @Autowired
     @Qualifier("billingEventLogger")
     private MongoEventLogger mongoEventLogger;
+
+    @Autowired
+    private ObjectArrayDtoAdapter objectArrayDtoAdapter;
 
     @PostConstruct
     public void initObserver() {
@@ -204,11 +210,11 @@ public class BillingService extends AbstractEventSubject {
         Map<String, Double> methodBreakdown = new HashMap<>();
         long totalTransactions = 0;
         double totalAmount = 0.0;
-
         for (Object[] row : rows) {
-            String method = (String) row[0];
-            long count = ((Number) row[1]).longValue();
-            double sum = ((Number) row[2]).doubleValue();
+            String method = objectArrayDtoAdapter.toTransactionMethod(row);
+            long count = objectArrayDtoAdapter.toTransactionCount(row);
+            double sum = objectArrayDtoAdapter.toTransactionSum(row);
+
             methodBreakdown.put(method, sum);
             totalTransactions += count;
             totalAmount += sum;
@@ -222,49 +228,81 @@ public class BillingService extends AbstractEventSubject {
                 .build();
     }
 
-    @Transactional
-    public Transaction processTransactionForOrder(Long orderId, String method, String cardLastFour) {
-        String orderStatus = transactionRepository.findOrderStatusById(orderId);
-        if (orderStatus == null) {
-            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Order not found");
-        }
-        if (!orderStatus.equals("DELIVERED")) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                    "Order must be DELIVERED to process payment");
-        }
-
-        int completedCount = transactionRepository.countCompletedTransactionsByOrderId(orderId);
-        if (completedCount > 0) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "already paid");
-        }
-
-        Double amount = transactionRepository.findOrderTotalAmountById(orderId);
-        Long userId = transactionRepository.findUserIdByOrderId(orderId);
-
-        Map<String, Object> details = new HashMap<>();
-        details.put("gatewayResponse", "approved");
-        if (cardLastFour != null) details.put("cardLastFour", cardLastFour);
-
-        Transaction transaction = new Transaction();
-        transaction.setOrderId(orderId);
-        transaction.setUserId(userId);
-        transaction.setAmount(amount != null ? amount : 0.0);
-        transaction.setMethod(TransactionMethod.valueOf(method));
-        transaction.setStatus(TransactionStatus.COMPLETED);
-        transaction.setTransactionDetails(details);
-        transaction.setCreatedAt(LocalDateTime.now());
-
-        Transaction savedTransaction = transactionRepository.save(transaction);
-        notifyObservers("CREATED", billingEventPayload(savedTransaction.getId(), savedTransaction.getMethod().name(), savedTransaction.getAmount(), Map.of(
-            "status", "PENDING",
-            "details", transactionDetails(savedTransaction)
-        )));
-        notifyObservers("COMPLETED", billingEventPayload(savedTransaction.getId(), savedTransaction.getMethod().name(), savedTransaction.getAmount(), Map.of(
-            "status", savedTransaction.getStatus().name(),
-            "details", transactionDetails(savedTransaction)
-        )));
-        return savedTransaction;
+@Transactional
+public Transaction processTransactionForOrder(Long orderId, String method, String cardLastFour, boolean simulateFailure) {
+    String orderStatus = transactionRepository.findOrderStatusById(orderId);
+    if (orderStatus == null) {
+        throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Order not found");
     }
+    if (!orderStatus.equals("DELIVERED")) {
+        throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                "Order must be DELIVERED to process payment");
+    }
+
+    int completedCount = transactionRepository.countCompletedTransactionsByOrderId(orderId);
+    if (completedCount > 0) {
+        throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "already paid");
+    }
+
+    Double amount = transactionRepository.findOrderTotalAmountById(orderId);
+    Long userId = transactionRepository.findUserIdByOrderId(orderId);
+
+    Map<String, Object> details = new HashMap<>();
+    details.put("gatewayResponse", simulateFailure ? "declined" : "approved");
+    if (cardLastFour != null) {
+        details.put("cardLastFour", cardLastFour);
+    }
+
+    if (simulateFailure) {
+        details.put("failureReason", "simulated failure");
+        details.put("failedAt", LocalDateTime.now().toString());
+    }
+
+    Transaction transaction = new Transaction();
+    transaction.setOrderId(orderId);
+    transaction.setUserId(userId);
+    transaction.setAmount(amount != null ? amount : 0.0);
+    transaction.setMethod(TransactionMethod.valueOf(method));
+    transaction.setStatus(simulateFailure ? TransactionStatus.FAILED : TransactionStatus.COMPLETED);
+    transaction.setTransactionDetails(details);
+    transaction.setCreatedAt(LocalDateTime.now());
+
+    Transaction savedTransaction = transactionRepository.save(transaction);
+
+    if (simulateFailure) {
+        notifyObservers("FAILED", billingEventPayload(
+                savedTransaction.getId(),
+                savedTransaction.getMethod().name(),
+                savedTransaction.getAmount(),
+                Map.of(
+                        "status", savedTransaction.getStatus().name(),
+                        "details", transactionDetails(savedTransaction)
+                )
+        ));
+    } else {
+        notifyObservers("CREATED", billingEventPayload(
+                savedTransaction.getId(),
+                savedTransaction.getMethod().name(),
+                savedTransaction.getAmount(),
+                Map.of(
+                        "status", "PENDING",
+                        "details", transactionDetails(savedTransaction)
+                )
+        ));
+
+        notifyObservers("COMPLETED", billingEventPayload(
+                savedTransaction.getId(),
+                savedTransaction.getMethod().name(),
+                savedTransaction.getAmount(),
+                Map.of(
+                        "status", savedTransaction.getStatus().name(),
+                        "details", transactionDetails(savedTransaction)
+                )
+        ));
+    }
+
+    return savedTransaction;
+}
 
 
 
@@ -439,24 +477,8 @@ public class BillingService extends AbstractEventSubject {
         for (Object[] row : rows) {
             if (count >= limit) break;
 
-            Voucher v             = (Voucher) row[0];
-            Integer timesUsed     = ((Number) row[1]).intValue();
-            Double  totalDiscount = ((Number) row[2]).doubleValue();
-            boolean expired       = v.getExpiryDate() != null &&
-                    v.getExpiryDate().isBefore(LocalDateTime.now());
-
-            result.add(VoucherUsageDTO.builder()
-                    .voucherId(v.getId())
-                    .code(v.getCode())
-                    .discountType(v.getDiscountType().name())
-                    .discountValue(v.getDiscountValue())
-                    .timesUsed(timesUsed)
-                    .totalDiscountGiven(totalDiscount)
-                    .active(v.getActive())
-                    .expired(expired)
-                    .build());
-            count++;
-        }
+           result.add(objectArrayDtoAdapter.toVoucherUsageDTO(row));
+     count++;}
 
         return result;
     }

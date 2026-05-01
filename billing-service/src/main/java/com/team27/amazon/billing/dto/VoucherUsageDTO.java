@@ -1,5 +1,6 @@
 package com.team27.amazon.billing.dto;
 
+
 public class VoucherUsageDTO {
 
     private Long voucherId;
@@ -73,11 +74,10 @@ public class VoucherUsageDTO {
             return this;
         }
 
-        public Builder discountType(String discountType) {
-            this.discountType = discountType;
-            return this;
-        }
-
+public Builder discountType(String discountType) {
+    this.discountType = discountType;
+    return this;
+}
         public Builder discountValue(Double discountValue) {
             this.discountValue = discountValue;
             return this;

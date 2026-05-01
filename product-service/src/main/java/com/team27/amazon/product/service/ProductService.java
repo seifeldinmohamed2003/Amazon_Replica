@@ -1,21 +1,29 @@
 package com.team27.amazon.product.service;
 
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
-import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-import com.team27.amazon.common.events.AbstractEventSubject;
-import com.team27.amazon.common.events.MongoEventLogger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.team27.amazon.common.events.AbstractEventSubject;
+import com.team27.amazon.common.events.MongoEventLogger;
+import com.team27.amazon.product.adapter.ObjectArrayDtoAdapter;
 import com.team27.amazon.product.dto.LowStockAlertDTO;
 import com.team27.amazon.product.dto.ProductRequest;
 import com.team27.amazon.product.dto.ProductReviewRequest;
@@ -51,6 +59,19 @@ public class ProductService extends AbstractEventSubject {
     @Qualifier("productEventLogger")
     private MongoEventLogger mongoEventLogger;
 
+    private static final Logger log = LoggerFactory.getLogger(ProductService.class);
+
+    @Autowired
+    private ObjectArrayDtoAdapter objectArrayDtoAdapter;
+
+    @Value("${spring.elasticsearch.uris:http://elasticsearch:9200}")
+private String elasticsearchUri;
+
+private final ObjectMapper objectMapper = new ObjectMapper();
+private final HttpClient httpClient = HttpClient.newHttpClient();
+
+  
+    
     @PostConstruct
     public void initObserver() {
         register(mongoEventLogger);
@@ -60,6 +81,7 @@ public class ProductService extends AbstractEventSubject {
         Product product = new Product();
         applyRequest(product, request);
         Product savedProduct = productRepository.save(product);
+autoIndexProduct(savedProduct, "auto_crud_create");
         notifyObservers("PRODUCT_CREATED", productEventPayload(savedProduct.getId(), Map.of(
                 "name", savedProduct.getName(),
                 "status", savedProduct.getStatus() == null ? null : savedProduct.getStatus().name()
@@ -99,6 +121,7 @@ public class ProductService extends AbstractEventSubject {
         Product existing = getProductById(id);
         applyRequest(existing, request);
         Product savedProduct = productRepository.save(existing);
+        autoIndexProduct(savedProduct, "auto_crud_update");
         notifyObservers("PRODUCT_UPDATED", productEventPayload(savedProduct.getId(), Map.of(
                 "name", savedProduct.getName(),
                 "status", savedProduct.getStatus() == null ? null : savedProduct.getStatus().name()
@@ -144,28 +167,12 @@ public class ProductService extends AbstractEventSubject {
 
         Object[] result = productRepository.getProductSalesSummary(productId, startDateTime, endDateTime);
 
-        long totalUnitsSold = 0L;
-        double totalRevenue = 0.0;
-
-        if (result != null && result.length >= 2) {
-            totalUnitsSold = result[0] == null ? 0L : ((Number) result[0]).longValue();
-            totalRevenue = result[1] == null ? 0.0 : ((Number) result[1]).doubleValue();
-        }
-
-        double averageSellingPrice = totalUnitsSold == 0 ? 0.0 : totalRevenue / totalUnitsSold;
-
-        return ProductSalesDTO.builder()
-                .productId(product.getId())
-                .name(product.getName())
-                .totalUnitsSold(totalUnitsSold)
-                .totalRevenue(totalRevenue)
-                .averageSellingPrice(averageSellingPrice)
-                .build();
-    }
-
+return objectArrayDtoAdapter.toProductSalesDTO(product.getId(), product.getName(), result);
+}
     public void deleteProduct(Long id) {
         Product existing = getProductById(id);
         productRepository.delete(existing);
+        autoDeleteProductFromIndex(id);
         notifyObservers("PRODUCT_DELETED", productEventPayload(id, Map.of()));
 
     }
@@ -297,17 +304,10 @@ public class ProductService extends AbstractEventSubject {
     }
 
     List<Object[]> rows = productRepository.findTopRatedProducts(limit);
-
-    return rows.stream()
-            .map(row -> TopProductDTO.builder()
-                    .productId(((Number) row[0]).longValue())
-                    .name((String) row[1])
-                    .rating(row[2] == null ? 0.0 : ((Number) row[2]).doubleValue())
-                    .totalSales(row[3] == null ? 0L : ((Number) row[3]).longValue())
-                    .build()
-            )
-            .toList();
-    }
+return rows.stream()
+        .map(objectArrayDtoAdapter::toTopProductDTO)
+        .toList();
+}
 
     private void applyRequest(Product product, ProductRequest request) {
         product.setName(request.getName());
@@ -370,5 +370,109 @@ public class ProductService extends AbstractEventSubject {
         details.put("title", review.getTitle());
         return details;
     }
-    
+
+private void autoIndexProduct(Product product, String source) {
+    try {
+        Map<String, Object> document = new HashMap<>();
+        document.put("id", String.valueOf(product.getId()));
+        document.put("productId", product.getId());
+        document.put("name", product.getName());
+        document.put("description", product.getDescription());
+        document.put("category", product.getCategory());
+        document.put("brand", product.getBrand());
+        document.put("price", product.getPrice());
+        document.put("stockQuantity", product.getStockQuantity());
+        document.put("rating", product.getRating());
+        document.put("status", product.getStatus() == null ? null : product.getStatus().name());
+
+        createProductsIndexIfNeeded();
+
+        String jsonBody = objectMapper.writeValueAsString(document);
+
+        HttpRequest request = HttpRequest.newBuilder()
+                .uri(URI.create(elasticsearchUri + "/products/_doc/" + product.getId()))
+                .header("Content-Type", "application/json")
+                .PUT(HttpRequest.BodyPublishers.ofString(jsonBody))
+                .build();
+
+        HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+
+        if (response.statusCode() >= 300) {
+            throw new IllegalStateException("Elasticsearch indexing failed: " + response.statusCode() + " " + response.body());
+        }
+
+        notifyObservers("INDEXED", productEventPayload(product.getId(), Map.of(
+                "productId", product.getId(),
+                "indexedFields", List.of(
+                        "id",
+                        "name",
+                        "description",
+                        "category",
+                        "brand",
+                        "price",
+                        "stockQuantity",
+                        "rating",
+                        "status"
+                ),
+                "source", source
+        )));
+    } catch (Exception e) {
+        log.warn("Failed to auto-index product {}", product.getId(), e);
+    }
+}
+
+private void createProductsIndexIfNeeded() {
+    try {
+        String mapping = """
+                {
+                  "mappings": {
+                    "properties": {
+                      "id": { "type": "keyword" },
+                      "productId": { "type": "long" },
+                      "name": { "type": "text" },
+                      "description": { "type": "text" },
+                      "category": { "type": "keyword" },
+                      "brand": { "type": "keyword" },
+                      "price": { "type": "double" },
+                      "stockQuantity": { "type": "integer" },
+                      "rating": { "type": "double" },
+                      "status": { "type": "keyword" }
+                    }
+                  }
+                }
+                """;
+
+        HttpRequest request = HttpRequest.newBuilder()
+                .uri(URI.create(elasticsearchUri + "/products"))
+                .header("Content-Type", "application/json")
+                .PUT(HttpRequest.BodyPublishers.ofString(mapping))
+                .build();
+
+        HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+
+        if (response.statusCode() != 200 && response.statusCode() != 400) {
+            throw new IllegalStateException("Elasticsearch index creation failed: " + response.statusCode() + " " + response.body());
+        }
+    } catch (Exception e) {
+        log.warn("Could not create Elasticsearch products index", e);
+    }
+}
+
+private void autoDeleteProductFromIndex(Long productId) {
+    try {
+        HttpRequest request = HttpRequest.newBuilder()
+                .uri(URI.create(elasticsearchUri + "/products/_doc/" + productId))
+                .DELETE()
+                .build();
+
+        HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+
+        if (response.statusCode() >= 300 && response.statusCode() != 404) {
+            throw new IllegalStateException("Elasticsearch delete failed: "
+                    + response.statusCode() + " " + response.body());
+        }
+    } catch (Exception e) {
+        log.warn("Failed to delete product {} from Elasticsearch index", productId, e);
+    }
+}
 }
