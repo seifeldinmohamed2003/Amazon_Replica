@@ -30,6 +30,7 @@ import com.team27.amazon.shipping.dto.CarrierSummaryDTO;
 import com.team27.amazon.shipping.dto.CreateShipmentRequest;
 import com.team27.amazon.shipping.dto.DelayedShipmentDTO;
 import com.team27.amazon.shipping.dto.NearbyShipmentDTO;
+import com.team27.amazon.shipping.dto.ShippingAnalyticsDTO;
 import com.team27.amazon.shipping.dto.TrackingEventRequest;
 import com.team27.amazon.shipping.model.Shipment;
 import com.team27.amazon.shipping.model.ShipmentStatus;
@@ -79,7 +80,8 @@ public class ShipmentService extends AbstractEventSubject {
         @CacheEvict(cacheNames = RedisConfiguration.CACHE_S4_F5, allEntries = true),
         @CacheEvict(cacheNames = RedisConfiguration.CACHE_S4_F6, allEntries = true),
         @CacheEvict(cacheNames = RedisConfiguration.CACHE_S4_F8, allEntries = true),
-        @CacheEvict(cacheNames = RedisConfiguration.CACHE_S4_F9, allEntries = true)
+        @CacheEvict(cacheNames = RedisConfiguration.CACHE_S4_F9, allEntries = true),
+        @CacheEvict(cacheNames = RedisConfiguration.CACHE_S4_F10, allEntries = true)
     })
     public Shipment createShipment(Shipment shipment) {
         Shipment savedShipment = shipmentRepository.save(shipment);
@@ -109,7 +111,8 @@ public class ShipmentService extends AbstractEventSubject {
         @CacheEvict(cacheNames = RedisConfiguration.CACHE_S4_F5, allEntries = true),
         @CacheEvict(cacheNames = RedisConfiguration.CACHE_S4_F6, allEntries = true),
         @CacheEvict(cacheNames = RedisConfiguration.CACHE_S4_F8, allEntries = true),
-        @CacheEvict(cacheNames = RedisConfiguration.CACHE_S4_F9, allEntries = true)
+        @CacheEvict(cacheNames = RedisConfiguration.CACHE_S4_F9, allEntries = true),
+        @CacheEvict(cacheNames = RedisConfiguration.CACHE_S4_F10, allEntries = true)
     })
     public Shipment updateShipment(Long id, Shipment updatedShipment) {
         Shipment existing = shipmentRepository.findById(id)
@@ -140,7 +143,8 @@ public class ShipmentService extends AbstractEventSubject {
         @CacheEvict(cacheNames = RedisConfiguration.CACHE_S4_F5, allEntries = true),
         @CacheEvict(cacheNames = RedisConfiguration.CACHE_S4_F6, allEntries = true),
         @CacheEvict(cacheNames = RedisConfiguration.CACHE_S4_F8, allEntries = true),
-        @CacheEvict(cacheNames = RedisConfiguration.CACHE_S4_F9, allEntries = true)
+        @CacheEvict(cacheNames = RedisConfiguration.CACHE_S4_F9, allEntries = true),
+        @CacheEvict(cacheNames = RedisConfiguration.CACHE_S4_F10, allEntries = true)
     })
     public void deleteShipment(Long id) {
         if (!shipmentRepository.existsById(id)) {
@@ -175,7 +179,8 @@ public class ShipmentService extends AbstractEventSubject {
         @CacheEvict(cacheNames = RedisConfiguration.CACHE_S4_F5, allEntries = true),
         @CacheEvict(cacheNames = RedisConfiguration.CACHE_S4_F6, allEntries = true),
         @CacheEvict(cacheNames = RedisConfiguration.CACHE_S4_F8, allEntries = true),
-        @CacheEvict(cacheNames = RedisConfiguration.CACHE_S4_F9, allEntries = true)
+        @CacheEvict(cacheNames = RedisConfiguration.CACHE_S4_F9, allEntries = true),
+        @CacheEvict(cacheNames = RedisConfiguration.CACHE_S4_F10, allEntries = true)
     })
     public Shipment createShipmentForOrder(Long orderId, CreateShipmentRequest request) {
         Integer orderCount = jdbcTemplate.queryForObject(
@@ -326,7 +331,8 @@ public class ShipmentService extends AbstractEventSubject {
         @CacheEvict(cacheNames = RedisConfiguration.CACHE_S4_F5, allEntries = true),
         @CacheEvict(cacheNames = RedisConfiguration.CACHE_S4_F6, allEntries = true),
         @CacheEvict(cacheNames = RedisConfiguration.CACHE_S4_F8, allEntries = true),
-        @CacheEvict(cacheNames = RedisConfiguration.CACHE_S4_F9, allEntries = true)
+        @CacheEvict(cacheNames = RedisConfiguration.CACHE_S4_F9, allEntries = true),
+        @CacheEvict(cacheNames = RedisConfiguration.CACHE_S4_F10, allEntries = true)
     })
     @Transactional
     public int purgeOldShipments(int olderThanDays) {
@@ -499,7 +505,8 @@ public class ShipmentService extends AbstractEventSubject {
         @CacheEvict(cacheNames = RedisConfiguration.CACHE_S4_F5, allEntries = true),
         @CacheEvict(cacheNames = RedisConfiguration.CACHE_S4_F6, allEntries = true),
         @CacheEvict(cacheNames = RedisConfiguration.CACHE_S4_F8, allEntries = true),
-        @CacheEvict(cacheNames = RedisConfiguration.CACHE_S4_F9, allEntries = true)
+        @CacheEvict(cacheNames = RedisConfiguration.CACHE_S4_F9, allEntries = true),
+        @CacheEvict(cacheNames = RedisConfiguration.CACHE_S4_F10, allEntries = true)
     })
     @Transactional
     public int batchUpdateStatus(List<BatchStatusUpdateRequest> requests) {
@@ -604,4 +611,98 @@ public class ShipmentService extends AbstractEventSubject {
             );
         }
     }
+
+    public void logShippingAnalyticsViewed(LocalDate startDate, LocalDate endDate) {
+        notifyObservers("ANALYTICS_VIEWED", shipmentEventPayload(null, Map.of(
+                "feature", "S4-F10",
+                "startDate", startDate == null ? null : startDate.toString(),
+                "endDate", endDate == null ? null : endDate.toString()
+        )));
+    }
+
+    // S4-F10: Get Shipping Analytics Dashboard - TTL 10 min
+    // Cache key: shipping-service::S4-F10::{startDate}:{endDate}
+    @Cacheable(cacheNames = RedisConfiguration.CACHE_S4_F10,
+               key = "#startDate.toString() + ':' + #endDate.toString()")
+    public ShippingAnalyticsDTO getShippingAnalytics(LocalDate startDate, LocalDate endDate) {
+        if (startDate == null || endDate == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "startDate and endDate are required");
+        }
+
+        if (startDate.isAfter(endDate)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "startDate cannot be after endDate");
+        }
+
+        LocalDateTime start = startDate.atStartOfDay();
+        LocalDateTime end = endDate.atTime(23, 59, 59, 999_000_000);
+
+        List<Shipment> shipments = shipmentRepository.findByCreatedAtBetween(start, end);
+
+        long totalShipments = shipments.size();
+
+        Map<String, Long> shipmentsByStatus = shipments.stream()
+                .filter(shipment -> shipment.getStatus() != null)
+                .collect(Collectors.groupingBy(
+                        shipment -> shipment.getStatus().name(),
+                        Collectors.counting()
+                ));
+
+        List<Shipment> deliveredShipments = shipments.stream()
+                .filter(shipment -> shipment.getStatus() == ShipmentStatus.DELIVERED)
+                .toList();
+
+        double averageDeliveryTimeDays = deliveredShipments.stream()
+                .filter(shipment -> shipment.getActualDelivery() != null && shipment.getCreatedAt() != null)
+                .mapToLong(shipment -> ChronoUnit.DAYS.between(
+                        shipment.getCreatedAt().toLocalDate(),
+                        shipment.getActualDelivery()
+                ))
+                .average()
+                .orElse(0.0);
+
+        long onTimeDeliveredCount = deliveredShipments.stream()
+                .filter(shipment -> shipment.getActualDelivery() != null && shipment.getEstimatedDelivery() != null)
+                .filter(shipment -> !shipment.getActualDelivery().isAfter(shipment.getEstimatedDelivery()))
+                .count();
+
+        double onTimeRate = deliveredShipments.isEmpty()
+                ? 0.0
+                : (double) onTimeDeliveredCount / deliveredShipments.size();
+
+        double averageAttempts = deliveredShipments.stream()
+                .mapToDouble(this::extractDeliveryAttempts)
+                .average()
+                .orElse(0.0);
+
+        return ShippingAnalyticsDTO.builder()
+                .totalShipments(totalShipments)
+                .averageDeliveryTimeDays(averageDeliveryTimeDays)
+                .onTimeRate(onTimeRate)
+                .shipmentsByStatus(shipmentsByStatus)
+                .averageAttempts(averageAttempts)
+                .build();
+    }
+
+    private double extractDeliveryAttempts(Shipment shipment) {
+        if (shipment == null || shipment.getMetadata() == null) {
+            return 0.0;
+        }
+
+        Object attempts = shipment.getMetadata().get("deliveryAttempts");
+        if (attempts == null) {
+            return 0.0;
+        }
+
+        if (attempts instanceof Number number) {
+            return number.doubleValue();
+        }
+
+        try {
+            return Double.parseDouble(attempts.toString());
+        } catch (NumberFormatException exception) {
+            return 0.0;
+        }
+    }
+
+
 }

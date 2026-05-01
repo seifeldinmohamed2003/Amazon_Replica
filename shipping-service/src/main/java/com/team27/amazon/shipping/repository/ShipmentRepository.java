@@ -15,6 +15,9 @@ public interface ShipmentRepository extends JpaRepository<Shipment, Long> {
 
     Optional<Shipment> findFirstByOrderIdOrderByCreatedAtDesc(Long orderId);
 
+
+    List<Shipment> findByCreatedAtBetween(LocalDateTime startDate, LocalDateTime endDate);
+
     List<Shipment> findByStatusAndLatitudeIsNotNullAndLongitudeIsNotNull(ShipmentStatus status);
 
     @Query(value = "SELECT COUNT(*) FROM shipments s WHERE s.last_update < :cutoff", nativeQuery = true)

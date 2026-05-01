@@ -5,6 +5,7 @@ import com.team27.amazon.shipping.dto.CarrierSummaryDTO;
 import com.team27.amazon.shipping.dto.CreateShipmentRequest;
 import com.team27.amazon.shipping.dto.DelayedShipmentDTO;
 import com.team27.amazon.shipping.dto.NearbyShipmentDTO;
+import com.team27.amazon.shipping.dto.ShippingAnalyticsDTO;
 import com.team27.amazon.shipping.dto.TrackingEventRequest;
 import com.team27.amazon.shipping.model.Shipment;
 import com.team27.amazon.shipping.model.ShipmentStatus;
@@ -14,6 +15,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
@@ -121,6 +123,16 @@ public class ShipmentController {
         return ResponseEntity.ok(
                 shipmentService.getShipmentsInDateRange(startDate, endDate, status)
         );
+    }
+
+
+    @GetMapping("/analytics")
+    public ResponseEntity<ShippingAnalyticsDTO> getShippingAnalytics(
+            @RequestParam LocalDate startDate,
+            @RequestParam LocalDate endDate
+    ) {
+        shipmentService.logShippingAnalyticsViewed(startDate, endDate);
+        return ResponseEntity.ok(shipmentService.getShippingAnalytics(startDate, endDate));
     }
 
     @GetMapping("/metadata/search")
