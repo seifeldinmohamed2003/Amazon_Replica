@@ -24,6 +24,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
 import jakarta.annotation.PostConstruct;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
 import java.util.Comparator;
@@ -89,7 +90,7 @@ public class ShipmentService extends AbstractEventSubject {
     }
 
     @Caching(evict = {
-        @CacheEvict(cacheNames = RedisConfiguration.CACHE_SHIPMENT_DETAIL, allEntries = true),
+        @CacheEvict(cacheNames = RedisConfiguration.CACHE_SHIPMENT_DETAIL, key = "#id"),
         @CacheEvict(cacheNames = RedisConfiguration.CACHE_S4_F1, allEntries = true),
         @CacheEvict(cacheNames = RedisConfiguration.CACHE_S4_F3, allEntries = true),
         @CacheEvict(cacheNames = RedisConfiguration.CACHE_S4_F5, allEntries = true),
@@ -120,7 +121,7 @@ public class ShipmentService extends AbstractEventSubject {
     }
 
     @Caching(evict = {
-        @CacheEvict(cacheNames = RedisConfiguration.CACHE_SHIPMENT_DETAIL, allEntries = true),
+        @CacheEvict(cacheNames = RedisConfiguration.CACHE_SHIPMENT_DETAIL, key = "#id"),
         @CacheEvict(cacheNames = RedisConfiguration.CACHE_S4_F1, allEntries = true),
         @CacheEvict(cacheNames = RedisConfiguration.CACHE_S4_F3, allEntries = true),
         @CacheEvict(cacheNames = RedisConfiguration.CACHE_S4_F5, allEntries = true),
@@ -360,7 +361,7 @@ public class ShipmentService extends AbstractEventSubject {
                 .orderId(((Number) row[1]).longValue())
                 .carrier((String) row[2])
                 .trackingNumber((String) row[3])
-                .estimatedDelivery(((java.sql.Date) row[4]).toLocalDate())
+                .estimatedDelivery(toLocalDate(row[4]))
                 .daysOverdue(((Number) row[5]).longValue())
                 .deliveryAttempts(((Number) row[6]).intValue())
                 .build()
@@ -497,6 +498,27 @@ public class ShipmentService extends AbstractEventSubject {
         )));
 
         return existingShipments.size();
+    }
+
+
+    private LocalDate toLocalDate(Object value) {
+        if (value == null) {
+            return null;
+        }
+
+        if (value instanceof LocalDate localDate) {
+            return localDate;
+        }
+
+        if (value instanceof java.sql.Date sqlDate) {
+            return sqlDate.toLocalDate();
+        }
+
+        if (value instanceof java.sql.Timestamp timestamp) {
+            return timestamp.toLocalDateTime().toLocalDate();
+        }
+
+        throw new IllegalArgumentException("Unsupported date value type: " + value.getClass().getName());
     }
 
     private Map<String, Object> shipmentEventPayload(Long shipmentId, Map<String, Object> details) {
