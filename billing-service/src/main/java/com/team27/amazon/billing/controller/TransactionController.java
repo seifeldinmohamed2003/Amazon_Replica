@@ -10,7 +10,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
-
+import com.team27.amazon.billing.dto.RefundRequest;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
@@ -135,6 +135,13 @@ public class TransactionController {
     public ResponseEntity<Void> deleteTransaction(@PathVariable Long id) {
         billingService.deleteTransaction(id);
         return ResponseEntity.noContent().build();
+    }
+
+    @PostMapping("/{id}/refund-items")
+    public ResponseEntity<Transaction> processPartialRefund(
+            @PathVariable Long id,
+            @RequestBody RefundRequest request) {
+        return ResponseEntity.ok(billingService.processPartialRefund(id, request));
     }
 
 }

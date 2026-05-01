@@ -27,7 +27,15 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
 import com.team27.amazon.billing.repository.CategoryRepository;
 import com.team27.amazon.billing.logging.MongoEventLogger;
-
+import com.team27.amazon.common.events.TransactionAuditEvent;
+import com.team27.amazon.billing.dto.RefundRequest;
+import com.team27.amazon.billing.dto.RefundResult;
+import com.team27.amazon.billing.repository.TransactionAuditEventRepository;
+import com.team27.amazon.billing.strategy.NoRefundStrategy;
+import com.team27.amazon.billing.strategy.RefundStrategy;
+import com.team27.amazon.billing.strategy.RefundStrategySelector;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
@@ -56,6 +64,15 @@ public class BillingService {
     private MongoEventLogger mongoEventLogger; 
     @Autowired
     private MongoDocumentAdapter mongoDocumentAdapter;
+
+    private static final Logger log = LoggerFactory.getLogger(BillingService.class);
+
+    @Autowired
+    private TransactionAuditEventRepository auditRepository;
+
+    @Autowired
+    private RefundStrategySelector refundStrategySelector;
+
 
     // ── Cache key constants ───────────────────────────────────────────────────
     private static final String SVC = "billing-service";
@@ -86,6 +103,36 @@ public class BillingService {
     private void invalidateVoucherCaches(Long voucherId) {
         cacheService.delete(vcKey(voucherId));
         cacheService.deleteByPattern(SVC + "::S5-F9::*");
+    }
+
+    private void writeAuditEvent(Long transactionId, String action, String method,
+                                 Double amount, Map<String, Object> details) {
+        try {
+            TransactionAuditEvent event = new TransactionAuditEvent(
+                    transactionId, action, LocalDateTime.now(), method, amount, details);
+            auditRepository.save(event);
+        } catch (Exception e) {
+            log.warn("MongoDB audit write failed for transactionId {}: {}", transactionId, e.getMessage());
+        }
+    }
+
+    private List<Map<String, Object>> buildRefundedItemsList(List<Long> itemIds, Long orderId) {
+        List<Map<String, Object>> refundedItems = new ArrayList<>();
+        if (itemIds == null || itemIds.isEmpty()) return refundedItems;
+
+        List<Object[]> rows = transactionRepository.findItemDetailsByIds(itemIds);
+        for (Object[] row : rows) {
+            Long itemId = ((Number) row[0]).longValue();
+            Integer quantity = ((Number) row[1]).intValue();
+            Double price = ((Number) row[2]).doubleValue();
+
+            Map<String, Object> item = new HashMap<>();
+            item.put("orderItemId", itemId);
+            item.put("quantity", quantity);
+            item.put("amount", price * quantity);
+            refundedItems.add(item);
+        }
+        return refundedItems;
     }
 
     // ── CRUD ─────────────────────────────────────────────────────────────────
@@ -551,4 +598,95 @@ public class BillingService {
     cacheService.set(key, dtos, 15);
     return dtos;
 }
+
+    // ── S5-F12 ── Process Partial Item Refund ────────────────────────────────
+
+    @Transactional
+    public Transaction processPartialRefund(Long id, RefundRequest request) {
+
+        // Step b — Find transaction
+        Transaction tx = transactionRepository.findById(id)
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND, "Transaction not found"));
+
+        // Step c — Validate COMPLETED
+        if (tx.getStatus() != TransactionStatus.COMPLETED) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "Transaction must be COMPLETED to process a refund");
+        }
+
+        // Step d — Validate orderItemIds if refundAll=false
+        if (!request.isRefundAll()) {
+            if (request.getOrderItemIds() == null || request.getOrderItemIds().isEmpty()) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                        "orderItemIds must not be empty when refundAll is false");
+            }
+            int validCount = transactionRepository.countItemsBelongingToOrder(
+                    request.getOrderItemIds(), tx.getOrderId());
+            if (validCount != request.getOrderItemIds().size()) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                        "Some orderItemIds do not belong to this transaction's order");
+            }
+        }
+
+        // Step e — Select strategy (no if/else branching here — selector does it)
+        RefundStrategy strategy = refundStrategySelector.select(tx, request);
+
+        // Step f — Handle NoRefundStrategy
+        if (strategy instanceof NoRefundStrategy) {
+            Map<String, Object> denialDetails = new HashMap<>();
+            denialDetails.put("refundStrategy", "NoRefundStrategy");
+            denialDetails.put("reason", "return window expired");
+            denialDetails.put("orderItemIds", request.getOrderItemIds());
+
+            writeAuditEvent(tx.getId(), "REFUND_DENIED",
+                    tx.getMethod().name(), tx.getAmount(), denialDetails);
+
+            cacheService.deleteByPattern(SVC + "::S5-F10::*");
+            cacheService.deleteByPattern(SVC + "::S5-F11::*");
+
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "return window expired");
+        }
+
+        // Step g — Calculate refund
+        RefundResult result = strategy.calculateRefund(tx, request);
+        tx.setStatus(TransactionStatus.REFUNDED);
+
+        // Step h — Write additive JSONB keys
+        Map<String, Object> details = tx.getTransactionDetails();
+        if (details == null) details = new HashMap<>();
+
+        List<Map<String, Object>> refundedItems =
+                buildRefundedItemsList(result.getRefundedItemIds(), tx.getOrderId());
+
+        details.put("refundAmount", result.getAmount());
+        details.put("refundedItems", refundedItems);
+        details.put("refundStrategy", strategy.getClass().getSimpleName());
+        details.put("refundReason", request.getReason());
+        details.put("refundedAt", LocalDateTime.now().toString());
+        tx.setTransactionDetails(details);
+
+        Transaction saved = transactionRepository.save(tx);
+
+        // Step i — Log REFUNDED event to MongoDB
+        Map<String, Object> auditDetails = new HashMap<>();
+        auditDetails.put("refundStrategy", strategy.getClass().getSimpleName());
+        auditDetails.put("reason", request.getReason());
+        auditDetails.put("originalAmount", tx.getAmount());
+        auditDetails.put("refundAmount", result.getAmount());
+        auditDetails.put("refundedItemIds", result.getRefundedItemIds());
+
+        writeAuditEvent(tx.getId(), "REFUNDED",
+                tx.getMethod().name(), result.getAmount(), auditDetails);
+
+        // Step j — Invalidate caches
+        invalidateTransactionCaches(id);
+        cacheService.deleteByPattern(SVC + "::S5-F10::*");
+        cacheService.deleteByPattern(SVC + "::S5-F11::*");
+
+        return saved;
+    }
+
+
+
 }
