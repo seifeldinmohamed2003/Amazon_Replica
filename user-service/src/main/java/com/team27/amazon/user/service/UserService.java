@@ -2,19 +2,13 @@ package com.team27.amazon.user.service;
 
 
 
+import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
-import java.time.LocalDate;
-import java.time.LocalDateTime;
 import java.util.Map;
 
-import com.team27.amazon.common.events.AbstractEventSubject;
-import com.team27.amazon.common.events.MongoEventLogger;
-import com.team27.amazon.user.dto.TopBuyerDTO;
-import com.team27.amazon.user.model.Role;
-import com.team27.amazon.user.dto.UserOrderSummaryDTO;
-import com.team27.amazon.user.model.Status;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -22,13 +16,21 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 import org.springframework.web.server.ResponseStatusException;
 
+import com.team27.amazon.common.events.AbstractEventSubject;
+import com.team27.amazon.common.events.MongoEventLogger;
+import com.team27.amazon.user.adapter.ObjectArrayDtoAdapter;
+import com.team27.amazon.user.dto.ShippingAddressDTO;
+import com.team27.amazon.user.dto.TopBuyerDTO;
+import com.team27.amazon.user.dto.UserOrderSummaryDTO;
+import com.team27.amazon.user.dto.UserProfileDTO;
+import com.team27.amazon.user.dto.UserProfileDTOBuilder;
+import com.team27.amazon.user.model.Role;
 import com.team27.amazon.user.model.ShippingAddress;
+import com.team27.amazon.user.model.Status;
 import com.team27.amazon.user.model.User;
 import com.team27.amazon.user.repository.ShippingAddressRepository;
 import com.team27.amazon.user.repository.UserRepository;
-import com.team27.amazon.user.dto.ShippingAddressDTO;
-import com.team27.amazon.user.dto.UserProfileDTO;
-import com.team27.amazon.user.dto.UserProfileDTOBuilder;
+
 
 @Service
 public class UserService extends AbstractEventSubject {
@@ -37,15 +39,19 @@ public class UserService extends AbstractEventSubject {
     private final ShippingAddressRepository shippingAddressRepository;
     private final PasswordEncoder passwordEncoder;
     private final MongoEventLogger mongoEventLogger;
+    private final ObjectArrayDtoAdapter objectArrayDtoAdapter;
 
     public UserService(UserRepository userRepository,
                        ShippingAddressRepository shippingAddressRepository,
                        PasswordEncoder passwordEncoder,
-                       MongoEventLogger mongoEventLogger) {
+                       MongoEventLogger mongoEventLogger,
+                        ObjectArrayDtoAdapter objectArrayDtoAdapter) {
         this.userRepository = userRepository;
         this.shippingAddressRepository = shippingAddressRepository;
         this.passwordEncoder = passwordEncoder;
         this.mongoEventLogger = mongoEventLogger;
+        this.objectArrayDtoAdapter = objectArrayDtoAdapter;
+
         register(mongoEventLogger);
     }
 
@@ -169,39 +175,31 @@ public class UserService extends AbstractEventSubject {
         }
 
         User savedUser = userRepository.save(user);
-        notifyObservers("PREFERENCES_UPDATED", userEventPayload(savedUser.getId(), savedUser.getPreferences() == null ? new HashMap<>() : new HashMap<>(savedUser.getPreferences())));
+        notifyObservers("USER_UPDATED", userEventPayload(savedUser.getId(), savedUser.getPreferences() == null ? new HashMap<>() : new HashMap<>(savedUser.getPreferences())));
         return savedUser;
     }
 
     // S1-F3
-    public UserOrderSummaryDTO getUserOrderSummary(Long userId) {
-        getUserById(userId); // throws 404 if not found
+ public UserOrderSummaryDTO getUserOrderSummary(Long userId) {
+    getUserById(userId); // throws 404 if not found
 
-        Object[] row = userRepository.getUserOrderSummary(userId);
+    Object[] row = userRepository.getUserOrderSummary(userId);
 
-        if (row == null || row.length == 0) {
-            // User exists but has no orders
-            User user = getUserById(userId);
-            return UserOrderSummaryDTO.builder()
-                    .userId(userId)
-                    .name(user.getName())
-                    .totalOrders(0L)
-                    .completedOrders(0L)
-                    .cancelledOrders(0L)
-                    .totalSpent(0.0)
-                    .averageOrderValue(0.0)
-                    .build();  }
-
+    if (row == null || row.length == 0) {
+        User user = getUserById(userId);
         return UserOrderSummaryDTO.builder()
-                .userId(((Number) row[0]).longValue())
-                .name((String) row[1])
-                .totalOrders(((Number) row[2]).longValue())
-                .completedOrders(((Number) row[3]).longValue())
-                .cancelledOrders(((Number) row[4]).longValue())
-                .totalSpent(((Number) row[5]).doubleValue())
-                .averageOrderValue(((Number) row[6]).doubleValue())
+                .userId(userId)
+                .name(user.getName())
+                .totalOrders(0L)
+                .completedOrders(0L)
+                .cancelledOrders(0L)
+                .totalSpent(0.0)
+                .averageOrderValue(0.0)
                 .build();
     }
+
+    return objectArrayDtoAdapter.adapt(row);
+}
 
     //S1-F4
     @Transactional
@@ -268,18 +266,8 @@ public class UserService extends AbstractEventSubject {
         List<TopBuyerDTO> result = new ArrayList<>();
 
         for (Object[] row : rows) {
-            Long userId = ((Number) row[0]).longValue();
-            String name = (String) row[1];
-            Double totalSpent = ((Number) row[2]).doubleValue();
-            Long orderCount = ((Number) row[3]).longValue();
-
-            result.add(TopBuyerDTO.builder()
-                    .userId(userId)
-                    .name(name)
-                    .totalSpent(totalSpent)
-                    .orderCount(orderCount)
-                    .build());
-        }
+    result.add(objectArrayDtoAdapter.toTopBuyerDTO(row));
+}
 
         return result;
     }

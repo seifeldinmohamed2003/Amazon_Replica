@@ -1,20 +1,28 @@
 package com.team27.amazon.billing.controller;
 
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.util.List;
+import java.util.Map;
+
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RestController;
+
 import com.team27.amazon.billing.dto.RevenueReportDTO;
 import com.team27.amazon.billing.dto.TransactionDetailsDTO;
 import com.team27.amazon.billing.dto.UserTransactionSummaryDTO;
 import com.team27.amazon.billing.dto.VoucherUsageDTO;
 import com.team27.amazon.billing.model.Transaction;
 import com.team27.amazon.billing.service.BillingService;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.format.annotation.DateTimeFormat;
-import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.*;
-
-import java.time.LocalDate;
-import java.time.LocalDateTime;
-import java.util.List;
-import java.util.Map;
 
 @RestController
 @RequestMapping("/api/transactions")
@@ -54,18 +62,21 @@ public class TransactionController {
         return ResponseEntity.ok(billingService.getUserTransactionSummary(userId));
     }
 
-    @PostMapping("/order/{orderId}")
-    public ResponseEntity<Transaction> processTransactionForOrder(
-            @PathVariable Long orderId,
-            @RequestBody Map<String, String> body) {
-        Transaction t = billingService.processTransactionForOrder(
-                orderId,
-                body.get("method"),
-                body.get("cardLastFour")
-        );
-        return ResponseEntity.status(201).body(t);
-    }
+@PostMapping("/order/{orderId}")
+public ResponseEntity<Transaction> processTransactionForOrder(
+        @PathVariable Long orderId,
+        @RequestBody Map<String, String> body,
+        @RequestParam(defaultValue = "false") boolean simulateFailure) {
 
+    Transaction t = billingService.processTransactionForOrder(
+            orderId,
+            body.get("method"),
+            body.get("cardLastFour"),
+            simulateFailure
+    );
+
+    return ResponseEntity.status(201).body(t);
+}
     @PostMapping("/{transactionId}/voucher/{voucherId}")
     public ResponseEntity<TransactionDetailsDTO> applyVoucher(
             @PathVariable Long transactionId,

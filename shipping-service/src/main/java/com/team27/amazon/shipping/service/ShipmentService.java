@@ -1,25 +1,5 @@
 package com.team27.amazon.shipping.service;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.team27.amazon.common.events.AbstractEventSubject;
-import com.team27.amazon.common.events.MongoEventLogger;
-import com.team27.amazon.shipping.dto.BatchStatusUpdateRequest;
-import com.team27.amazon.shipping.dto.CarrierSummaryDTO;
-import com.team27.amazon.shipping.dto.CreateShipmentRequest;
-import com.team27.amazon.shipping.dto.DelayedShipmentDTO;
-import com.team27.amazon.shipping.dto.NearbyShipmentDTO;
-import com.team27.amazon.shipping.model.Shipment;
-import com.team27.amazon.shipping.model.ShipmentStatus;
-import com.team27.amazon.shipping.repository.ShipmentRepository;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.beans.factory.annotation.Qualifier;
-import org.springframework.http.HttpStatus;
-import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
-import org.springframework.web.server.ResponseStatusException;
-
-import jakarta.annotation.PostConstruct;
 import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
 import java.util.Comparator;
@@ -28,12 +8,36 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.http.HttpStatus;
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.server.ResponseStatusException;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.team27.amazon.common.events.AbstractEventSubject;
+import com.team27.amazon.common.events.MongoEventLogger;
+import com.team27.amazon.shipping.adapter.ObjectArrayDtoAdapter;
+import com.team27.amazon.shipping.dto.BatchStatusUpdateRequest;
+import com.team27.amazon.shipping.dto.CarrierSummaryDTO;
+import com.team27.amazon.shipping.dto.CreateShipmentRequest;
+import com.team27.amazon.shipping.dto.DelayedShipmentDTO;
+import com.team27.amazon.shipping.dto.NearbyShipmentDTO;
+import com.team27.amazon.shipping.model.Shipment;
+import com.team27.amazon.shipping.model.ShipmentStatus;
+import com.team27.amazon.shipping.repository.ShipmentRepository;
+
+import jakarta.annotation.PostConstruct;
+
 @Service
 public class ShipmentService extends AbstractEventSubject {
 
     private final ShipmentRepository shipmentRepository;
     private final JdbcTemplate jdbcTemplate;
     private final ObjectMapper objectMapper;
+    private final ObjectArrayDtoAdapter objectArrayDtoAdapter;
 
     @Autowired
     @Qualifier("shipmentEventLogger")
@@ -42,11 +46,15 @@ public class ShipmentService extends AbstractEventSubject {
     public ShipmentService(
             ShipmentRepository shipmentRepository,
             JdbcTemplate jdbcTemplate,
-            ObjectMapper objectMapper
+            ObjectMapper objectMapper,
+            ObjectArrayDtoAdapter objectArrayDtoAdapter
+
     ) {
         this.shipmentRepository = shipmentRepository;
         this.jdbcTemplate = jdbcTemplate;
         this.objectMapper = objectMapper;
+        this.objectArrayDtoAdapter = objectArrayDtoAdapter;
+
     }
 
     @PostConstruct
@@ -288,16 +296,9 @@ public class ShipmentService extends AbstractEventSubject {
 
         List<Object[]> rows = shipmentRepository.findDelayedShipments(maxDeliveryAttempts);
 
-        return rows.stream().map(row -> DelayedShipmentDTO.builder()
-                .shipmentId(((Number) row[0]).longValue())
-                .orderId(((Number) row[1]).longValue())
-                .carrier((String) row[2])
-                .trackingNumber((String) row[3])
-                .estimatedDelivery(((java.sql.Date) row[4]).toLocalDate())
-                .daysOverdue(((Number) row[5]).longValue())
-                .deliveryAttempts(((Number) row[6]).intValue())
-                .build()
-        ).toList();
+       return rows.stream()
+        .map(objectArrayDtoAdapter::toDelayedShipmentDTO)
+        .toList();
     }
 
     public List<Shipment> getShipmentsInDateRange(LocalDateTime startDate, LocalDateTime endDate, ShipmentStatus status) {
