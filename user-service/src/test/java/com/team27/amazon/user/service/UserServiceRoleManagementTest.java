@@ -1,23 +1,25 @@
 package com.team27.amazon.user.service;
 
-import java.util.Optional;
-
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertThrows;
-import org.junit.jupiter.api.Test;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.when;
-import org.springframework.http.HttpStatus;
-import org.springframework.security.crypto.password.PasswordEncoder;
-import org.springframework.web.server.ResponseStatusException;
-
 import com.team27.amazon.common.events.MongoEventLogger;
 import com.team27.amazon.user.adapter.ObjectArrayDtoAdapter;
+import com.team27.amazon.user.cache.CacheInvalidationService;
+import com.team27.amazon.user.cache.RedisCacheService;
 import com.team27.amazon.user.model.Role;
 import com.team27.amazon.user.model.Status;
 import com.team27.amazon.user.model.User;
 import com.team27.amazon.user.repository.ShippingAddressRepository;
 import com.team27.amazon.user.repository.UserRepository;
+import org.junit.jupiter.api.Test;
+import org.springframework.http.HttpStatus;
+import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.web.server.ResponseStatusException;
+
+import java.util.Optional;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 class UserServiceRoleManagementTest {
 
@@ -26,14 +28,19 @@ class UserServiceRoleManagementTest {
     private final PasswordEncoder passwordEncoder = mock(PasswordEncoder.class);
     private final MongoEventLogger mongoEventLogger = mock(MongoEventLogger.class);
     private final ObjectArrayDtoAdapter objectArrayDtoAdapter = new ObjectArrayDtoAdapter();
+    private final RedisCacheService redisCacheService = mock(RedisCacheService.class);
+    private final CacheInvalidationService cacheInvalidationService = mock(CacheInvalidationService.class);
 
-private final UserService userService = new UserService(
-        userRepository,
-        shippingAddressRepository,
-        passwordEncoder,
-        mongoEventLogger,
-        objectArrayDtoAdapter
-);
+    private final UserService userService = new UserService(
+            userRepository,
+            shippingAddressRepository,
+            passwordEncoder,
+            mongoEventLogger,
+            objectArrayDtoAdapter,
+            redisCacheService,
+            cacheInvalidationService
+    );
+
     @Test
     void changeUserRoleUpdatesRoleAndSavesUser() {
         User existing = new User();
