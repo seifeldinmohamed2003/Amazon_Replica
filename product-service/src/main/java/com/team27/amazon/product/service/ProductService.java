@@ -316,7 +316,7 @@ autoIndexProduct(savedProduct, "auto_crud_create");
         )));
         return product;
     }
-
+    @Transactional
     public List<LowStockAlertDTO> getLowStockAlerts(Integer threshold) {
         if (threshold == null || threshold < 0) {
             throw new InvalidProductAlertException("Threshold must be zero or greater.");
@@ -328,7 +328,7 @@ autoIndexProduct(savedProduct, "auto_crud_create");
                 cacheKey,
                 Duration.ofMinutes(10),
                 new TypeReference<List<LowStockAlertDTO>>() {},
-                () -> productRepository.findByStockQuantityLessThanOrderByStockQuantityAsc(threshold)
+                () -> productRepository.findLowStockProducts(threshold)
                         .stream()
                         .map(LowStockAlertDTO::from)
                         .toList()
