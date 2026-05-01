@@ -5,8 +5,10 @@ import com.team27.amazon.shipping.dto.CarrierSummaryDTO;
 import com.team27.amazon.shipping.dto.CreateShipmentRequest;
 import com.team27.amazon.shipping.dto.DelayedShipmentDTO;
 import com.team27.amazon.shipping.dto.NearbyShipmentDTO;
+import com.team27.amazon.shipping.dto.TrackingEventRequest;
 import com.team27.amazon.shipping.model.Shipment;
 import com.team27.amazon.shipping.model.ShipmentStatus;
+import com.team27.amazon.shipping.model.cassandra.ShipmentTrackingEvent;
 import com.team27.amazon.shipping.service.ShipmentService;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -38,6 +40,17 @@ public class ShipmentController {
     ) {
         Shipment shipment = shipmentService.createShipmentForOrder(orderId, request);
         return ResponseEntity.status(HttpStatus.CREATED).body(shipment);
+    }
+
+    // S4-F11: Record Shipment Tracking Event
+    // POST /api/shipments/{id}/tracking
+    @PostMapping("/{id}/tracking")
+    public ResponseEntity<ShipmentTrackingEvent> recordTrackingEvent(
+            @PathVariable Long id,
+            @RequestBody TrackingEventRequest request
+    ) {
+        ShipmentTrackingEvent event = shipmentService.recordTrackingEvent(id, request);
+        return ResponseEntity.status(HttpStatus.CREATED).body(event);
     }
 
     @GetMapping
@@ -128,4 +141,4 @@ public class ShipmentController {
         int count = shipmentService.batchUpdateStatus(requests);
         return ResponseEntity.status(HttpStatus.CREATED).body(Map.of("count", count));
     }
-}
+} 

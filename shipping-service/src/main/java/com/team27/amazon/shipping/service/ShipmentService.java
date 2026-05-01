@@ -30,9 +30,13 @@ import com.team27.amazon.shipping.dto.CarrierSummaryDTO;
 import com.team27.amazon.shipping.dto.CreateShipmentRequest;
 import com.team27.amazon.shipping.dto.DelayedShipmentDTO;
 import com.team27.amazon.shipping.dto.NearbyShipmentDTO;
+import com.team27.amazon.shipping.dto.TrackingEventRequest;
 import com.team27.amazon.shipping.model.Shipment;
 import com.team27.amazon.shipping.model.ShipmentStatus;
+import com.team27.amazon.shipping.model.cassandra.ShipmentTrackingEvent;
+import com.team27.amazon.shipping.model.cassandra.ShipmentTrackingEventKey;
 import com.team27.amazon.shipping.repository.ShipmentRepository;
+import com.team27.amazon.shipping.repository.ShipmentTrackingEventRepository;
 
 import jakarta.annotation.PostConstruct;
 
@@ -40,6 +44,7 @@ import jakarta.annotation.PostConstruct;
 public class ShipmentService extends AbstractEventSubject {
 
     private final ShipmentRepository shipmentRepository;
+    private final ShipmentTrackingEventRepository shipmentTrackingEventRepository;
     private final JdbcTemplate jdbcTemplate;
     private final ObjectMapper objectMapper;
     private final ObjectArrayDtoAdapter objectArrayDtoAdapter;
@@ -50,16 +55,16 @@ public class ShipmentService extends AbstractEventSubject {
 
     public ShipmentService(
             ShipmentRepository shipmentRepository,
+            ShipmentTrackingEventRepository shipmentTrackingEventRepository,
             JdbcTemplate jdbcTemplate,
             ObjectMapper objectMapper,
             ObjectArrayDtoAdapter objectArrayDtoAdapter
-
     ) {
         this.shipmentRepository = shipmentRepository;
+        this.shipmentTrackingEventRepository = shipmentTrackingEventRepository;
         this.jdbcTemplate = jdbcTemplate;
         this.objectMapper = objectMapper;
         this.objectArrayDtoAdapter = objectArrayDtoAdapter;
-
     }
 
     @PostConstruct
@@ -203,6 +208,59 @@ public class ShipmentService extends AbstractEventSubject {
         return savedShipment;
     }
 
+    // S4-F11: Record Shipment Tracking Event
+    // Endpoint: POST /api/shipments/{id}/tracking
+    // Cassandra: shipment_tracking_events
+    // MongoDB Observer event: TRACKING_RECORDED
+    @Caching(evict = {
+        @CacheEvict(cacheNames = "shipping-service::S4-F10", allEntries = true),
+        @CacheEvict(cacheNames = "shipping-service::S4-F12", key = "#shipmentId")
+    })
+    public ShipmentTrackingEvent recordTrackingEvent(Long shipmentId, TrackingEventRequest request) {
+        Shipment shipment = shipmentRepository.findById(shipmentId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Shipment not found"));
+
+        if (request == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Tracking event request body is required");
+        }
+
+        if (request.getStatus() == null || request.getStatus().trim().isEmpty()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "status is required");
+        }
+
+        validateCoordinates(request.getLatitude(), request.getLongitude());
+
+        LocalDateTime now = LocalDateTime.now();
+
+        ShipmentTrackingEventKey key = new ShipmentTrackingEventKey(shipmentId, now);
+
+        ShipmentTrackingEvent trackingEvent = new ShipmentTrackingEvent(
+                key,
+                request.getStatus(),
+                shipment.getCarrier(),
+                shipment.getTrackingNumber(),
+                request.getLatitude(),
+                request.getLongitude(),
+                request.getNotes()
+        );
+
+        ShipmentTrackingEvent savedEvent = shipmentTrackingEventRepository.save(trackingEvent);
+
+        Map<String, Object> details = new HashMap<>();
+        details.put("shipmentId", shipmentId);
+        details.put("status", request.getStatus());
+        details.put("latitude", request.getLatitude());
+        details.put("longitude", request.getLongitude());
+        details.put("notes", request.getNotes());
+        details.put("carrier", shipment.getCarrier());
+        details.put("trackingNumber", shipment.getTrackingNumber());
+        details.put("timestamp", now.toString());
+
+        notifyObservers("TRACKING_RECORDED", shipmentEventPayload(shipmentId, details));
+
+        return savedEvent;
+    }
+
     // F3: Find Nearby Shipments Out for Delivery - TTL 10 min
     // Cache key: shipping-service::S4-F3::{lat}:{lon}:{radiusKm}
     @Cacheable(cacheNames = RedisConfiguration.CACHE_S4_F3,
@@ -313,7 +371,8 @@ public class ShipmentService extends AbstractEventSubject {
                     .deliveredCount(0)
                     .averageDeliveryDays(0.0)
                     .onTimeRate(0.0)
-                    .build();}
+                    .build();
+        }
 
         long totalShipments = shipments.size();
 
@@ -448,14 +507,12 @@ public class ShipmentService extends AbstractEventSubject {
             return 0;
         }
 
-        // Extract all shipment IDs and validate all shipments exist
         List<Long> shipmentIds = requests.stream()
                 .map(BatchStatusUpdateRequest::getShipmentId)
                 .toList();
 
         List<Shipment> existingShipments = shipmentRepository.findAllById(shipmentIds);
         if (existingShipments.size() != shipmentIds.size()) {
-            // Find which shipment IDs are missing
             List<Long> existingIds = existingShipments.stream()
                     .map(Shipment::getId)
                     .toList();
@@ -468,12 +525,10 @@ public class ShipmentService extends AbstractEventSubject {
             );
         }
 
-        // Validate coordinates for all requests
         for (BatchStatusUpdateRequest request : requests) {
             validateCoordinates(request.getLatitude(), request.getLongitude());
         }
 
-        // Update each shipment
         for (BatchStatusUpdateRequest request : requests) {
             Shipment shipment = existingShipments.stream()
                     .filter(s -> s.getId().equals(request.getShipmentId()))
@@ -486,10 +541,8 @@ public class ShipmentService extends AbstractEventSubject {
             shipment.setStatus(request.getStatus());
             shipment.setLatitude(request.getLatitude());
             shipment.setLongitude(request.getLongitude());
-            // lastUpdate will be automatically set by @PreUpdate
         }
 
-        // Save all updated shipments
         shipmentRepository.saveAll(existingShipments);
 
         notifyObservers("BATCH_STATUS_UPDATED", shipmentEventPayload(null, Map.of(
@@ -499,7 +552,6 @@ public class ShipmentService extends AbstractEventSubject {
 
         return existingShipments.size();
     }
-
 
     private LocalDate toLocalDate(Object value) {
         if (value == null) {
