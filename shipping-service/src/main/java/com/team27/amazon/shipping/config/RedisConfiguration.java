@@ -51,6 +51,7 @@ public class RedisConfiguration {
     public static final String S4_F6_KEY_PREFIX = SERVICE_PREFIX + "::S4-F6::";
     public static final String S4_F8_KEY_PREFIX = SERVICE_PREFIX + "::S4-F8::";
     public static final String S4_F9_KEY_PREFIX = SERVICE_PREFIX + "::S4-F9::";
+    public static final String S4_F12_KEY_PREFIX = SERVICE_PREFIX + "::S4-F12::";
 
     public static final String CACHE_SHIPMENT_DETAIL = "shipping-service::shipment";
     public static final String CACHE_S4_F1 = "shipping-service::S4-F1";
@@ -59,6 +60,7 @@ public class RedisConfiguration {
     public static final String CACHE_S4_F6 = "shipping-service::S4-F6";
     public static final String CACHE_S4_F8 = "shipping-service::S4-F8";
     public static final String CACHE_S4_F9 = "shipping-service::S4-F9";
+    public static final String CACHE_S4_F12 = "shipping-service::S4-F12";
 
     private static final Duration GET_BY_ID_TTL = Duration.ofMinutes(15);
     private static final Duration F1_TTL = Duration.ofMinutes(5);
@@ -67,6 +69,7 @@ public class RedisConfiguration {
     private static final Duration F6_TTL = Duration.ofMinutes(10);
     private static final Duration F8_TTL = Duration.ofMinutes(15);
     private static final Duration F9_TTL = Duration.ofMinutes(10);
+    private static final Duration F12_TTL = Duration.ofMinutes(5);
 
     @Bean
     public GenericJackson2JsonRedisSerializer redisJsonSerializer() {
@@ -109,6 +112,7 @@ public class RedisConfiguration {
         cacheConfigurations.put(CACHE_S4_F6, defaultConfig.entryTtl(F6_TTL));
         cacheConfigurations.put(CACHE_S4_F8, defaultConfig.entryTtl(F8_TTL));
         cacheConfigurations.put(CACHE_S4_F9, defaultConfig.entryTtl(F9_TTL));
+        cacheConfigurations.put(CACHE_S4_F12, defaultConfig.entryTtl(F12_TTL));
 
         return RedisCacheManager.builder(connectionFactory)
                 .cacheDefaults(defaultConfig)
