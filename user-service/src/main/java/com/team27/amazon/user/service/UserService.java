@@ -21,6 +21,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 import org.springframework.web.server.ResponseStatusException;
+import org.springframework.cache.annotation.Cacheable;
+import org.springframework.cache.annotation.CacheEvict;
 
 import com.team27.amazon.user.model.ShippingAddress;
 import com.team27.amazon.user.model.User;
@@ -51,6 +53,7 @@ public class UserService extends AbstractEventSubject {
 
     // ─── User CRUD ───────────────────────────────────────────────
 
+    @CacheEvict(cacheNames = {"users::detail", "users::search", "users::profile", "users::order-summary", "users::addresses", "users::top-buyers"}, allEntries = true)
     public User createUser(User user) {
         encodePasswordIfNeeded(user);
         User savedUser = userRepository.save(user);
@@ -58,9 +61,12 @@ public class UserService extends AbstractEventSubject {
                 "email", savedUser.getEmail(),
                 "status", savedUser.getStatus() == null ? null : savedUser.getStatus().name()
         )));
+        // Invalidate user-related caches on write
+        // Over-invalidate: correctness > cache-hit optimality
         return savedUser;
     }
 
+    @Cacheable(cacheNames = "users::detail", key = "#id")
     public User getUserById(Long id) {
         return userRepository.findById(id)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "User not found"));
@@ -70,6 +76,7 @@ public class UserService extends AbstractEventSubject {
         return userRepository.findAll();
     }
 
+    @CacheEvict(cacheNames = {"users::detail", "users::search", "users::profile", "users::order-summary", "users::addresses", "users::top-buyers"}, allEntries = true)
     public User updateUser(Long id, User updated) {
         User user = getUserById(id);
         user.setName(updated.getName());
@@ -89,6 +96,7 @@ public class UserService extends AbstractEventSubject {
         return savedUser;
     }
 
+    @CacheEvict(cacheNames = {"users::detail", "users::search", "users::profile", "users::order-summary", "users::addresses", "users::top-buyers"}, allEntries = true)
     public void deleteUser(Long id) {
         getUserById(id);
         userRepository.deleteById(id);
@@ -97,6 +105,7 @@ public class UserService extends AbstractEventSubject {
 
     // ─── ShippingAddress CRUD ─────────────────────────────────────
 
+    @CacheEvict(cacheNames = {"users::addresses", "users::detail", "users::profile", "users::order-summary", "users::search", "users::top-buyers"}, allEntries = true)
     public ShippingAddress createAddress(Long userId, ShippingAddress address) {
         User user = getUserById(userId);
         address.setUser(user);
@@ -107,6 +116,7 @@ public class UserService extends AbstractEventSubject {
         return savedAddress;
     }
 
+    @Cacheable(cacheNames = "users::addresses", key = "#addressId")
     public ShippingAddress getAddressById(Long userId, Long addressId) {
         getUserById(userId);
         ShippingAddress address = shippingAddressRepository.findById(addressId)
@@ -117,11 +127,13 @@ public class UserService extends AbstractEventSubject {
         return address;
     }
 
+    @Cacheable(cacheNames = "users::addresses", key = "#userId")
     public List<ShippingAddress> getAllAddresses(Long userId) {
         getUserById(userId);
         return shippingAddressRepository.findByUserId(userId);
     }
 
+    @CacheEvict(cacheNames = {"users::addresses", "users::detail", "users::profile", "users::order-summary", "users::search", "users::top-buyers"}, allEntries = true)
     public ShippingAddress updateAddress(Long userId, Long addressId, ShippingAddress updated) {
         ShippingAddress address = getAddressById(userId, addressId);
         address.setLabel(updated.getLabel());
@@ -138,6 +150,7 @@ public class UserService extends AbstractEventSubject {
         return savedAddress;
     }
 
+    @CacheEvict(cacheNames = {"users::addresses", "users::detail", "users::profile", "users::order-summary", "users::search", "users::top-buyers"}, allEntries = true)
     public void deleteAddress(Long userId, Long addressId) {
         ShippingAddress address = getAddressById(userId, addressId);
         shippingAddressRepository.delete(address);
@@ -145,6 +158,7 @@ public class UserService extends AbstractEventSubject {
     }
 
     // S1-F1
+    @Cacheable(cacheNames = "users::search", key = "#root.methodName + ':' + (#name == null ? '' : #name) + ':' + (#email==null ? '' : #email) + ':' + (#role==null ? '' : #role)")
     public List<User> searchUsers(String name, String email, String role) {
         String nameParam  = (name  != null && !name.trim().isEmpty())  ? name.trim()  : null;
         String emailParam = (email != null && !email.trim().isEmpty()) ? email.trim() : null;
@@ -154,6 +168,7 @@ public class UserService extends AbstractEventSubject {
     }
 
     // S1-F2
+    @CacheEvict(cacheNames = {"users::detail", "users::profile", "users::order-summary", "users::search", "users::addresses", "users::top-buyers"}, allEntries = true)
     public User updateUserPreferences(Long id, Map<String, Object> incomingPreferences) {
         User user = getUserById(id);
 
@@ -174,6 +189,7 @@ public class UserService extends AbstractEventSubject {
     }
 
     // S1-F3
+    @Cacheable(cacheNames = "users::order-summary", key = "#userId")
     public UserOrderSummaryDTO getUserOrderSummary(Long userId) {
         getUserById(userId); // throws 404 if not found
 
@@ -205,6 +221,7 @@ public class UserService extends AbstractEventSubject {
 
     //S1-F4
     @Transactional
+    @CacheEvict(cacheNames = {"users::detail", "users::profile", "users::order-summary", "users::search", "users::addresses", "users::top-buyers"}, allEntries = true)
     public User deactivateUser(Long id) {
         User user = userRepository.findById(id)
                 .orElseThrow(() -> new ResponseStatusException(
@@ -284,8 +301,14 @@ public class UserService extends AbstractEventSubject {
         return result;
     }
 
+    @Cacheable(cacheNames = "users::top-buyers", key = "#startDate.toString() + ':' + #endDate.toString() + ':' + #limit")
+    public List<TopBuyerDTO> getTopBuyersCached(LocalDate startDate, LocalDate endDate, int limit) {
+        return getTopBuyers(startDate, endDate, limit);
+    }
+
     // S1-F7
     @Transactional
+    @CacheEvict(cacheNames = {"users::addresses", "users::detail", "users::profile", "users::order-summary", "users::search", "users::top-buyers"}, allEntries = true)
     public User setDefaultAddress(Long userId, Long addressId) {
 
         // 1. Validate user (404)
@@ -315,10 +338,12 @@ public class UserService extends AbstractEventSubject {
 
         notifyObservers("DEFAULT_ADDRESS_SET", userEventPayload(userId, Map.of("addressId", addressId, "defaultAddressId", addressId)));
 
+
         return user;
     }
 
     @Transactional(readOnly = true)
+    @Cacheable(cacheNames = "users::profile", key = "#userId")
     public UserProfileDTO getUserProfile(Long userId) {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "User not found"));
@@ -353,6 +378,7 @@ public class UserService extends AbstractEventSubject {
         return userRepository.findByLanguageAndMinOrders(lang, minOrders);
     }
 
+    @CacheEvict(cacheNames = {"users::detail", "users::profile", "users::order-summary", "users::search", "users::addresses", "users::top-buyers"}, allEntries = true)
     public User changeUserRole(Long id, Role role) {
         if (role == null) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Role must be provided");
@@ -365,6 +391,12 @@ public class UserService extends AbstractEventSubject {
                 "role", savedUser.getRole() == null ? null : savedUser.getRole().name()
         )));
         return savedUser;
+    }
+
+    // Simple over-invalidation helper: evict known user-related caches
+    @CacheEvict(cacheNames = {"users::detail", "users::search", "users::profile", "users::order-summary", "users::addresses", "users::top-buyers"}, allEntries = true)
+    public void evictAllUserCaches() {
+        // method body left intentionally blank; annotation-driven eviction
     }
 
     private Map<String, Object> userEventPayload(Long userId, Map<String, Object> details) {

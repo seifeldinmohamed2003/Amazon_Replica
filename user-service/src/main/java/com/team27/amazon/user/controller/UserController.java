@@ -139,7 +139,7 @@ public class UserController {
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate,
             @RequestParam int limit
     ) {
-        return userService.getTopBuyers(startDate, endDate, limit);
+        return userService.getTopBuyersCached(startDate, endDate, limit);
     }
 
     //S1-F7
