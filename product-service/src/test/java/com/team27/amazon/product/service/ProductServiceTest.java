@@ -12,6 +12,14 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import com.team27.amazon.product.cache.RedisCacheService;
+import com.team27.amazon.product.cache.ProductCacheInvalidator;
+import com.team27.amazon.product.repository.ProductReviewRepository;
+import com.team27.amazon.common.events.MongoEventLogger;
+import com.team27.amazon.product.adapter.ObjectArrayDtoAdapter;
+import java.util.function.Supplier;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.lenient;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -33,6 +41,21 @@ class ProductServiceTest {
     @Mock
     private ProductRepository productRepository;
 
+    @Mock
+    private RedisCacheService redisCacheService;
+
+    @Mock
+    private ProductCacheInvalidator productCacheInvalidator;
+
+    @Mock
+    private ProductReviewRepository productReviewRepository;
+
+    @Mock
+    private MongoEventLogger mongoEventLogger;
+
+    @Mock
+    private ObjectArrayDtoAdapter objectArrayDtoAdapter;
+
     @InjectMocks
     private ProductService productService;
 
@@ -49,6 +72,31 @@ class ProductServiceTest {
         request.setStockQuantity(20);
         request.setStatus(ProductStatus.ACTIVE);
         request.setSpecifications(Map.of("ram", "16GB"));
+
+        // Make redisCacheService return supplier result by default to avoid caching NPEs
+        lenient().when(redisCacheService.getOrLoad(anyString(), any(), any(), any(Supplier.class)))
+                .thenAnswer(invocation -> {
+                    Supplier<?> supplier = invocation.getArgument(3);
+                    return supplier.get();
+                });
+
+        // Default adapter behavior for product sales DTO construction
+        lenient().when(objectArrayDtoAdapter.toProductSalesDTO(any(Long.class), any(String.class), any()))
+            .thenAnswer(invocation -> {
+                Long id = invocation.getArgument(0);
+                String name = invocation.getArgument(1);
+                Object[] arr = invocation.getArgument(2);
+                Long units = arr == null || arr[0] == null ? 0L : ((Number) arr[0]).longValue();
+                Double rev = arr == null || arr[1] == null ? 0.0 : ((Number) arr[1]).doubleValue();
+                Double avg = units == 0L ? 0.0 : rev / units;
+                return ProductSalesDTO.builder()
+                    .productId(id)
+                    .name(name)
+                    .totalUnitsSold(units)
+                    .totalRevenue(rev)
+                    .averageSellingPrice(avg)
+                    .build();
+            });
     }
 
     @Test
