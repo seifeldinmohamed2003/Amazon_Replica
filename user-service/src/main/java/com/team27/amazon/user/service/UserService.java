@@ -1,6 +1,30 @@
 package com.team27.amazon.user.service;
 
-import com.fasterxml.jackson.core.type.TypeReference;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.team27.amazon.common.events.AuthEvent;
+import com.team27.amazon.user.adapter.ActivityCacheAdapter;
+import com.team27.amazon.user.dto.ActivityFeedDTO;
+import com.team27.amazon.user.repository.AuthEventRepository;
+import com.team27.amazon.user.security.JwtService;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.http.HttpStatus;
+import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.StringUtils;
+import org.springframework.web.server.ResponseStatusException;
+
 import com.team27.amazon.common.events.AbstractEventSubject;
 import com.team27.amazon.common.events.MongoEventLogger;
 import com.team27.amazon.user.adapter.ObjectArrayDtoAdapter;
@@ -44,22 +68,45 @@ public class UserService extends AbstractEventSubject {
     private final RedisCacheService redisCacheService;
     private final CacheInvalidationService cacheInvalidationService;
 
+    // S1-F12 dependencies
+    private final AuthEventRepository authEventRepository;
+    private final ActivityCacheAdapter cacheAdapter;
+    private final ObjectMapper objectMapper;
+    private final JwtService jwtService;
+
+    // ─── Main constructor (used by Spring) ───────────────────────
+    @Autowired
     public UserService(UserRepository userRepository,
                        ShippingAddressRepository shippingAddressRepository,
                        PasswordEncoder passwordEncoder,
                        MongoEventLogger mongoEventLogger,
                        ObjectArrayDtoAdapter objectArrayDtoAdapter,
-                       RedisCacheService redisCacheService,
-                       CacheInvalidationService cacheInvalidationService) {
+                       AuthEventRepository authEventRepository,
+                       ActivityCacheAdapter cacheAdapter,
+                       ObjectMapper objectMapper,
+                       JwtService jwtService) {
         this.userRepository = userRepository;
         this.shippingAddressRepository = shippingAddressRepository;
         this.passwordEncoder = passwordEncoder;
         this.mongoEventLogger = mongoEventLogger;
         this.objectArrayDtoAdapter = objectArrayDtoAdapter;
-        this.redisCacheService = redisCacheService;
-        this.cacheInvalidationService = cacheInvalidationService;
+        this.authEventRepository = authEventRepository;
+        this.cacheAdapter = cacheAdapter;
+        this.objectMapper = objectMapper;
+        this.jwtService = jwtService;
 
         register(mongoEventLogger);
+    }
+
+    // ─── Test constructor (keeps existing tests working) ─────────
+    public UserService(UserRepository userRepository,
+                       ShippingAddressRepository shippingAddressRepository,
+                       PasswordEncoder passwordEncoder,
+                       MongoEventLogger mongoEventLogger,
+                       ObjectArrayDtoAdapter objectArrayDtoAdapter) {
+        this(userRepository, shippingAddressRepository, passwordEncoder,
+                mongoEventLogger, objectArrayDtoAdapter,
+                null, null, null, null);
     }
 
     // ─── User CRUD ───────────────────────────────────────────────
@@ -261,7 +308,6 @@ public class UserService extends AbstractEventSubject {
         User user = getUserByIdFromDatabase(id);
 
         Map<String, Object> existing = user.getPreferences();
-
         if (existing == null) {
             user.setPreferences(incomingPreferences);
         } else {
@@ -270,7 +316,6 @@ public class UserService extends AbstractEventSubject {
             }
             user.setPreferences(existing);
         }
-
         User savedUser = userRepository.save(user);
 
         notifyObservers("USER_UPDATED", userEventPayload(
@@ -328,14 +373,12 @@ public class UserService extends AbstractEventSubject {
         User user = getUserByIdFromDatabase(id);
 
         boolean hasActiveOrders = userRepository.existsActiveOrdersByUserId(id);
-
         if (hasActiveOrders) {
             throw new ResponseStatusException(
                     HttpStatus.BAD_REQUEST,
                     "User has active orders and cannot be deactivated"
             );
         }
-
         user.setStatus(Status.DEACTIVATED);
 
         User savedUser = userRepository.save(user);
@@ -380,17 +423,10 @@ public class UserService extends AbstractEventSubject {
     // S1-F6
     public List<TopBuyerDTO> getTopBuyers(LocalDate startDate, LocalDate endDate, int limit) {
         if (startDate == null || endDate == null || startDate.isAfter(endDate)) {
-            throw new ResponseStatusException(
-                    HttpStatus.BAD_REQUEST,
-                    "Invalid date range"
-            );
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid date range");
         }
-
         if (limit <= 0) {
-            throw new ResponseStatusException(
-                    HttpStatus.BAD_REQUEST,
-                    "Limit must be greater than zero"
-            );
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Limit must be greater than zero");
         }
 
         String cacheKey = CacheKeyBuilder.featureKeyFromParams(
@@ -413,15 +449,8 @@ public class UserService extends AbstractEventSubject {
     private List<TopBuyerDTO> getTopBuyersFromDatabase(LocalDate startDate, LocalDate endDate, int limit) {
         LocalDateTime startDateTime = startDate.atStartOfDay();
         LocalDateTime endDateExclusive = endDate.plusDays(1).atStartOfDay();
-
-        List<Object[]> rows = userRepository.findTopBuyersByDateRange(
-                startDateTime,
-                endDateExclusive,
-                limit
-        );
-
+        List<Object[]> rows = userRepository.findTopBuyersByDateRange(startDateTime, endDateExclusive, limit);
         List<TopBuyerDTO> result = new ArrayList<>();
-
         for (Object[] row : rows) {
             result.add(objectArrayDtoAdapter.toTopBuyerDTO(row));
         }
@@ -496,7 +525,6 @@ public class UserService extends AbstractEventSubject {
                         addr.getMetadata()
                 ))
                 .toList();
-
         return UserProfileDTOBuilder.builder()
                 .userId(user.getId())
                 .name(user.getName())
@@ -532,13 +560,12 @@ public class UserService extends AbstractEventSubject {
         );
     }
 
+    // CC-2
     public User changeUserRole(Long id, Role role) {
         if (role == null) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Role must be provided");
         }
-
-        User user = getUserByIdFromDatabase(id);
-
+        User user = getUserById(id);
         user.setRole(role);
 
         User savedUser = userRepository.save(user);
@@ -552,6 +579,67 @@ public class UserService extends AbstractEventSubject {
         return savedUser;
     }
 
+    // S1-F12
+    public ActivityFeedDTO getUserActivityFeed(Long userId, int page, int size, String token) {
+
+        // 1. Validate JWT
+        if (!jwtService.validateToken(token)) {
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Invalid or missing token");
+        }
+
+        // 2. Ownership check
+        Long callerUid = jwtService.extractUserId(token);
+        String callerRole = jwtService.extractRole(token);
+        if (!callerUid.equals(userId) && !"ADMIN".equals(callerRole)) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Access denied");
+        }
+
+        // 3. Find user in PostgreSQL — throws 404 if not found
+        getUserById(userId);
+
+        // 4. Cap size at 100
+        size = Math.min(size, 100);
+
+        // 5. Check Redis cache via adapter
+        String cacheKey = "activity_feed:" + userId + ":" + page + ":" + size;
+        Optional<String> cached = cacheAdapter.get(cacheKey);
+        if (cached.isPresent()) {
+            try {
+                return objectMapper.readValue(cached.get(), ActivityFeedDTO.class);
+            } catch (Exception ignored) {}
+        }
+
+        // 6. Query MongoDB
+        Pageable pageable = PageRequest.of(page, size);
+        Page<AuthEvent> events = authEventRepository
+                .findByUserIdOrderByTimestampDesc(userId, pageable);
+
+        // 7. Build response using Builder pattern
+        List<ActivityFeedDTO.ActivityEventDTO> content = events.getContent().stream()
+                .map(e -> new ActivityFeedDTO.ActivityEventDTO.Builder()
+                        .action(e.getAction())
+                        .timestamp(e.getTimestamp().toString())
+                        .details(e.getDetails())
+                        .build())
+                .toList();
+
+        ActivityFeedDTO result = new ActivityFeedDTO.Builder()
+                .content(content)
+                .page(page)
+                .size(size)
+                .totalElements(events.getTotalElements())
+                .build();
+
+        // 8. Cache for 5 minutes via adapter
+        try {
+            cacheAdapter.set(cacheKey, objectMapper.writeValueAsString(result), 5);
+        } catch (Exception ignored) {}
+
+        return result;
+    }
+
+    // ─── Private helpers ─────────────────────────────────────────
+
     private Map<String, Object> userEventPayload(Long userId, Map<String, Object> details) {
         Map<String, Object> payload = new HashMap<>();
         payload.put("userId", userId);
@@ -561,11 +649,7 @@ public class UserService extends AbstractEventSubject {
 
     private Map<String, Object> addressDetails(ShippingAddress address) {
         Map<String, Object> details = new HashMap<>();
-
-        if (address == null) {
-            return details;
-        }
-
+        if (address == null) return details;
         details.put("label", address.getLabel());
         details.put("city", address.getCity());
         details.put("country", address.getCountry());

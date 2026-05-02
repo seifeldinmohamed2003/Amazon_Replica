@@ -4,10 +4,7 @@ import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
 
-import com.team27.amazon.user.dto.TopBuyerDTO;
-import com.team27.amazon.user.dto.RoleUpdateRequest;
-import com.team27.amazon.user.dto.UserOrderSummaryDTO;
-import com.team27.amazon.user.dto.UserProfileDTO;
+import com.team27.amazon.user.dto.*;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -169,6 +166,20 @@ public class UserController {
         }
         List<User> users = userService.findUsersByLanguage(lang, minOrders);
         return ResponseEntity.ok(users);
+    }
+    // S1-F12
+    @GetMapping("/{id}/activity")
+    public ResponseEntity<ActivityFeedDTO> getUserActivityFeed(
+            @PathVariable Long id,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size,
+            @RequestHeader("Authorization") String authHeader) {
+
+        String token = authHeader.startsWith("Bearer ")
+                ? authHeader.substring(7)
+                : authHeader;
+
+        return ResponseEntity.ok(userService.getUserActivityFeed(id, page, size, token));
     }
 
 
