@@ -7,7 +7,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-
+import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.team27.amazon.common.events.AuthEvent;
 import com.team27.amazon.user.adapter.ActivityCacheAdapter;
@@ -81,6 +81,8 @@ public class UserService extends AbstractEventSubject {
                        PasswordEncoder passwordEncoder,
                        MongoEventLogger mongoEventLogger,
                        ObjectArrayDtoAdapter objectArrayDtoAdapter,
+                       RedisCacheService redisCacheService,
+                       CacheInvalidationService cacheInvalidationService,
                        AuthEventRepository authEventRepository,
                        ActivityCacheAdapter cacheAdapter,
                        ObjectMapper objectMapper,
@@ -90,6 +92,8 @@ public class UserService extends AbstractEventSubject {
         this.passwordEncoder = passwordEncoder;
         this.mongoEventLogger = mongoEventLogger;
         this.objectArrayDtoAdapter = objectArrayDtoAdapter;
+        this.redisCacheService = redisCacheService;
+        this.cacheInvalidationService = cacheInvalidationService;
         this.authEventRepository = authEventRepository;
         this.cacheAdapter = cacheAdapter;
         this.objectMapper = objectMapper;
@@ -98,17 +102,26 @@ public class UserService extends AbstractEventSubject {
         register(mongoEventLogger);
     }
 
-    // ─── Test constructor (keeps existing tests working) ─────────
+    // ─── Test constructor for older/unit tests ─────────────────────
     public UserService(UserRepository userRepository,
                        ShippingAddressRepository shippingAddressRepository,
                        PasswordEncoder passwordEncoder,
                        MongoEventLogger mongoEventLogger,
-                       ObjectArrayDtoAdapter objectArrayDtoAdapter) {
-        this(userRepository, shippingAddressRepository, passwordEncoder,
-                mongoEventLogger, objectArrayDtoAdapter,
-                null, null, null, null);
+                       ObjectArrayDtoAdapter objectArrayDtoAdapter,
+                       RedisCacheService redisCacheService,
+                       CacheInvalidationService cacheInvalidationService) {
+        this(userRepository,
+                shippingAddressRepository,
+                passwordEncoder,
+                mongoEventLogger,
+                objectArrayDtoAdapter,
+                redisCacheService,
+                cacheInvalidationService,
+                null,
+                null,
+                null,
+                null);
     }
-
     // ─── User CRUD ───────────────────────────────────────────────
 
     public User createUser(User user) {
