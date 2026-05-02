@@ -46,8 +46,13 @@ List<Object[]> findTopRatedProducts(@Param("limit") int limit);
         """, nativeQuery = true)
     boolean existsInPendingOrders(@Param("productId") Long productId);
 
-        @Query("SELECT p FROM Product p WHERE p.status = com.team27.amazon.product.model.ProductStatus.ACTIVE AND p.stockQuantity < :threshold ORDER BY p.stockQuantity ASC")
-        List<Product> findByStockQuantityLessThanOrderByStockQuantityAsc(@Param("threshold") Integer threshold);
+    @Query(value = """
+    SELECT *
+    FROM products p
+    WHERE p.stock_quantity < :threshold
+    ORDER BY p.stock_quantity ASC
+    """, nativeQuery = true)
+    List<Product> findLowStockProducts(@Param("threshold") Integer threshold);
 
     @Query(value = """
             SELECT *
@@ -114,4 +119,42 @@ List<Object[]> findTopRatedProducts(@Param("limit") int limit);
             @Param("value") String value,
             @Param("status") String status
     );
+
+        @Query(value = "SELECT COUNT(*) FROM products", nativeQuery = true)
+    Long countAllProductsForDashboard();
+
+      @Query(value = """
+            SELECT COUNT(*)
+            FROM products p
+            WHERE p.status::text = 'OUT_OF_STOCK'
+            """, nativeQuery = true)
+    Long countOutOfStockProductsForDashboard();
+
+    @Query(value = """
+            SELECT COALESCE(AVG(p.rating), 0)
+            FROM products p
+            WHERE p.total_ratings > 0
+            """, nativeQuery = true)
+    Double averageRatedProductsForDashboard();
+
+    @Query(value = """
+            SELECT p.category::text AS category, COUNT(*) AS count
+            FROM products p
+            GROUP BY p.category::text
+            """, nativeQuery = true)
+    List<Object[]> countProductsByCategoryForDashboard();
+
+    @Query(value = """
+            SELECT COALESCE(AVG(p.price), 0)
+            FROM products p
+            """, nativeQuery = true)
+    Double averagePriceForDashboard();
+
+    @Query(value = """
+            SELECT COUNT(*)
+            FROM products p
+            WHERE p.stock_quantity <= 10
+              AND p.status::text = 'ACTIVE'
+            """, nativeQuery = true)
+    Long countLowStockActiveProductsForDashboard();
 }

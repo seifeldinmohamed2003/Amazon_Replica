@@ -1,5 +1,9 @@
 package com.team27.amazon.product.service;
 
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
@@ -7,15 +11,23 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
-import com.team27.amazon.common.events.AbstractEventSubject;
-import com.team27.amazon.common.events.MongoEventLogger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.team27.amazon.common.events.AbstractEventSubject;
+import com.team27.amazon.common.events.MongoEventLogger;
+import com.team27.amazon.product.adapter.ObjectArrayDtoAdapter;
+import com.team27.amazon.product.dto.ProductCatalogDashboardDTO;
 import com.team27.amazon.product.dto.LowStockAlertDTO;
 import com.team27.amazon.product.dto.ProductRequest;
 import com.team27.amazon.product.dto.ProductReviewRequest;
@@ -34,7 +46,12 @@ import com.team27.amazon.product.model.ProductReview;
 import com.team27.amazon.product.model.ProductStatus;
 import com.team27.amazon.product.repository.ProductRepository;
 import com.team27.amazon.product.repository.ProductReviewRepository;
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.team27.amazon.product.cache.ProductCacheInvalidator;
+import com.team27.amazon.product.cache.ProductCacheKeys;
+import com.team27.amazon.product.cache.RedisCacheService;
 
+import java.time.Duration;
 import jakarta.annotation.PostConstruct;
 import jakarta.transaction.Transactional;
 
@@ -51,6 +68,25 @@ public class ProductService extends AbstractEventSubject {
     @Qualifier("productEventLogger")
     private MongoEventLogger mongoEventLogger;
 
+    @Autowired
+    private RedisCacheService redisCacheService;
+
+    @Autowired
+    private ProductCacheInvalidator productCacheInvalidator;
+
+    private static final Logger log = LoggerFactory.getLogger(ProductService.class);
+
+    @Autowired
+    private ObjectArrayDtoAdapter objectArrayDtoAdapter;
+
+    @Value("${spring.elasticsearch.uris:http://elasticsearch:9200}")
+private String elasticsearchUri;
+
+private final ObjectMapper objectMapper = new ObjectMapper();
+private final HttpClient httpClient = HttpClient.newHttpClient();
+
+
+
     @PostConstruct
     public void initObserver() {
         register(mongoEventLogger);
@@ -60,16 +96,32 @@ public class ProductService extends AbstractEventSubject {
         Product product = new Product();
         applyRequest(product, request);
         Product savedProduct = productRepository.save(product);
+autoIndexProduct(savedProduct, "auto_crud_create");
         notifyObservers("PRODUCT_CREATED", productEventPayload(savedProduct.getId(), Map.of(
                 "name", savedProduct.getName(),
                 "status", savedProduct.getStatus() == null ? null : savedProduct.getStatus().name()
         )));
+
+        productCacheInvalidator.invalidateAllProductFeatureCaches();
+
         return savedProduct;
     }
 
     public Product getProductById(Long id) {
-        return productRepository.findById(id)
-                .orElseThrow(() -> new ProductNotFoundException(id));
+        String cacheKey = ProductCacheKeys.productDetail(id);
+
+        return redisCacheService.getOrLoad(
+                cacheKey,
+                Duration.ofMinutes(15),
+                new TypeReference<Product>() {},
+                () -> productRepository.findById(id)
+                        .orElseThrow(() -> new ProductNotFoundException(id))
+        );
+    }
+
+    public void indexProductForSearch(Long id) {
+        Product product = getProductById(id);
+        autoIndexProduct(product, "explicit");
     }
 
     public List<Product> getProducts(ProductStatus status, String category) {
@@ -92,17 +144,64 @@ public class ProductService extends AbstractEventSubject {
         Double min = minPrice != null ? minPrice : 0.0;
         Double max = maxPrice != null ? maxPrice : Double.MAX_VALUE;
 
-        return productRepository.searchByPriceRange(min, max, category);
+        String cacheKey = ProductCacheKeys.s2f1Search(category, min, max);
+
+        return redisCacheService.getOrLoad(
+                cacheKey,
+                Duration.ofMinutes(5),
+                new TypeReference<List<Product>>() {},
+                () -> productRepository.searchByPriceRange(min, max, category)
+        );
+    }
+
+    public List<Product> searchProductsFullText(
+            String query,
+            String category,
+            String brand,
+            ProductStatus status,
+            Double minPrice,
+            Double maxPrice,
+            Double minRating,
+            Double maxRating
+    ) {
+        if (query == null || query.isBlank()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "query must not be blank");
+        }
+
+        validateRange("price", minPrice, maxPrice);
+        validateRange("rating", minRating, maxRating);
+
+        String cacheKey = ProductCacheKeys.s2f10FullText(
+                query,
+                normalizeOptional(category),
+                normalizeOptional(brand),
+                status == null ? null : status.name(),
+                minPrice,
+                maxPrice,
+                minRating,
+                maxRating
+        );
+
+        return redisCacheService.getOrLoad(
+                cacheKey,
+                Duration.ofMinutes(5),
+                new TypeReference<List<Product>>() {},
+                () -> searchFullTextFromElasticsearch(query, category, brand, status, minPrice, maxPrice, minRating, maxRating)
+        );
     }
 
     public Product updateProduct(Long id, ProductRequest request) {
         Product existing = getProductById(id);
         applyRequest(existing, request);
         Product savedProduct = productRepository.save(existing);
+        autoIndexProduct(savedProduct, "auto_crud_update");
         notifyObservers("PRODUCT_UPDATED", productEventPayload(savedProduct.getId(), Map.of(
                 "name", savedProduct.getName(),
                 "status", savedProduct.getStatus() == null ? null : savedProduct.getStatus().name()
         )));
+
+        productCacheInvalidator.invalidateProduct(id);
+
         return savedProduct;
     }
 
@@ -131,43 +230,42 @@ public class ProductService extends AbstractEventSubject {
         existing.setSpecifications(currentSpecifications);
         Product savedProduct = productRepository.save(existing);
         notifyObservers("SPECIFICATIONS_UPDATED", productEventPayload(savedProduct.getId(), Map.of(
-            "details", new HashMap<>(currentSpecifications)
+                "details", new HashMap<>(currentSpecifications)
         )));
+
+        productCacheInvalidator.invalidateProduct(id);
+
         return savedProduct;
     }
 
     public ProductSalesDTO getProductSalesSummary(Long productId, LocalDate startDate, LocalDate endDate) {
-        Product product = getProductById(productId);
+        String cacheKey = ProductCacheKeys.s2f3Sales(productId, startDate, endDate);
 
-        LocalDateTime startDateTime = startDate.atStartOfDay();
-        LocalDateTime endDateTime = endDate.atTime(LocalTime.MAX);
+        return redisCacheService.getOrLoad(
+                cacheKey,
+                Duration.ofMinutes(10),
+                new TypeReference<ProductSalesDTO>() {
+                },
+                () -> {
+                    Product product = getProductById(productId);
 
-        Object[] result = productRepository.getProductSalesSummary(productId, startDateTime, endDateTime);
+                    LocalDateTime startDateTime = startDate.atStartOfDay();
+                    LocalDateTime endDateTime = endDate.atTime(LocalTime.MAX);
 
-        long totalUnitsSold = 0L;
-        double totalRevenue = 0.0;
+                    Object[] result = productRepository.getProductSalesSummary(productId, startDateTime, endDateTime);
 
-        if (result != null && result.length >= 2) {
-            totalUnitsSold = result[0] == null ? 0L : ((Number) result[0]).longValue();
-            totalRevenue = result[1] == null ? 0.0 : ((Number) result[1]).doubleValue();
-        }
-
-        double averageSellingPrice = totalUnitsSold == 0 ? 0.0 : totalRevenue / totalUnitsSold;
-
-        return ProductSalesDTO.builder()
-                .productId(product.getId())
-                .name(product.getName())
-                .totalUnitsSold(totalUnitsSold)
-                .totalRevenue(totalRevenue)
-                .averageSellingPrice(averageSellingPrice)
-                .build();
+                    return objectArrayDtoAdapter.toProductSalesDTO(product.getId(), product.getName(), result);
+                }
+        );
     }
-
     public void deleteProduct(Long id) {
         Product existing = getProductById(id);
         productRepository.delete(existing);
-        notifyObservers("PRODUCT_DELETED", productEventPayload(id, Map.of()));
+        autoDeleteProductFromIndex(id);
+        notifyObservers("PRODUCT_DELETED", productEventPayload(id, Map.of("productId", id,
+                "source", "auto_crud_delete")));
 
+        productCacheInvalidator.invalidateProduct(id);
     }
 
     @Transactional
@@ -212,7 +310,7 @@ public class ProductService extends AbstractEventSubject {
             "rating", savedReview.getRating(),
             "details", reviewDetails(savedReview)
         )));
-
+        productCacheInvalidator.invalidateProductReview(savedReview.getId(), productId);
         return savedReview;
     }
 
@@ -263,50 +361,117 @@ public class ProductService extends AbstractEventSubject {
         )));
         return product;
     }
-
+    @Transactional
     public List<LowStockAlertDTO> getLowStockAlerts(Integer threshold) {
         if (threshold == null || threshold < 0) {
-            throw new InvalidProductAlertException("Threshold must be zero or greater.");        }
+            throw new InvalidProductAlertException("Threshold must be zero or greater.");
+        }
 
-        return productRepository.findByStockQuantityLessThanOrderByStockQuantityAsc(threshold)
-                .stream()
-                .map(LowStockAlertDTO::from)
-                .toList();
+        String cacheKey = ProductCacheKeys.s2f9LowStock(threshold);
+
+        return redisCacheService.getOrLoad(
+                cacheKey,
+                Duration.ofMinutes(10),
+                new TypeReference<List<LowStockAlertDTO>>() {},
+                () -> productRepository.findLowStockProducts(threshold)
+                        .stream()
+                        .map(LowStockAlertDTO::from)
+                        .toList()
+        );
     }
     public List<Product> searchBySpecification(String key, String value, ProductStatus status) {
-    if (key == null || key.isBlank() || value == null || value.isBlank()) {
-        throw new ResponseStatusException(
-                HttpStatus.BAD_REQUEST,
-                "Key and value must not be blank"
+        if (key == null || key.isBlank() || value == null || value.isBlank()) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Key and value must not be blank"
+            );
+        }
+
+        String cacheKey = ProductCacheKeys.s2f5Specifications(
+                key,
+                value,
+                status == null ? null : status.name()
+        );
+
+        return redisCacheService.getOrLoad(
+                cacheKey,
+                Duration.ofMinutes(5),
+                new TypeReference<List<Product>>() {},
+                () -> productRepository.findBySpecificationKeyValueAndOptionalStatus(
+                        key,
+                        value,
+                        status == null ? null : status.name()
+                )
         );
     }
 
-    return productRepository.findBySpecificationKeyValueAndOptionalStatus(
-            key,
-            value,
-            status == null ? null : status.name()
-    );
-} 
-        
     public List<TopProductDTO> getTopRatedProducts(Integer limit) {
-    if (limit == null || limit <= 0) {
-        throw new ResponseStatusException(
-                HttpStatus.BAD_REQUEST,
-                "Limit must be greater than 0"
+        if (limit == null || limit <= 0) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Limit must be greater than 0"
+            );
+        }
+
+        String cacheKey = ProductCacheKeys.s2f6TopRated(limit);
+
+        return redisCacheService.getOrLoad(
+                cacheKey,
+                Duration.ofMinutes(10),
+                new TypeReference<List<TopProductDTO>>() {},
+                () -> {
+                    List<Object[]> rows = productRepository.findTopRatedProducts(limit);
+
+                    return rows.stream()
+                            .map(objectArrayDtoAdapter::toTopProductDTO)
+                            .toList();
+                }
         );
     }
 
-    List<Object[]> rows = productRepository.findTopRatedProducts(limit);
+        public ProductCatalogDashboardDTO getProductCatalogDashboard() {
+        notifyObservers("DASHBOARD_VIEWED", productEventPayload(null, Map.of(
+                "dashboard", "ProductCatalogDashboard",
+                "featureId", "S2-F12"
+        )));
 
-    return rows.stream()
-            .map(row -> TopProductDTO.builder()
-                    .productId(((Number) row[0]).longValue())
-                    .name((String) row[1])
-                    .rating(row[2] == null ? 0.0 : ((Number) row[2]).doubleValue())
-                    .totalSales(row[3] == null ? 0L : ((Number) row[3]).longValue())
-                    .build()
-            )
-            .toList();
+        String cacheKey = ProductCacheKeys.s2f12CatalogDashboard();
+
+        return redisCacheService.getOrLoad(
+                cacheKey,
+                Duration.ofMinutes(10),
+                new TypeReference<ProductCatalogDashboardDTO>() {},
+                () -> {
+                    Long totalProducts = productRepository.countAllProductsForDashboard();
+                    Long outOfStockCount = productRepository.countOutOfStockProductsForDashboard();
+                    Double averageRating = productRepository.averageRatedProductsForDashboard();
+                    Double averagePrice = productRepository.averagePriceForDashboard();
+                    Long lowStockCount = productRepository.countLowStockActiveProductsForDashboard();
+
+                    Map<String, Long> categoryDistribution = new HashMap<>();
+                    List<Object[]> categoryRows = productRepository.countProductsByCategoryForDashboard();
+
+                    for (Object[] row : categoryRows) {
+                        if (row == null || row.length < 2) {
+                            continue;
+                        }
+
+                        String category = row[0] == null ? "UNKNOWN" : String.valueOf(row[0]);
+                        Long count = row[1] == null ? 0L : ((Number) row[1]).longValue();
+
+                        categoryDistribution.put(category, count);
+                    }
+
+                    return ProductCatalogDashboardDTO.builder()
+                            .totalProducts(totalProducts)
+                            .outOfStockCount(outOfStockCount)
+                            .averageRating(averageRating)
+                            .categoryDistribution(categoryDistribution)
+                            .averagePrice(averagePrice)
+                            .lowStockCount(lowStockCount)
+                            .build();
+                }
+        );
     }
 
     private void applyRequest(Product product, ProductRequest request) {
@@ -339,7 +504,8 @@ public class ProductService extends AbstractEventSubject {
     notifyObservers("STATUS_CHANGED", productEventPayload(savedProduct.getId(), Map.of(
             "status", savedProduct.getStatus() == null ? null : savedProduct.getStatus().name()
     )));
-    return savedProduct;
+        productCacheInvalidator.invalidateProduct(productId);
+        return savedProduct;
 }
 
     private Map<String, Object> productEventPayload(Long productId, Map<String, Object> details) {
@@ -370,5 +536,280 @@ public class ProductService extends AbstractEventSubject {
         details.put("title", review.getTitle());
         return details;
     }
-    
+
+    private List<Product> searchFullTextFromElasticsearch(
+            String query,
+            String category,
+            String brand,
+            ProductStatus status,
+            Double minPrice,
+            Double maxPrice,
+            Double minRating,
+            Double maxRating
+    ) {
+        try {
+            Map<String, Object> boolQuery = new HashMap<>();
+
+            List<Map<String, Object>> mustClauses = new ArrayList<>();
+            mustClauses.add(Map.of(
+                    "multi_match", Map.of(
+                            "query", query,
+                            "fields", List.of("name^2", "description"),
+                            "operator", "or"
+                    )
+            ));
+            boolQuery.put("must", mustClauses);
+
+            String wildcardText = "*" + query.trim().toLowerCase() + "*";
+            List<Map<String, Object>> shouldClauses = new ArrayList<>();
+            shouldClauses.add(Map.of(
+                    "wildcard", Map.of(
+                            "name", Map.of(
+                                    "value", wildcardText,
+                                    "case_insensitive", true,
+                                    "boost", 2.0
+                            )
+                    )
+            ));
+            shouldClauses.add(Map.of(
+                    "wildcard", Map.of(
+                            "description", Map.of(
+                                    "value", wildcardText,
+                                    "case_insensitive", true
+                            )
+                    )
+            ));
+            boolQuery.put("should", shouldClauses);
+
+            List<Map<String, Object>> filterClauses = buildFullTextFilters(category, brand, status, minPrice, maxPrice, minRating, maxRating);
+            if (!filterClauses.isEmpty()) {
+                boolQuery.put("filter", filterClauses);
+            }
+
+            Map<String, Object> requestBody = Map.of(
+                    "query", Map.of("bool", boolQuery),
+                    "sort", List.of(Map.of("_score", Map.of("order", "desc"))),
+                    "size", 200
+            );
+
+            HttpRequest request = HttpRequest.newBuilder()
+                    .uri(URI.create(elasticsearchUri + "/products/_search"))
+                    .header("Content-Type", "application/json")
+                    .POST(HttpRequest.BodyPublishers.ofString(objectMapper.writeValueAsString(requestBody)))
+                    .build();
+
+            HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+            if (response.statusCode() >= 300) {
+                throw new IllegalStateException("Elasticsearch full-text search failed: " + response.statusCode() + " " + response.body());
+            }
+
+            return mapProductsByRelevance(response.body());
+        } catch (Exception ex) {
+            log.warn("Failed to run full-text product search", ex);
+            return List.of();
+        }
+    }
+
+    private List<Map<String, Object>> buildFullTextFilters(
+            String category,
+            String brand,
+            ProductStatus status,
+            Double minPrice,
+            Double maxPrice,
+            Double minRating,
+            Double maxRating
+    ) {
+        List<Map<String, Object>> filters = new ArrayList<>();
+
+        if (normalizeOptional(category) != null) {
+            filters.add(Map.of("term", Map.of("category", category.trim().toUpperCase())));
+        }
+        if (normalizeOptional(brand) != null) {
+            filters.add(Map.of("term", Map.of("brand", brand.trim())));
+        }
+        if (status != null) {
+            filters.add(Map.of("term", Map.of("status", status.name())));
+        }
+        if (minPrice != null || maxPrice != null) {
+            Map<String, Object> priceRange = new HashMap<>();
+            if (minPrice != null) {
+                priceRange.put("gte", minPrice);
+            }
+            if (maxPrice != null) {
+                priceRange.put("lte", maxPrice);
+            }
+            filters.add(Map.of("range", Map.of("price", priceRange)));
+        }
+        if (minRating != null || maxRating != null) {
+            Map<String, Object> ratingRange = new HashMap<>();
+            if (minRating != null) {
+                ratingRange.put("gte", minRating);
+            }
+            if (maxRating != null) {
+                ratingRange.put("lte", maxRating);
+            }
+            filters.add(Map.of("range", Map.of("rating", ratingRange)));
+        }
+
+        return filters;
+    }
+
+    private List<Product> mapProductsByRelevance(String responseBody) throws Exception {
+        JsonNode root = objectMapper.readTree(responseBody);
+        JsonNode hitNodes = root.path("hits").path("hits");
+
+        if (!hitNodes.isArray() || hitNodes.isEmpty()) {
+            return List.of();
+        }
+
+        List<Long> orderedIds = new ArrayList<>();
+        for (JsonNode hit : hitNodes) {
+            JsonNode productIdNode = hit.path("_source").path("productId");
+            if (productIdNode.isNumber()) {
+                orderedIds.add(productIdNode.asLong());
+            }
+        }
+
+        if (orderedIds.isEmpty()) {
+            return List.of();
+        }
+
+        Map<Long, Product> productById = productRepository.findAllById(orderedIds)
+                .stream()
+                .collect(Collectors.toMap(Product::getId, product -> product));
+
+        List<Product> orderedProducts = new ArrayList<>();
+        for (Long id : orderedIds) {
+            Product product = productById.get(id);
+            if (product != null) {
+                orderedProducts.add(product);
+            }
+        }
+
+        return orderedProducts;
+    }
+
+    private void validateRange(String fieldName, Double min, Double max) {
+        if (min != null && max != null && min > max) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Invalid " + fieldName + " range: min value must be less than or equal to max value"
+            );
+        }
+    }
+
+    private String normalizeOptional(String value) {
+        if (value == null || value.isBlank()) {
+            return null;
+        }
+        return value.trim();
+    }
+
+private void autoIndexProduct(Product product, String source) {
+    try {
+        Map<String, Object> document = new HashMap<>();
+        document.put("id", String.valueOf(product.getId()));
+        document.put("productId", product.getId());
+        document.put("name", product.getName());
+        document.put("description", product.getDescription());
+        document.put("category", product.getCategory());
+        document.put("brand", product.getBrand());
+        document.put("price", product.getPrice());
+        document.put("stockQuantity", product.getStockQuantity());
+        document.put("rating", product.getRating());
+        document.put("status", product.getStatus() == null ? null : product.getStatus().name());
+
+        createProductsIndexIfNeeded();
+
+        String jsonBody = objectMapper.writeValueAsString(document);
+
+        HttpRequest request = HttpRequest.newBuilder()
+                .uri(URI.create(elasticsearchUri + "/products/_doc/" + product.getId()))
+                .header("Content-Type", "application/json")
+                .PUT(HttpRequest.BodyPublishers.ofString(jsonBody))
+                .build();
+
+        HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+
+        if (response.statusCode() >= 300) {
+            throw new IllegalStateException("Elasticsearch indexing failed: " + response.statusCode() + " " + response.body());
+        }
+
+        notifyObservers("INDEXED", productEventPayload(product.getId(), Map.of(
+                "productId", product.getId(),
+                "indexedFields", List.of(
+                        "id",
+                        "name",
+                        "description",
+                        "category",
+                        "brand",
+                        "price",
+                        "stockQuantity",
+                        "rating",
+                        "status"
+                ),
+                "source", source
+        )));
+        redisCacheService.evictByPattern("product-service::S2-F10::*");
+    } catch (Exception e) {
+        log.warn("Failed to auto-index product {}", product.getId(), e);
+    }
+}
+
+private void createProductsIndexIfNeeded() {
+    try {
+        String mapping = """
+                {
+                  "mappings": {
+                    "properties": {
+                      "id": { "type": "keyword" },
+                      "productId": { "type": "long" },
+                      "name": { "type": "text" },
+                      "description": { "type": "text" },
+                      "category": { "type": "keyword" },
+                      "brand": { "type": "keyword" },
+                      "price": { "type": "double" },
+                      "stockQuantity": { "type": "integer" },
+                      "rating": { "type": "double" },
+                      "status": { "type": "keyword" }
+                    }
+                  }
+                }
+                """;
+
+        HttpRequest request = HttpRequest.newBuilder()
+                .uri(URI.create(elasticsearchUri + "/products"))
+                .header("Content-Type", "application/json")
+                .PUT(HttpRequest.BodyPublishers.ofString(mapping))
+                .build();
+
+        HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+
+        if (response.statusCode() != 200 && response.statusCode() != 400) {
+            throw new IllegalStateException("Elasticsearch index creation failed: " + response.statusCode() + " " + response.body());
+        }
+    } catch (Exception e) {
+        log.warn("Could not create Elasticsearch products index", e);
+    }
+}
+
+private void autoDeleteProductFromIndex(Long productId) {
+    try {
+        HttpRequest request = HttpRequest.newBuilder()
+                .uri(URI.create(elasticsearchUri + "/products/_doc/" + productId))
+                .DELETE()
+                .build();
+
+        HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+
+        if (response.statusCode() >= 300 && response.statusCode() != 404) {
+            throw new IllegalStateException("Elasticsearch delete failed: "
+                    + response.statusCode() + " " + response.body());
+        }
+
+        redisCacheService.evictByPattern("product-service::S2-F10::*");
+    } catch (Exception e) {
+        log.warn("Failed to delete product {} from Elasticsearch index", productId, e);
+    }
+}
 }

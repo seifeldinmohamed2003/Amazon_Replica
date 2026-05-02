@@ -3,10 +3,11 @@ package com.team27.amazon.shipping.metadatasearch;
 import com.team27.amazon.shipping.model.Shipment;
 import com.team27.amazon.shipping.model.ShipmentStatus;
 import com.team27.amazon.shipping.repository.ShipmentRepository;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.util.HashMap;
@@ -16,11 +17,20 @@ import java.util.Map;
 import static org.junit.jupiter.api.Assertions.*;
 
 @SpringBootTest
-@DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_EACH_TEST_METHOD)
 public class MetadataSearchTest {
 
     @Autowired
     private ShipmentRepository shipmentRepository;
+
+    @BeforeEach
+    void cleanDatabaseBeforeEachTest() {
+        shipmentRepository.deleteAllInBatch();
+    }
+
+    @AfterEach
+    void cleanDatabaseAfterEachTest() {
+        shipmentRepository.deleteAllInBatch();
+    }
 
     private Shipment createShipmentWithMetadata(Long orderId, String carrier, String trackingNumber, Map<String, Object> metadata) {
         Shipment shipment = new Shipment();
