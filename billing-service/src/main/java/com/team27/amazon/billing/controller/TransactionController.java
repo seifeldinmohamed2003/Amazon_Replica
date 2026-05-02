@@ -21,6 +21,8 @@ import com.team27.amazon.billing.dto.RevenueReportDTO;
 import com.team27.amazon.billing.dto.TransactionDetailsDTO;
 import com.team27.amazon.billing.dto.UserTransactionSummaryDTO;
 import com.team27.amazon.billing.dto.VoucherUsageDTO;
+import com.team27.amazon.billing.dto.CategoryRevenueDTO;
+import com.team27.amazon.billing.dto.AuditLogDTO;
 import com.team27.amazon.billing.model.Transaction;
 import com.team27.amazon.billing.service.BillingService;
 
@@ -121,6 +123,21 @@ public class TransactionController {
     public ResponseEntity<List<VoucherUsageDTO>> getTopUsedVouchers(
             @RequestParam int limit) {
         return ResponseEntity.ok(billingService.getTopUsedVouchers(limit));
+    }
+
+    // ── S5-F10 ── GET /api/transactions/reports/category-revenue ──────────────
+
+    @GetMapping("/reports/category-revenue")
+    public ResponseEntity<List<CategoryRevenueDTO>> getCategoryRevenueReport() {
+        return ResponseEntity.ok(billingService.getCategoryRevenueReport());
+    }
+
+    // ── S5-F11 ── GET /api/transactions/{transactionId}/audit-trail ──────────
+
+    @GetMapping("/{transactionId}/audit-trail")
+    public ResponseEntity<List<AuditLogDTO>> getTransactionAuditTrail(
+            @PathVariable String transactionId) {
+        return ResponseEntity.ok(billingService.getTransactionAuditTrail(transactionId));
     }
 
     @GetMapping
