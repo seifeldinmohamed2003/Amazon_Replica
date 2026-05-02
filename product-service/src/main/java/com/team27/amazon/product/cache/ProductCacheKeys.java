@@ -39,6 +39,10 @@ public final class ProductCacheKeys {
     public static String s2f9LowStock(Integer threshold) {
         return feature("S2-F9", threshold);
     }
+     
+    public static String s2f12CatalogDashboard() {
+        return feature("S2-F12", "catalog-dashboard");
+    }
 
     public static String featurePattern(String featureId) {
         return SERVICE + "::" + featureId + "::*";
