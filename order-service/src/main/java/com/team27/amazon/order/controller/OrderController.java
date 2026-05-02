@@ -4,7 +4,7 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
-
+import com.team27.amazon.order.dto.CoPurchaseRecordResponse;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
@@ -187,6 +187,10 @@ public class OrderController {
                         endDate.atTime(23, 59, 59)
                 )
         );
+    }
+    @PostMapping("/{orderId}/record-co-purchase")
+    public ResponseEntity<CoPurchaseRecordResponse> recordProductCoPurchase(@PathVariable Long orderId) {
+        return ResponseEntity.ok(orderService.recordProductCoPurchase(orderId));
     }
 }
 
