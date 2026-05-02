@@ -19,7 +19,8 @@ import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
-
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.cache.CacheManager;
 import com.team27.amazon.order.dto.AddOrderItemRequest;
 import com.team27.amazon.order.dto.OrderAnalyticsDTO;
 import com.team27.amazon.order.dto.OrderDetailsDTO;
@@ -39,7 +40,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
-
+import org.springframework.cache.CacheManager;
 import org.springframework.http.HttpStatus;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
@@ -53,8 +54,8 @@ public class OrderService extends AbstractEventSubject {
     private static final double SHIPPING_THRESHOLD = 500.0;
     private static final double SHIPPING_FLAT_RATE = 50.0;
     private OrderItemRepository orderItemRepository;
-
-
+    @Autowired
+    private CacheManager cacheManager;
     @Autowired
     private OrderRepository orderRepository;
     @Autowired
@@ -669,7 +670,10 @@ public class OrderService extends AbstractEventSubject {
                     """)
                 .bind(orderId).to("orderId")
                 .run();
-
+        var cache = cacheManager.getCache("order:recommendations");
+        if (cache != null) {
+            cache.clear();
+        }
         notifyObservers("INTERACTION_RECORDED", Map.of(
                 "orderId", orderId,
                 "details", Map.of(
