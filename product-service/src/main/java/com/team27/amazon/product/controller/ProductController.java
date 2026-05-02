@@ -104,7 +104,15 @@ public class ProductController {
         return productService.getProductSalesSummary(id, startDate, endDate);
     }
 
-    
+    @PostMapping("/{id}/index")
+    public ResponseEntity<Map<String, Object>> indexProduct(@PathVariable Long id) {
+        productService.indexProductForSearch(id);
+
+        return ResponseEntity.ok(Map.of(
+                "message", "Product indexed successfully",
+                "productId", id
+        ));
+    }
 
     @PutMapping("/{id}")
     public ProductResponse updateProduct(@PathVariable Long id, @Valid @RequestBody ProductRequest request) {
