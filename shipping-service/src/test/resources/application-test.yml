@@ -2,7 +2,7 @@ spring:
   application:
     name: shipping-service
   datasource:
-    url: jdbc:postgresql://postgres:5432/amazondb
+    url: jdbc:postgresql://localhost:5432/amazondb
     username: postgres
     password: postgres
   jpa:
@@ -13,20 +13,20 @@ spring:
       hibernate:
         dialect: org.hibernate.dialect.PostgreSQLDialect
   cassandra:
-    contact-points: cassandra
+    contact-points: localhost
     port: 9042
     local-datacenter: datacenter1
     keyspace-name: amazonks
     schema-action: CREATE_IF_NOT_EXISTS
   mongodb:
-    uri: mongodb://root:rootpass@mongo:27017/amazonmongo?authSource=admin
+    uri: mongodb://root:rootpass@localhost:27017/amazonmongo?authSource=admin
   data:
     redis:
-      host: redis
+      host: localhost
       port: 6379
       password: redispass
 server:
   port: 8080
 jwt:
-  secret: ${JWT_SECRET:MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=}
-  expiration: ${JWT_EXPIRATION_MS:86400000}
+  secret: MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=
+  expiration: 86400000
