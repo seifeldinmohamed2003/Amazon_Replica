@@ -18,12 +18,14 @@ import com.team27.amazon.billing.dto.RevenueReportDTO;
 import com.team27.amazon.billing.dto.TransactionDetailsDTO;
 import com.team27.amazon.billing.dto.UserTransactionSummaryDTO;
 import com.team27.amazon.billing.dto.VoucherUsageDTO;
+import com.team27.amazon.billing.model.AuditLogDocument;
 import com.team27.amazon.billing.model.DiscountType;
 import com.team27.amazon.billing.model.Transaction;
 import com.team27.amazon.billing.model.TransactionMethod;
 import com.team27.amazon.billing.model.TransactionStatus;
 import com.team27.amazon.billing.model.TransactionVoucher;
 import com.team27.amazon.billing.model.Voucher;
+import com.team27.amazon.billing.repository.TransactionAuditRepository;
 import com.team27.amazon.billing.repository.TransactionRepository;
 import com.team27.amazon.billing.repository.TransactionVoucherRepository;
 import com.team27.amazon.billing.repository.VoucherRepository;
@@ -34,7 +36,7 @@ import jakarta.annotation.PostConstruct;
 import jakarta.transaction.Transactional;
 
 @Service
-public class BillingService extends AbstractEventSubject {
+public class BillingService {
 
     @Autowired
     private TransactionRepository transactionRepository;
@@ -42,10 +44,21 @@ public class BillingService extends AbstractEventSubject {
     private VoucherRepository voucherRepository;
     @Autowired
     private TransactionVoucherRepository transactionVoucherRepository;
+    @Autowired
+    private CacheService cacheService;
+    @Autowired
+    private CategoryRepository categoryRepository;
+    @Autowired
+    private TransactionAuditRepository transactionAuditRepository; 
+    @Autowired
+    private MongoEventLogger mongoEventLogger; 
+    @Autowired
+    private MongoDocumentAdapter mongoDocumentAdapter;
+
+    private static final Logger log = LoggerFactory.getLogger(BillingService.class);
 
     @Autowired
-    @Qualifier("billingEventLogger")
-    private MongoEventLogger mongoEventLogger;
+    private TransactionAuditEventRepository auditRepository;
 
     @Autowired
     private ObjectArrayDtoAdapter objectArrayDtoAdapter;
@@ -55,95 +68,138 @@ public class BillingService extends AbstractEventSubject {
         register(mongoEventLogger);
     }
 
-    // ── existing ─────────────────────────────────────────────────────────────
-
-    public List<Transaction> searchTransactions(String status, LocalDateTime startDate, LocalDateTime endDate) {
-        return transactionRepository.searchTransactions(status, startDate, endDate);
+    private void invalidateVoucherCaches(Long voucherId) {
+        cacheService.delete(vcKey(voucherId));
+        cacheService.deleteByPattern(SVC + "::S5-F9::*");
     }
+
+    private void writeAuditEvent(Long transactionId, String action, String method,
+                                 Double amount, Map<String, Object> details) {
+        try {
+            TransactionAuditEvent event = new TransactionAuditEvent(
+                    transactionId, action, LocalDateTime.now(), method, amount, details);
+            auditRepository.save(event);
+        } catch (Exception e) {
+            log.warn("MongoDB audit write failed for transactionId {}: {}", transactionId, e.getMessage());
+        }
+    }
+
+    private List<Map<String, Object>> buildRefundedItemsList(List<Long> itemIds, Long orderId) {
+        List<Map<String, Object>> refundedItems = new ArrayList<>();
+        if (itemIds == null || itemIds.isEmpty()) return refundedItems;
+
+        List<Object[]> rows = transactionRepository.findItemDetailsByIds(itemIds);
+        for (Object[] row : rows) {
+            Long itemId = ((Number) row[0]).longValue();
+            Integer quantity = ((Number) row[1]).intValue();
+            Double price = ((Number) row[2]).doubleValue();
+
+            Map<String, Object> item = new HashMap<>();
+            item.put("orderItemId", itemId);
+            item.put("quantity", quantity);
+            item.put("amount", price * quantity);
+            refundedItems.add(item);
+        }
+        return refundedItems;
+    }
+
+    // ── CRUD ─────────────────────────────────────────────────────────────────
 
     public List<Transaction> getAllTransactions() {
         return transactionRepository.findAll();
+    }
+
+    public Transaction getTransactionById(Long id) {
+        String key = txKey(id);
+        Transaction cached = cacheService.get(key, Transaction.class);
+        if (cached != null) return cached;
+
+        Transaction t = transactionRepository.findById(id)
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND, "Transaction not found"));
+        cacheService.set(key, t, 15);
+        return t;
+    }
+
+    public Voucher getVoucherById(Long id) {
+        String key = vcKey(id);
+        Voucher cached = cacheService.get(key, Voucher.class);
+        if (cached != null) return cached;
+
+        Voucher v = voucherRepository.findById(id)
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND, "Voucher not found"));
+        cacheService.set(key, v, 15);
+        return v;
     }
 
     public List<Voucher> getAllVouchers() {
         return voucherRepository.findAll();
     }
 
-    public Transaction getTransactionById(Long id) {
-        return transactionRepository.findById(id)
-                .orElseThrow(() -> new ResponseStatusException(
-                        HttpStatus.NOT_FOUND, "Transaction not found"));
-    }
-    public Voucher getVoucherById(Long id) {
-        return voucherRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("Voucher not found"));
+    public TransactionVoucher getTransactionVoucherById(Long id) {
+        String key = tvKey(id);
+        TransactionVoucher cached = cacheService.get(key, TransactionVoucher.class);
+        if (cached != null) return cached;
+
+        TransactionVoucher tv = transactionVoucherRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("TransactionVoucher not found"));
+        cacheService.set(key, tv, 15);
+        return tv;
     }
 
-    public Voucher createVoucher(Voucher voucher) {
-        Voucher savedVoucher = voucherRepository.save(voucher);
-        notifyObservers("VOUCHER_CREATED", billingEventPayload(null, null, null, Map.of(
-                "voucherId", savedVoucher.getId(),
-                "code", savedVoucher.getCode(),
-                "details", voucherDetails(savedVoucher)
-        )));
-        return savedVoucher;
-    }
-
-    public Voucher updateVoucher(Long id, Voucher voucher) {
-        voucher.setId(id);
-        Voucher savedVoucher = voucherRepository.save(voucher);
-        notifyObservers("VOUCHER_UPDATED", billingEventPayload(null, null, null, Map.of(
-                "voucherId", savedVoucher.getId(),
-                "code", savedVoucher.getCode(),
-                "details", voucherDetails(savedVoucher)
-        )));
-        return savedVoucher;
-    }
-
-    public void deleteVoucher(Long id) {
-        voucherRepository.deleteById(id);
-        notifyObservers("VOUCHER_DELETED", billingEventPayload(null, null, null, Map.of("voucherId", id)));
+    public Transaction saveTransaction(Transaction transaction) {
+        if (transaction.getCreatedAt() == null) {
+            transaction.setCreatedAt(LocalDateTime.now());
+        }
+        Transaction saved = transactionRepository.save(transaction);
+        invalidateTransactionCaches(saved.getId());
+        return saved;
     }
 
     public Transaction updateTransaction(Long id, Transaction updated) {
-        Transaction t = getTransactionById(id);
+        Transaction t = transactionRepository.findById(id)
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND, "Transaction not found"));
         if (updated.getAmount() != null) t.setAmount(updated.getAmount());
         if (updated.getMethod() != null) t.setMethod(updated.getMethod());
         if (updated.getStatus() != null) t.setStatus(updated.getStatus());
         if (updated.getTransactionDetails() != null) t.setTransactionDetails(updated.getTransactionDetails());
         if (updated.getOrderId() != null) t.setOrderId(updated.getOrderId());
         if (updated.getUserId() != null) t.setUserId(updated.getUserId());
-        Transaction savedTransaction = transactionRepository.save(t);
-        notifyObservers("TRANSACTION_UPDATED", billingEventPayload(savedTransaction.getId(), savedTransaction.getMethod() == null ? null : savedTransaction.getMethod().name(), savedTransaction.getAmount(), Map.of(
-            "status", savedTransaction.getStatus() == null ? null : savedTransaction.getStatus().name(),
-            "details", transactionDetails(savedTransaction)
-        )));
-        return savedTransaction;
-    }
-
-    public void deleteTransaction(Long id) {
-        transactionRepository.deleteById(id);
-        notifyObservers("TRANSACTION_DELETED", billingEventPayload(id, null, null, Map.of()));
-    }
-
-    public TransactionVoucher createTransactionVoucher(TransactionVoucher tv) {
-        if (tv.getAppliedAt() == null) tv.setAppliedAt(java.time.LocalDateTime.now());
-        TransactionVoucher saved = transactionVoucherRepository.save(tv);
-        notifyObservers("TRANSACTION_VOUCHER_CREATED", billingEventPayload(
-            saved.getTransaction() == null ? null : saved.getTransaction().getId(),
-            null,
-            null,
-            Map.of(
-                "voucherId", saved.getVoucher() == null ? null : saved.getVoucher().getId(),
-                "discountApplied", saved.getDiscountApplied()
-            )
-        ));
+        Transaction saved = transactionRepository.save(t);
+        invalidateTransactionCaches(saved.getId());
         return saved;
     }
 
-    public TransactionVoucher getTransactionVoucherById(Long id) {
-        return transactionVoucherRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("TransactionVoucher not found"));
+    public void deleteTransaction(Long id) {
+        invalidateTransactionCaches(id);
+        transactionRepository.deleteById(id);
+    }
+
+    public Voucher saveVoucher(Voucher voucher) {
+        Voucher saved = voucherRepository.save(voucher);
+        invalidateVoucherCaches(saved.getId());
+        return saved;
+    }
+
+    public Voucher updateVoucher(Long id, Voucher updated) {
+        updated.setId(id);
+        Voucher saved = voucherRepository.save(updated);
+        invalidateVoucherCaches(saved.getId());
+        return saved;
+    }
+
+    public void deleteVoucher(Long id) {
+        invalidateVoucherCaches(id);
+        voucherRepository.deleteById(id);
+    }
+
+    public TransactionVoucher createTransactionVoucher(TransactionVoucher tv) {
+        if (tv.getAppliedAt() == null) tv.setAppliedAt(LocalDateTime.now());
+        TransactionVoucher saved = transactionVoucherRepository.save(tv);
+        cacheService.delete(tvKey(saved.getId()));
+        return saved;
     }
 
     public List<TransactionVoucher> getAllTransactionVouchers() {
@@ -151,35 +207,36 @@ public class BillingService extends AbstractEventSubject {
     }
 
     public void deleteTransactionVoucher(Long id) {
+        cacheService.delete(tvKey(id));
         transactionVoucherRepository.deleteById(id);
-        notifyObservers("TRANSACTION_VOUCHER_DELETED", billingEventPayload(null, null, null, Map.of("transactionVoucherId", id)));
     }
 
-    public Transaction saveTransaction(Transaction transaction) {
-        if (transaction.getCreatedAt() == null) {
-            transaction.setCreatedAt(LocalDateTime.now());
-        }
-        Transaction savedTransaction = transactionRepository.save(transaction);
-        String action = savedTransaction.getStatus() == null || savedTransaction.getStatus().name().equals("PENDING")
-                ? "CREATED"
-                : savedTransaction.getStatus().name();
-        notifyObservers(action, billingEventPayload(savedTransaction.getId(), savedTransaction.getMethod() == null ? null : savedTransaction.getMethod().name(), savedTransaction.getAmount(), Map.of(
-                "status", savedTransaction.getStatus() == null ? null : savedTransaction.getStatus().name(),
-                "details", transactionDetails(savedTransaction)
-        )));
-        return savedTransaction;
+    // ── S5-F1 ── Search Transactions ─────────────────────────────────────────
+
+    public List<Transaction> searchTransactions(String status, LocalDateTime startDate, LocalDateTime endDate) {
+        String key = f1Key(status, startDate, endDate);
+        List<Transaction> cached = cacheService.get(key, new TypeReference<List<Transaction>>() {});
+        if (cached != null) return cached;
+
+        List<Transaction> result = transactionRepository.searchTransactions(status, startDate, endDate);
+        cacheService.set(key, result, 5);
+        return result;
     }
+
+    // ── S5-F2 ── Process Refund ───────────────────────────────────────────────
 
     @Transactional
     public Transaction processRefund(Long id, String reason) {
         Transaction transaction = transactionRepository.findById(id)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Transaction not found"));
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND, "Transaction not found"));
 
         if (transaction.getStatus() == TransactionStatus.REFUNDED) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Already refunded");
         }
         if (transaction.getStatus() != TransactionStatus.COMPLETED) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Only COMPLETED transactions allowed");
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "Only COMPLETED transactions allowed");
         }
 
         transaction.setStatus(TransactionStatus.REFUNDED);
@@ -190,16 +247,18 @@ public class BillingService extends AbstractEventSubject {
         details.put("refundedAt", LocalDateTime.now().toString());
         transaction.setTransactionDetails(details);
 
-        Transaction savedTransaction = transactionRepository.save(transaction);
-        notifyObservers("REFUNDED", billingEventPayload(savedTransaction.getId(), savedTransaction.getMethod() == null ? null : savedTransaction.getMethod().name(), savedTransaction.getAmount(), Map.of(
-            "reason", reason,
-            "status", savedTransaction.getStatus().name(),
-            "details", transactionDetails(savedTransaction)
-        )));
-        return savedTransaction;
+        Transaction saved = transactionRepository.save(transaction);
+        invalidateTransactionCaches(saved.getId());
+        return saved;
     }
 
+    // ── S5-F3 ── User Transaction Summary ────────────────────────────────────
+
     public UserTransactionSummaryDTO getUserTransactionSummary(Long userId) {
+        String key = f3Key(userId);
+        UserTransactionSummaryDTO cached = cacheService.get(key, UserTransactionSummaryDTO.class);
+        if (cached != null) return cached;
+
         int userExists = transactionRepository.countUserById(userId);
         if (userExists == 0) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "User not found");
@@ -220,12 +279,10 @@ public class BillingService extends AbstractEventSubject {
             totalAmount += sum;
         }
 
-        return UserTransactionSummaryDTO.builder()
-                .userId(userId)
-                .totalTransactions(totalTransactions)
-                .totalAmount(totalAmount)
-                .methodBreakdown(methodBreakdown)
-                .build();
+        UserTransactionSummaryDTO dto =
+                new UserTransactionSummaryDTO(userId, totalTransactions, totalAmount, methodBreakdown);
+        cacheService.set(key, dto, 10);
+        return dto;
     }
 
 @Transactional
@@ -305,11 +362,13 @@ public Transaction processTransactionForOrder(Long orderId, String method, Strin
 }
 
 
+    // ── S5-F5 ── Apply Voucher to Transaction ─────────────────────────────────
 
     @Transactional
     public Transaction applyVoucherToTransaction(Long transactionId, Long voucherId) {
         Transaction transaction = transactionRepository.findById(transactionId)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Transaction not found"));
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND, "Transaction not found"));
 
         if (transaction.getStatus() == TransactionStatus.COMPLETED ||
                 transaction.getStatus() == TransactionStatus.REFUNDED) {
@@ -318,7 +377,8 @@ public Transaction processTransactionForOrder(Long orderId, String method, Strin
         }
 
         Voucher voucher = voucherRepository.findById(voucherId)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Voucher not found"));
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND, "Voucher not found"));
 
         if (!voucher.getActive()) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Voucher is not active");
@@ -356,16 +416,13 @@ public Transaction processTransactionForOrder(Long orderId, String method, Strin
         voucher.setCurrentUses(voucher.getCurrentUses() + 1);
         voucherRepository.save(voucher);
 
-        notifyObservers("VOUCHER_APPLIED", billingEventPayload(transactionId, transaction.getMethod() == null ? null : transaction.getMethod().name(), transaction.getAmount(), Map.of(
-            "voucherId", voucherId,
-            "discount", discount,
-            "details", transactionDetails(transaction)
-        )));
+        invalidateTransactionCaches(transactionId);
+        invalidateVoucherCaches(voucherId);
 
         return transactionRepository.findById(transactionId).get();
     }
 
-    // ── S5-F6 ── Revenue Report by Date Range ────────────────────────────────
+    // ── S5-F6 ── Revenue Report ───────────────────────────────────────────────
 
     public RevenueReportDTO getRevenueReport(LocalDateTime startDate, LocalDateTime endDate) {
         if (startDate.isAfter(endDate)) {
@@ -373,27 +430,26 @@ public Transaction processTransactionForOrder(Long orderId, String method, Strin
                     "startDate must not be after endDate");
         }
 
-        Double totalRevenue = transactionRepository.sumCompletedRevenue(startDate, endDate);
-        Long totalTx = transactionRepository.countCompleted(startDate, endDate);
+        String key = f6Key(startDate, endDate);
+        RevenueReportDTO cached = cacheService.get(key, RevenueReportDTO.class);
+        if (cached != null) return cached;
+
+        Double totalRevenue   = transactionRepository.sumCompletedRevenue(startDate, endDate);
+        Long   totalTx        = transactionRepository.countCompleted(startDate, endDate);
         Double refundedAmount = transactionRepository.sumRefundedAmount(startDate, endDate);
-        Long refundCount = transactionRepository.countRefunded(startDate, endDate);
+        Long   refundCount    = transactionRepository.countRefunded(startDate, endDate);
 
-        // null-safe defaults
-        if (totalRevenue == null) totalRevenue = 0.0;
-        if (totalTx == null) totalTx = 0L;
+        if (totalRevenue   == null) totalRevenue   = 0.0;
+        if (totalTx        == null) totalTx        = 0L;
         if (refundedAmount == null) refundedAmount = 0.0;
-        if (refundCount == null) refundCount = 0L;
-
+        if (refundCount    == null) refundCount    = 0L;
 
         double average = totalTx > 0 ? totalRevenue / totalTx : 0.0;
 
-        return RevenueReportDTO.builder()
-                .totalRevenue(totalRevenue)
-                .totalTransactions(totalTx)
-                .averageTransaction(average)
-                .refundedAmount(refundedAmount)
-                .refundCount(refundCount)
-                .build();
+        RevenueReportDTO dto =
+                new RevenueReportDTO(totalRevenue, totalTx, average, refundedAmount, refundCount);
+        cacheService.set(key, dto, 10);
+        return dto;
     }
 
     // ── S5-F7 ── Retry Failed Transaction ────────────────────────────────────
@@ -422,18 +478,18 @@ public Transaction processTransactionForOrder(Long orderId, String method, Strin
         details.put("gatewayResponse", "approved");
         tx.setTransactionDetails(details);
 
-        Transaction savedTransaction = transactionRepository.save(tx);
-        notifyObservers("RETRY_ATTEMPTED", billingEventPayload(savedTransaction.getId(), savedTransaction.getMethod() == null ? null : savedTransaction.getMethod().name(), savedTransaction.getAmount(), Map.of(
-            "retryAttempt", currentRetry + 1,
-            "status", savedTransaction.getStatus().name(),
-            "details", transactionDetails(savedTransaction)
-        )));
-        return savedTransaction;
+        Transaction saved = transactionRepository.save(tx);
+        invalidateTransactionCaches(saved.getId());
+        return saved;
     }
 
-    // ── S5-F8 ── Get Transaction Details with Applied Vouchers ───────────────
+    // ── S5-F8 ── Transaction Details with Vouchers ───────────────────────────
 
     public TransactionDetailsDTO getTransactionDetails(Long transactionId) {
+        String key = f8Key(transactionId);
+        TransactionDetailsDTO cached = cacheService.get(key, TransactionDetailsDTO.class);
+        if (cached != null) return cached;
+
         Transaction tx = transactionRepository.findByIdWithVouchers(transactionId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
                         "Transaction not found with id: " + transactionId));
@@ -452,25 +508,31 @@ public Transaction processTransactionForOrder(Long orderId, String method, Strin
             totalDiscount += tv.getDiscountApplied();
         }
 
-        return TransactionDetailsDTO.builder()
-                .transactionId(tx.getId())
-                .orderId(tx.getOrderId())
-                .userId(tx.getUserId())
-                .originalAmount(tx.getAmount())
-                .method(tx.getMethod().name())
-                .status(tx.getStatus().name())
-                .transactionDetails(tx.getTransactionDetails())
-                .appliedVouchers(appliedVouchers)
-                .totalDiscount(totalDiscount)
-                .finalAmount(tx.getAmount() - totalDiscount)
-                .build();
+        TransactionDetailsDTO dto = new TransactionDetailsDTO();
+        dto.setTransactionId(tx.getId());
+        dto.setOrderId(tx.getOrderId());
+        dto.setUserId(tx.getUserId());
+        dto.setOriginalAmount(tx.getAmount());
+        dto.setMethod(tx.getMethod().name());
+        dto.setStatus(tx.getStatus().name());
+        dto.setTransactionDetails(tx.getTransactionDetails());
+        dto.setAppliedVouchers(appliedVouchers);
+        dto.setTotalDiscount(totalDiscount);
+        dto.setFinalAmount(tx.getAmount() - totalDiscount);
+
+        cacheService.set(key, dto, 15);
+        return dto;
     }
 
-    // ── S5-F9 ── Get Most Used Vouchers Report ───────────────────────────────
+    // ── S5-F9 ── Top Used Vouchers ───────────────────────────────────────────
 
     public List<VoucherUsageDTO> getTopUsedVouchers(int limit) {
-        List<Object[]> rows = transactionVoucherRepository.findTopUsedVouchers();
+        String key = f9Key(limit);
+        List<VoucherUsageDTO> cached =
+                cacheService.get(key, new TypeReference<List<VoucherUsageDTO>>() {});
+        if (cached != null) return cached;
 
+        List<Object[]> rows = transactionVoucherRepository.findTopUsedVouchers();
         List<VoucherUsageDTO> result = new ArrayList<>();
         int count = 0;
 
@@ -480,50 +542,136 @@ public Transaction processTransactionForOrder(Long orderId, String method, Strin
            result.add(objectArrayDtoAdapter.toVoucherUsageDTO(row));
      count++;}
 
+        cacheService.set(key, result, 10);
         return result;
     }
 
-    private Map<String, Object> billingEventPayload(Long transactionId,
-                                                    String method,
-                                                    Double amount,
-                                                    Map<String, Object> details) {
-        Map<String, Object> payload = new HashMap<>();
-        if (transactionId != null) {
-            payload.put("transactionId", transactionId);
+    //[S5-F10] Get Category Revenue with Return Impact
+
+    public List<CategoryRevenueDTO> getCategoryRevenueReport() {
+    String key = f10Key();
+    List<CategoryRevenueDTO> cached = cacheService.get(key, new TypeReference<List<CategoryRevenueDTO>>() {});
+    if (cached != null) return cached;
+    List<Object[]> results = categoryRepository.getCategoryRevenueData();
+    List<CategoryRevenueDTO> report = results.stream()
+        .<CategoryRevenueDTO>map(row -> {
+            String category = (row[0] != null) ? row[0].toString() : "Unknown";
+            Double revenue = (row[1] != null) ? ((Number) row[1]).doubleValue() : 0.0;
+
+            return CategoryRevenueDTO.builder()
+                .categoryName(category)
+                .netRevenue(revenue)
+                .build();
+        })
+        .collect(Collectors.toList());
+
+    mongoEventLogger.logEvent("REVENUE_REPORT_GENERATED", "System-Wide");
+    cacheService.set(key, report, 10);
+    return report;
+}
+
+    //[S5-F11] Get Transaction Lifecycle Audit
+    public List<AuditLogDTO> getTransactionAuditTrail(String transactionId) {
+    String key = f11Key(transactionId);
+    List<AuditLogDTO> cached = cacheService.get(key, new TypeReference<List<AuditLogDTO>>() {});
+    if (cached != null) return cached;
+    List<AuditLogDocument> logs = transactionAuditRepository.findAllByTransactionId(transactionId);
+    List<AuditLogDTO> dtos = logs.stream()
+               .map(mongoDocumentAdapter::toDTO)
+               .collect(Collectors.toList());
+
+    cacheService.set(key, dtos, 15);
+    return dtos;
+}
+
+    // ── S5-F12 ── Process Partial Item Refund ────────────────────────────────
+
+    @Transactional
+    public Transaction processPartialRefund(Long id, RefundRequest request) {
+
+        // Step b — Find transaction
+        Transaction tx = transactionRepository.findById(id)
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND, "Transaction not found"));
+
+        // Step c — Validate COMPLETED
+        if (tx.getStatus() != TransactionStatus.COMPLETED) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "Transaction must be COMPLETED to process a refund");
         }
-        if (method != null) {
-            payload.put("method", method);
+
+        // Step d — Validate orderItemIds if refundAll=false
+        if (!request.isRefundAll()) {
+            if (request.getOrderItemIds() == null || request.getOrderItemIds().isEmpty()) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                        "orderItemIds must not be empty when refundAll is false");
+            }
+            int validCount = transactionRepository.countItemsBelongingToOrder(
+                    request.getOrderItemIds(), tx.getOrderId());
+            if (validCount != request.getOrderItemIds().size()) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                        "Some orderItemIds do not belong to this transaction's order");
+            }
         }
-        if (amount != null) {
-            payload.put("amount", amount);
+
+        // Step e — Select strategy (no if/else branching here — selector does it)
+        RefundStrategy strategy = refundStrategySelector.select(tx, request);
+
+        // Step f — Handle NoRefundStrategy
+        if (strategy instanceof NoRefundStrategy) {
+            Map<String, Object> denialDetails = new HashMap<>();
+            denialDetails.put("refundStrategy", "NoRefundStrategy");
+            denialDetails.put("reason", "return window expired");
+            denialDetails.put("orderItemIds", request.getOrderItemIds());
+
+            writeAuditEvent(tx.getId(), "REFUND_DENIED",
+                    tx.getMethod().name(), tx.getAmount(), denialDetails);
+
+            cacheService.deleteByPattern(SVC + "::S5-F10::*");
+            cacheService.deleteByPattern(SVC + "::S5-F11::*");
+
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "return window expired");
         }
-        payload.put("details", details == null ? new HashMap<>() : new HashMap<>(details));
-        return payload;
+
+        // Step g — Calculate refund
+        RefundResult result = strategy.calculateRefund(tx, request);
+        tx.setStatus(TransactionStatus.REFUNDED);
+
+        // Step h — Write additive JSONB keys
+        Map<String, Object> details = tx.getTransactionDetails();
+        if (details == null) details = new HashMap<>();
+
+        List<Map<String, Object>> refundedItems =
+                buildRefundedItemsList(result.getRefundedItemIds(), tx.getOrderId());
+
+        details.put("refundAmount", result.getAmount());
+        details.put("refundedItems", refundedItems);
+        details.put("refundStrategy", strategy.getClass().getSimpleName());
+        details.put("refundReason", request.getReason());
+        details.put("refundedAt", LocalDateTime.now().toString());
+        tx.setTransactionDetails(details);
+
+        Transaction saved = transactionRepository.save(tx);
+
+        // Step i — Log REFUNDED event to MongoDB
+        Map<String, Object> auditDetails = new HashMap<>();
+        auditDetails.put("refundStrategy", strategy.getClass().getSimpleName());
+        auditDetails.put("reason", request.getReason());
+        auditDetails.put("originalAmount", tx.getAmount());
+        auditDetails.put("refundAmount", result.getAmount());
+        auditDetails.put("refundedItemIds", result.getRefundedItemIds());
+
+        writeAuditEvent(tx.getId(), "REFUNDED",
+                tx.getMethod().name(), result.getAmount(), auditDetails);
+
+        // Step j — Invalidate caches
+        invalidateTransactionCaches(id);
+        cacheService.deleteByPattern(SVC + "::S5-F10::*");
+        cacheService.deleteByPattern(SVC + "::S5-F11::*");
+
+        return saved;
     }
 
-    private Map<String, Object> transactionDetails(Transaction transaction) {
-        Map<String, Object> details = new HashMap<>();
-        if (transaction == null) {
-            return details;
-        }
 
-        details.put("orderId", transaction.getOrderId());
-        details.put("userId", transaction.getUserId());
-        details.put("status", transaction.getStatus() == null ? null : transaction.getStatus().name());
-        details.put("transactionDetails", transaction.getTransactionDetails() == null ? new HashMap<>() : new HashMap<>(transaction.getTransactionDetails()));
-        return details;
-    }
 
-    private Map<String, Object> voucherDetails(Voucher voucher) {
-        Map<String, Object> details = new HashMap<>();
-        if (voucher == null) {
-            return details;
-        }
-
-        details.put("code", voucher.getCode());
-        details.put("discountType", voucher.getDiscountType() == null ? null : voucher.getDiscountType().name());
-        details.put("discountValue", voucher.getDiscountValue());
-        details.put("active", voucher.getActive());
-        return details;
-    }
 }

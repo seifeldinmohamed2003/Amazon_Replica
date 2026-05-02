@@ -17,11 +17,12 @@ public class VoucherController {
 
     @PostMapping
     public ResponseEntity<Voucher> createVoucher(@RequestBody Voucher voucher) {
-        return ResponseEntity.status(201).body(billingService.createVoucher(voucher));
+        return ResponseEntity.status(201).body(billingService.saveVoucher(voucher));
     }
 
     @GetMapping
     public ResponseEntity<List<Voucher>> getAllVouchers() {
+        // list endpoints are NOT cached per spec
         return ResponseEntity.ok(billingService.getAllVouchers());
     }
 
@@ -31,7 +32,8 @@ public class VoucherController {
     }
 
     @PutMapping("/{id}")
-    public ResponseEntity<Voucher> updateVoucher(@PathVariable Long id, @RequestBody Voucher voucher) {
+    public ResponseEntity<Voucher> updateVoucher(
+            @PathVariable Long id, @RequestBody Voucher voucher) {
         return ResponseEntity.ok(billingService.updateVoucher(id, voucher));
     }
 

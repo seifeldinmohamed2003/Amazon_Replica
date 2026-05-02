@@ -146,4 +146,12 @@ public ResponseEntity<Transaction> processTransactionForOrder(
         return ResponseEntity.noContent().build();
     }
 
+
+    @PostMapping("/{id}/refund-items")
+    public ResponseEntity<Transaction> processPartialRefund(
+            @PathVariable Long id,
+            @RequestBody RefundRequest request) {
+        return ResponseEntity.ok(billingService.processPartialRefund(id, request));
+    }
+
 }
