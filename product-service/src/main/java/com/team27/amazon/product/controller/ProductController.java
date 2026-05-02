@@ -18,6 +18,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.team27.amazon.product.dto.LowStockAlertDTO;
+import com.team27.amazon.product.dto.ProductCatalogDashboardDTO;
 import com.team27.amazon.product.dto.ProductRequest;
 import com.team27.amazon.product.dto.ProductResponse;
 import com.team27.amazon.product.dto.ProductReviewRequest;
@@ -67,6 +68,11 @@ public class ProductController {
                 .toList();
     }
 
+    @GetMapping("/catalog/dashboard")
+    public ProductCatalogDashboardDTO getProductCatalogDashboard() {
+        return productService.getProductCatalogDashboard();
+    }
+
     @GetMapping("/{id}")
     public ProductResponse getProductById(@PathVariable Long id) {
         return ProductResponse.from(productService.getProductById(id));
@@ -80,6 +86,8 @@ public class ProductController {
     ) {
         return productService.getProductSalesSummary(id, startDate, endDate);
     }
+
+    
 
     @PutMapping("/{id}")
     public ProductResponse updateProduct(@PathVariable Long id, @Valid @RequestBody ProductRequest request) {

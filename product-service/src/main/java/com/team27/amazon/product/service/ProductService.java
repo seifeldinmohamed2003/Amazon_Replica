@@ -25,6 +25,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.team27.amazon.common.events.AbstractEventSubject;
 import com.team27.amazon.common.events.MongoEventLogger;
 import com.team27.amazon.product.adapter.ObjectArrayDtoAdapter;
+import com.team27.amazon.product.dto.ProductCatalogDashboardDTO;
 import com.team27.amazon.product.dto.LowStockAlertDTO;
 import com.team27.amazon.product.dto.ProductRequest;
 import com.team27.amazon.product.dto.ProductReviewRequest;
@@ -380,6 +381,51 @@ autoIndexProduct(savedProduct, "auto_crud_create");
                     return rows.stream()
                             .map(objectArrayDtoAdapter::toTopProductDTO)
                             .toList();
+                }
+        );
+    }
+
+        public ProductCatalogDashboardDTO getProductCatalogDashboard() {
+        notifyObservers("DASHBOARD_VIEWED", productEventPayload(null, Map.of(
+                "dashboard", "ProductCatalogDashboard",
+                "featureId", "S2-F12"
+        )));
+
+        String cacheKey = ProductCacheKeys.s2f12CatalogDashboard();
+
+        return redisCacheService.getOrLoad(
+                cacheKey,
+                Duration.ofMinutes(10),
+                new TypeReference<ProductCatalogDashboardDTO>() {},
+                () -> {
+                    Long totalProducts = productRepository.countAllProductsForDashboard();
+                    Long outOfStockCount = productRepository.countOutOfStockProductsForDashboard();
+                    Double averageRating = productRepository.averageRatedProductsForDashboard();
+                    Double averagePrice = productRepository.averagePriceForDashboard();
+                    Long lowStockCount = productRepository.countLowStockActiveProductsForDashboard();
+
+                    Map<String, Long> categoryDistribution = new HashMap<>();
+                    List<Object[]> categoryRows = productRepository.countProductsByCategoryForDashboard();
+
+                    for (Object[] row : categoryRows) {
+                        if (row == null || row.length < 2) {
+                            continue;
+                        }
+
+                        String category = row[0] == null ? "UNKNOWN" : String.valueOf(row[0]);
+                        Long count = row[1] == null ? 0L : ((Number) row[1]).longValue();
+
+                        categoryDistribution.put(category, count);
+                    }
+
+                    return ProductCatalogDashboardDTO.builder()
+                            .totalProducts(totalProducts)
+                            .outOfStockCount(outOfStockCount)
+                            .averageRating(averageRating)
+                            .categoryDistribution(categoryDistribution)
+                            .averagePrice(averagePrice)
+                            .lowStockCount(lowStockCount)
+                            .build();
                 }
         );
     }
