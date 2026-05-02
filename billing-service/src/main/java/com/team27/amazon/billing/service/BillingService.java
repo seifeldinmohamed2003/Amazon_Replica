@@ -1,19 +1,10 @@
 package com.team27.amazon.billing.service;
 
-import java.time.LocalDateTime;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Optional;
-
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.beans.factory.annotation.Qualifier;
-import org.springframework.http.HttpStatus;
-import org.springframework.stereotype.Service;
-import org.springframework.web.server.ResponseStatusException;
-
-import com.team27.amazon.billing.adapter.ObjectArrayDtoAdapter;
+import java.util.stream.Collectors;
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.team27.amazon.billing.adapter.MongoDocumentAdapter;
+import com.team27.amazon.billing.dto.AuditLogDTO;
+import com.team27.amazon.billing.dto.CategoryRevenueDTO;
 import com.team27.amazon.billing.dto.RevenueReportDTO;
 import com.team27.amazon.billing.dto.TransactionDetailsDTO;
 import com.team27.amazon.billing.dto.UserTransactionSummaryDTO;
@@ -29,15 +20,41 @@ import com.team27.amazon.billing.repository.TransactionAuditRepository;
 import com.team27.amazon.billing.repository.TransactionRepository;
 import com.team27.amazon.billing.repository.TransactionVoucherRepository;
 import com.team27.amazon.billing.repository.VoucherRepository;
-import com.team27.amazon.common.events.AbstractEventSubject;
-import com.team27.amazon.common.events.MongoEventLogger;
-
-import jakarta.annotation.PostConstruct;
 import jakarta.transaction.Transactional;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.HttpStatus;
+import org.springframework.stereotype.Service;
+import org.springframework.web.server.ResponseStatusException;
+import com.team27.amazon.billing.repository.CategoryRepository;
+import com.team27.amazon.billing.logging.MongoEventLogger;
+import com.team27.amazon.common.events.TransactionAuditEvent;
+import com.team27.amazon.billing.dto.RefundRequest;
+import com.team27.amazon.billing.dto.RefundResult;
+import com.team27.amazon.billing.repository.TransactionAuditEventRepository;
+import com.team27.amazon.billing.strategy.NoRefundStrategy;
+import com.team27.amazon.billing.strategy.RefundStrategy;
+import com.team27.amazon.billing.strategy.RefundStrategySelector;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import java.util.stream.Collectors;
 
 @Service
 public class BillingService {
 
+    private static final Logger log = LoggerFactory.getLogger(BillingService.class);
+
+    @Autowired
+    private TransactionAuditEventRepository auditRepository;
+
+    @Autowired
+    private RefundStrategySelector refundStrategySelector;
     @Autowired
     private TransactionRepository transactionRepository;
     @Autowired
@@ -49,23 +66,36 @@ public class BillingService {
     @Autowired
     private CategoryRepository categoryRepository;
     @Autowired
-    private TransactionAuditRepository transactionAuditRepository; 
+    private TransactionAuditRepository transactionAuditRepository;
     @Autowired
-    private MongoEventLogger mongoEventLogger; 
+    private MongoEventLogger mongoEventLogger;
     @Autowired
     private MongoDocumentAdapter mongoDocumentAdapter;
 
-    private static final Logger log = LoggerFactory.getLogger(BillingService.class);
+    // ── Cache key constants ───────────────────────────────────────────────────
+    private static final String SVC = "billing-service";
 
-    @Autowired
-    private TransactionAuditEventRepository auditRepository;
+    private String txKey(Long id)      { return SVC + "::transaction::" + id; }
+    private String vcKey(Long id)      { return SVC + "::voucher::" + id; }
+    private String tvKey(Long id)      { return SVC + "::transaction-voucher::" + id; }
+    private String f1Key(Object... p)  { return SVC + "::S5-F1::" + cacheService.buildParamHash(p); }
+    private String f3Key(Long userId)  { return SVC + "::S5-F3::" + userId; }
+    private String f6Key(Object... p)  { return SVC + "::S5-F6::" + cacheService.buildParamHash(p); }
+    private String f8Key(Long id)      { return SVC + "::S5-F8::" + id; }
+    private String f9Key(int limit)    { return SVC + "::S5-F9::" + limit; }
+    private String f10Key() { return SVC + "::S5-F10::report"; }
+    private String f11Key(String txId) { return SVC + "::S5-F11::" + txId; }
 
-    @Autowired
-    private ObjectArrayDtoAdapter objectArrayDtoAdapter;
-
-    @PostConstruct
-    public void initObserver() {
-        register(mongoEventLogger);
+    // Invalidate all caches that could be affected by a transaction change
+    private void invalidateTransactionCaches(Long transactionId) {
+        cacheService.delete(txKey(transactionId));
+        cacheService.delete(f8Key(transactionId));
+        cacheService.deleteByPattern(SVC + "::S5-F1::*");
+        cacheService.deleteByPattern(SVC + "::S5-F3::*");
+        cacheService.deleteByPattern(SVC + "::S5-F6::*");
+        cacheService.deleteByPattern(SVC + "::S5-F9::*");
+        cacheService.deleteByPattern(SVC + "::S5-F10::*");
+        cacheService.delete(f11Key(transactionId.toString()));
     }
 
     private void invalidateVoucherCaches(Long voucherId) {
@@ -269,11 +299,11 @@ public class BillingService {
         Map<String, Double> methodBreakdown = new HashMap<>();
         long totalTransactions = 0;
         double totalAmount = 0.0;
-        for (Object[] row : rows) {
-            String method = objectArrayDtoAdapter.toTransactionMethod(row);
-            long count = objectArrayDtoAdapter.toTransactionCount(row);
-            double sum = objectArrayDtoAdapter.toTransactionSum(row);
 
+        for (Object[] row : rows) {
+            String method = (String) row[0];
+            long count = ((Number) row[1]).longValue();
+            double sum = ((Number) row[2]).doubleValue();
             methodBreakdown.put(method, sum);
             totalTransactions += count;
             totalAmount += sum;
@@ -285,82 +315,55 @@ public class BillingService {
         return dto;
     }
 
-@Transactional
-public Transaction processTransactionForOrder(Long orderId, String method, String cardLastFour, boolean simulateFailure) {
-    String orderStatus = transactionRepository.findOrderStatusById(orderId);
-    if (orderStatus == null) {
-        throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Order not found");
+    // ── S5-F4 ── Process Transaction for Order ────────────────────────────────
+
+    @Transactional
+    public Transaction processTransactionForOrder(Long orderId, String method,
+                                                  String cardLastFour, boolean simulateFailure) {
+        String orderStatus = transactionRepository.findOrderStatusById(orderId);
+        if (orderStatus == null) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Order not found");
+        }
+        if (!orderStatus.equals("DELIVERED")) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "Order must be DELIVERED to process payment");
+        }
+
+        int completedCount = transactionRepository.countCompletedTransactionsByOrderId(orderId);
+        if (completedCount > 0) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "already paid");
+        }
+
+        Double amount = transactionRepository.findOrderTotalAmountById(orderId);
+        Long userId = transactionRepository.findUserIdByOrderId(orderId);
+
+        Map<String, Object> details = new HashMap<>();
+        if (cardLastFour != null) details.put("cardLastFour", cardLastFour);
+
+        Transaction transaction = new Transaction();
+        transaction.setOrderId(orderId);
+        transaction.setUserId(userId);
+        transaction.setAmount(amount != null ? amount : 0.0);
+        transaction.setMethod(TransactionMethod.valueOf(method));
+        transaction.setCreatedAt(LocalDateTime.now());
+
+        if (simulateFailure) {
+            details.put("gatewayResponse", "declined");
+            details.put("failureReason", "simulated gateway failure");
+            transaction.setStatus(TransactionStatus.FAILED);
+            transaction.setTransactionDetails(details);
+            Transaction saved = transactionRepository.save(transaction);
+            invalidateTransactionCaches(saved.getId());
+            return saved;
+        }
+
+        details.put("gatewayResponse", "approved");
+        transaction.setStatus(TransactionStatus.COMPLETED);
+        transaction.setTransactionDetails(details);
+        Transaction saved = transactionRepository.save(transaction);
+        invalidateTransactionCaches(saved.getId());
+        return saved;
     }
-    if (!orderStatus.equals("DELIVERED")) {
-        throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                "Order must be DELIVERED to process payment");
-    }
-
-    int completedCount = transactionRepository.countCompletedTransactionsByOrderId(orderId);
-    if (completedCount > 0) {
-        throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "already paid");
-    }
-
-    Double amount = transactionRepository.findOrderTotalAmountById(orderId);
-    Long userId = transactionRepository.findUserIdByOrderId(orderId);
-
-    Map<String, Object> details = new HashMap<>();
-    details.put("gatewayResponse", simulateFailure ? "declined" : "approved");
-    if (cardLastFour != null) {
-        details.put("cardLastFour", cardLastFour);
-    }
-
-    if (simulateFailure) {
-        details.put("failureReason", "simulated failure");
-        details.put("failedAt", LocalDateTime.now().toString());
-    }
-
-    Transaction transaction = new Transaction();
-    transaction.setOrderId(orderId);
-    transaction.setUserId(userId);
-    transaction.setAmount(amount != null ? amount : 0.0);
-    transaction.setMethod(TransactionMethod.valueOf(method));
-    transaction.setStatus(simulateFailure ? TransactionStatus.FAILED : TransactionStatus.COMPLETED);
-    transaction.setTransactionDetails(details);
-    transaction.setCreatedAt(LocalDateTime.now());
-
-    Transaction savedTransaction = transactionRepository.save(transaction);
-
-    if (simulateFailure) {
-        notifyObservers("FAILED", billingEventPayload(
-                savedTransaction.getId(),
-                savedTransaction.getMethod().name(),
-                savedTransaction.getAmount(),
-                Map.of(
-                        "status", savedTransaction.getStatus().name(),
-                        "details", transactionDetails(savedTransaction)
-                )
-        ));
-    } else {
-        notifyObservers("CREATED", billingEventPayload(
-                savedTransaction.getId(),
-                savedTransaction.getMethod().name(),
-                savedTransaction.getAmount(),
-                Map.of(
-                        "status", "PENDING",
-                        "details", transactionDetails(savedTransaction)
-                )
-        ));
-
-        notifyObservers("COMPLETED", billingEventPayload(
-                savedTransaction.getId(),
-                savedTransaction.getMethod().name(),
-                savedTransaction.getAmount(),
-                Map.of(
-                        "status", savedTransaction.getStatus().name(),
-                        "details", transactionDetails(savedTransaction)
-                )
-        ));
-    }
-
-    return savedTransaction;
-}
-
 
     // ── S5-F5 ── Apply Voucher to Transaction ─────────────────────────────────
 
@@ -538,9 +541,19 @@ public Transaction processTransactionForOrder(Long orderId, String method, Strin
 
         for (Object[] row : rows) {
             if (count >= limit) break;
+            Voucher v             = (Voucher) row[0];
+            Integer timesUsed     = ((Number) row[1]).intValue();
+            Double  totalDiscount = ((Number) row[2]).doubleValue();
+            boolean expired       = v.getExpiryDate() != null &&
+                    v.getExpiryDate().isBefore(LocalDateTime.now());
 
-           result.add(objectArrayDtoAdapter.toVoucherUsageDTO(row));
-     count++;}
+            result.add(new VoucherUsageDTO(
+                    v.getId(), v.getCode(), v.getDiscountType().name(),
+                    v.getDiscountValue(), timesUsed, totalDiscount,
+                    v.getActive(), expired
+            ));
+            count++;
+        }
 
         cacheService.set(key, result, 10);
         return result;
@@ -549,40 +562,40 @@ public Transaction processTransactionForOrder(Long orderId, String method, Strin
     //[S5-F10] Get Category Revenue with Return Impact
 
     public List<CategoryRevenueDTO> getCategoryRevenueReport() {
-    String key = f10Key();
-    List<CategoryRevenueDTO> cached = cacheService.get(key, new TypeReference<List<CategoryRevenueDTO>>() {});
-    if (cached != null) return cached;
-    List<Object[]> results = categoryRepository.getCategoryRevenueData();
-    List<CategoryRevenueDTO> report = results.stream()
-        .<CategoryRevenueDTO>map(row -> {
-            String category = (row[0] != null) ? row[0].toString() : "Unknown";
-            Double revenue = (row[1] != null) ? ((Number) row[1]).doubleValue() : 0.0;
+        String key = f10Key();
+        List<CategoryRevenueDTO> cached = cacheService.get(key, new TypeReference<List<CategoryRevenueDTO>>() {});
+        if (cached != null) return cached;
+        List<Object[]> results = categoryRepository.getCategoryRevenueData();
+        List<CategoryRevenueDTO> report = results.stream()
+                .<CategoryRevenueDTO>map(row -> {
+                    String category = (row[0] != null) ? row[0].toString() : "Unknown";
+                    Double revenue = (row[1] != null) ? ((Number) row[1]).doubleValue() : 0.0;
 
-            return CategoryRevenueDTO.builder()
-                .categoryName(category)
-                .netRevenue(revenue)
-                .build();
-        })
-        .collect(Collectors.toList());
+                    return CategoryRevenueDTO.builder()
+                            .categoryName(category)
+                            .netRevenue(revenue)
+                            .build();
+                })
+                .collect(Collectors.toList());
 
-    mongoEventLogger.logEvent("REVENUE_REPORT_GENERATED", "System-Wide");
-    cacheService.set(key, report, 10);
-    return report;
-}
+        mongoEventLogger.logEvent("REVENUE_REPORT_GENERATED", "System-Wide");
+        cacheService.set(key, report, 10);
+        return report;
+    }
 
     //[S5-F11] Get Transaction Lifecycle Audit
     public List<AuditLogDTO> getTransactionAuditTrail(String transactionId) {
-    String key = f11Key(transactionId);
-    List<AuditLogDTO> cached = cacheService.get(key, new TypeReference<List<AuditLogDTO>>() {});
-    if (cached != null) return cached;
-    List<AuditLogDocument> logs = transactionAuditRepository.findAllByTransactionId(transactionId);
-    List<AuditLogDTO> dtos = logs.stream()
-               .map(mongoDocumentAdapter::toDTO)
-               .collect(Collectors.toList());
+        String key = f11Key(transactionId);
+        List<AuditLogDTO> cached = cacheService.get(key, new TypeReference<List<AuditLogDTO>>() {});
+        if (cached != null) return cached;
+        List<AuditLogDocument> logs = transactionAuditRepository.findAllByTransactionId(transactionId);
+        List<AuditLogDTO> dtos = logs.stream()
+                .map(mongoDocumentAdapter::toDTO)
+                .collect(Collectors.toList());
 
-    cacheService.set(key, dtos, 15);
-    return dtos;
-}
+        cacheService.set(key, dtos, 15);
+        return dtos;
+    }
 
     // ── S5-F12 ── Process Partial Item Refund ────────────────────────────────
 
@@ -671,7 +684,4 @@ public Transaction processTransactionForOrder(Long orderId, String method, Strin
 
         return saved;
     }
-
-
-
 }
