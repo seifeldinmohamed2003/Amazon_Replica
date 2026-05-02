@@ -68,6 +68,23 @@ public class ProductController {
                 .toList();
     }
 
+    @GetMapping("/search/full-text")
+    public List<ProductResponse> searchProductsFullText(
+            @RequestParam String query,
+            @RequestParam(required = false) String category,
+            @RequestParam(required = false) String brand,
+            @RequestParam(required = false) ProductStatus status,
+            @RequestParam(required = false) Double minPrice,
+            @RequestParam(required = false) Double maxPrice,
+            @RequestParam(required = false) Double minRating,
+            @RequestParam(required = false) Double maxRating
+    ) {
+        return productService.searchProductsFullText(query, category, brand, status, minPrice, maxPrice, minRating, maxRating)
+                .stream()
+                .map(ProductResponse::from)
+                .toList();
+    }
+
     @GetMapping("/catalog/dashboard")
     public ProductCatalogDashboardDTO getProductCatalogDashboard() {
         return productService.getProductCatalogDashboard();
