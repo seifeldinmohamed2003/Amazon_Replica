@@ -11,6 +11,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -22,9 +23,11 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.team27.amazon.common.events.AbstractEventSubject;
 import com.team27.amazon.common.events.MongoEventLogger;
 import com.team27.amazon.product.adapter.ObjectArrayDtoAdapter;
+import com.team27.amazon.product.dto.ProductCatalogDashboardDTO;
 import com.team27.amazon.product.dto.LowStockAlertDTO;
 import com.team27.amazon.product.dto.ProductRequest;
 import com.team27.amazon.product.dto.ProductReviewRequest;
@@ -148,6 +151,42 @@ autoIndexProduct(savedProduct, "auto_crud_create");
                 Duration.ofMinutes(5),
                 new TypeReference<List<Product>>() {},
                 () -> productRepository.searchByPriceRange(min, max, category)
+        );
+    }
+
+    public List<Product> searchProductsFullText(
+            String query,
+            String category,
+            String brand,
+            ProductStatus status,
+            Double minPrice,
+            Double maxPrice,
+            Double minRating,
+            Double maxRating
+    ) {
+        if (query == null || query.isBlank()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "query must not be blank");
+        }
+
+        validateRange("price", minPrice, maxPrice);
+        validateRange("rating", minRating, maxRating);
+
+        String cacheKey = ProductCacheKeys.s2f10FullText(
+                query,
+                normalizeOptional(category),
+                normalizeOptional(brand),
+                status == null ? null : status.name(),
+                minPrice,
+                maxPrice,
+                minRating,
+                maxRating
+        );
+
+        return redisCacheService.getOrLoad(
+                cacheKey,
+                Duration.ofMinutes(5),
+                new TypeReference<List<Product>>() {},
+                () -> searchFullTextFromElasticsearch(query, category, brand, status, minPrice, maxPrice, minRating, maxRating)
         );
     }
 
@@ -390,6 +429,51 @@ autoIndexProduct(savedProduct, "auto_crud_create");
         );
     }
 
+        public ProductCatalogDashboardDTO getProductCatalogDashboard() {
+        notifyObservers("DASHBOARD_VIEWED", productEventPayload(null, Map.of(
+                "dashboard", "ProductCatalogDashboard",
+                "featureId", "S2-F12"
+        )));
+
+        String cacheKey = ProductCacheKeys.s2f12CatalogDashboard();
+
+        return redisCacheService.getOrLoad(
+                cacheKey,
+                Duration.ofMinutes(10),
+                new TypeReference<ProductCatalogDashboardDTO>() {},
+                () -> {
+                    Long totalProducts = productRepository.countAllProductsForDashboard();
+                    Long outOfStockCount = productRepository.countOutOfStockProductsForDashboard();
+                    Double averageRating = productRepository.averageRatedProductsForDashboard();
+                    Double averagePrice = productRepository.averagePriceForDashboard();
+                    Long lowStockCount = productRepository.countLowStockActiveProductsForDashboard();
+
+                    Map<String, Long> categoryDistribution = new HashMap<>();
+                    List<Object[]> categoryRows = productRepository.countProductsByCategoryForDashboard();
+
+                    for (Object[] row : categoryRows) {
+                        if (row == null || row.length < 2) {
+                            continue;
+                        }
+
+                        String category = row[0] == null ? "UNKNOWN" : String.valueOf(row[0]);
+                        Long count = row[1] == null ? 0L : ((Number) row[1]).longValue();
+
+                        categoryDistribution.put(category, count);
+                    }
+
+                    return ProductCatalogDashboardDTO.builder()
+                            .totalProducts(totalProducts)
+                            .outOfStockCount(outOfStockCount)
+                            .averageRating(averageRating)
+                            .categoryDistribution(categoryDistribution)
+                            .averagePrice(averagePrice)
+                            .lowStockCount(lowStockCount)
+                            .build();
+                }
+        );
+    }
+
     private void applyRequest(Product product, ProductRequest request) {
         product.setName(request.getName());
         product.setDescription(request.getDescription());
@@ -451,6 +535,174 @@ autoIndexProduct(savedProduct, "auto_crud_create");
         details.put("rating", review.getRating());
         details.put("title", review.getTitle());
         return details;
+    }
+
+    private List<Product> searchFullTextFromElasticsearch(
+            String query,
+            String category,
+            String brand,
+            ProductStatus status,
+            Double minPrice,
+            Double maxPrice,
+            Double minRating,
+            Double maxRating
+    ) {
+        try {
+            Map<String, Object> boolQuery = new HashMap<>();
+
+            List<Map<String, Object>> mustClauses = new ArrayList<>();
+            mustClauses.add(Map.of(
+                    "multi_match", Map.of(
+                            "query", query,
+                            "fields", List.of("name^2", "description"),
+                            "operator", "or"
+                    )
+            ));
+            boolQuery.put("must", mustClauses);
+
+            String wildcardText = "*" + query.trim().toLowerCase() + "*";
+            List<Map<String, Object>> shouldClauses = new ArrayList<>();
+            shouldClauses.add(Map.of(
+                    "wildcard", Map.of(
+                            "name", Map.of(
+                                    "value", wildcardText,
+                                    "case_insensitive", true,
+                                    "boost", 2.0
+                            )
+                    )
+            ));
+            shouldClauses.add(Map.of(
+                    "wildcard", Map.of(
+                            "description", Map.of(
+                                    "value", wildcardText,
+                                    "case_insensitive", true
+                            )
+                    )
+            ));
+            boolQuery.put("should", shouldClauses);
+
+            List<Map<String, Object>> filterClauses = buildFullTextFilters(category, brand, status, minPrice, maxPrice, minRating, maxRating);
+            if (!filterClauses.isEmpty()) {
+                boolQuery.put("filter", filterClauses);
+            }
+
+            Map<String, Object> requestBody = Map.of(
+                    "query", Map.of("bool", boolQuery),
+                    "sort", List.of(Map.of("_score", Map.of("order", "desc"))),
+                    "size", 200
+            );
+
+            HttpRequest request = HttpRequest.newBuilder()
+                    .uri(URI.create(elasticsearchUri + "/products/_search"))
+                    .header("Content-Type", "application/json")
+                    .POST(HttpRequest.BodyPublishers.ofString(objectMapper.writeValueAsString(requestBody)))
+                    .build();
+
+            HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+            if (response.statusCode() >= 300) {
+                throw new IllegalStateException("Elasticsearch full-text search failed: " + response.statusCode() + " " + response.body());
+            }
+
+            return mapProductsByRelevance(response.body());
+        } catch (Exception ex) {
+            log.warn("Failed to run full-text product search", ex);
+            return List.of();
+        }
+    }
+
+    private List<Map<String, Object>> buildFullTextFilters(
+            String category,
+            String brand,
+            ProductStatus status,
+            Double minPrice,
+            Double maxPrice,
+            Double minRating,
+            Double maxRating
+    ) {
+        List<Map<String, Object>> filters = new ArrayList<>();
+
+        if (normalizeOptional(category) != null) {
+            filters.add(Map.of("term", Map.of("category", category.trim().toUpperCase())));
+        }
+        if (normalizeOptional(brand) != null) {
+            filters.add(Map.of("term", Map.of("brand", brand.trim())));
+        }
+        if (status != null) {
+            filters.add(Map.of("term", Map.of("status", status.name())));
+        }
+        if (minPrice != null || maxPrice != null) {
+            Map<String, Object> priceRange = new HashMap<>();
+            if (minPrice != null) {
+                priceRange.put("gte", minPrice);
+            }
+            if (maxPrice != null) {
+                priceRange.put("lte", maxPrice);
+            }
+            filters.add(Map.of("range", Map.of("price", priceRange)));
+        }
+        if (minRating != null || maxRating != null) {
+            Map<String, Object> ratingRange = new HashMap<>();
+            if (minRating != null) {
+                ratingRange.put("gte", minRating);
+            }
+            if (maxRating != null) {
+                ratingRange.put("lte", maxRating);
+            }
+            filters.add(Map.of("range", Map.of("rating", ratingRange)));
+        }
+
+        return filters;
+    }
+
+    private List<Product> mapProductsByRelevance(String responseBody) throws Exception {
+        JsonNode root = objectMapper.readTree(responseBody);
+        JsonNode hitNodes = root.path("hits").path("hits");
+
+        if (!hitNodes.isArray() || hitNodes.isEmpty()) {
+            return List.of();
+        }
+
+        List<Long> orderedIds = new ArrayList<>();
+        for (JsonNode hit : hitNodes) {
+            JsonNode productIdNode = hit.path("_source").path("productId");
+            if (productIdNode.isNumber()) {
+                orderedIds.add(productIdNode.asLong());
+            }
+        }
+
+        if (orderedIds.isEmpty()) {
+            return List.of();
+        }
+
+        Map<Long, Product> productById = productRepository.findAllById(orderedIds)
+                .stream()
+                .collect(Collectors.toMap(Product::getId, product -> product));
+
+        List<Product> orderedProducts = new ArrayList<>();
+        for (Long id : orderedIds) {
+            Product product = productById.get(id);
+            if (product != null) {
+                orderedProducts.add(product);
+            }
+        }
+
+        return orderedProducts;
+    }
+
+    private void validateRange(String fieldName, Double min, Double max) {
+        if (min != null && max != null && min > max) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Invalid " + fieldName + " range: min value must be less than or equal to max value"
+            );
+        }
+    }
+
+    private String normalizeOptional(String value) {
+        if (value == null || value.isBlank()) {
+            return null;
+        }
+        return value.trim();
     }
 
 private void autoIndexProduct(Product product, String source) {

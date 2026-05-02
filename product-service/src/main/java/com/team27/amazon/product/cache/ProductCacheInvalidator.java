@@ -37,10 +37,16 @@ public class ProductCacheInvalidator {
         redisCacheService.evictByPattern(ProductCacheKeys.featurePattern("S2-F5"));
         redisCacheService.evictByPattern(ProductCacheKeys.featurePattern("S2-F6"));
         redisCacheService.evictByPattern(ProductCacheKeys.featurePattern("S2-F9"));
+        redisCacheService.evictByPattern(ProductCacheKeys.featurePattern("S2-F10"));
+        redisCacheService.evictByPattern(ProductCacheKeys.featurePattern("S2-F12"));
+
     }
 
     public void invalidateReviewAffectedFeatureCaches() {
         redisCacheService.evictByPattern(ProductCacheKeys.featurePattern("S2-F6"));
         redisCacheService.evictByPattern(ProductCacheKeys.featurePattern("S2-F9"));
+        redisCacheService.evictByPattern(ProductCacheKeys.featurePattern("S2-F10"));
+        redisCacheService.evictByPattern(ProductCacheKeys.featurePattern("S2-F12"));
+
     }
 }
