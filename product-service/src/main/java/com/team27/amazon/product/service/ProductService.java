@@ -116,6 +116,11 @@ autoIndexProduct(savedProduct, "auto_crud_create");
         );
     }
 
+    public void indexProductForSearch(Long id) {
+        Product product = getProductById(id);
+        autoIndexProduct(product, "explicit");
+    }
+
     public List<Product> getProducts(ProductStatus status, String category) {
         if (status != null) {
             return productRepository.findByStatus(status);
@@ -218,7 +223,8 @@ autoIndexProduct(savedProduct, "auto_crud_create");
         Product existing = getProductById(id);
         productRepository.delete(existing);
         autoDeleteProductFromIndex(id);
-        notifyObservers("PRODUCT_DELETED", productEventPayload(id, Map.of()));
+        notifyObservers("PRODUCT_DELETED", productEventPayload(id, Map.of("productId", id,
+                "source", "auto_crud_delete")));
 
         productCacheInvalidator.invalidateProduct(id);
     }
@@ -492,6 +498,7 @@ private void autoIndexProduct(Product product, String source) {
                 ),
                 "source", source
         )));
+        redisCacheService.evictByPattern("product-service::S2-F10::*");
     } catch (Exception e) {
         log.warn("Failed to auto-index product {}", product.getId(), e);
     }
@@ -547,6 +554,8 @@ private void autoDeleteProductFromIndex(Long productId) {
             throw new IllegalStateException("Elasticsearch delete failed: "
                     + response.statusCode() + " " + response.body());
         }
+
+        redisCacheService.evictByPattern("product-service::S2-F10::*");
     } catch (Exception e) {
         log.warn("Failed to delete product {} from Elasticsearch index", productId, e);
     }
