@@ -32,7 +32,7 @@ public SecurityFilterChain securityFilterChain(HttpSecurity http, JwtAuthenticat
                     .requestMatchers("/api/products/health").permitAll()
                     .requestMatchers("/api/auth/register", "/api/auth/login").permitAll()
                     .requestMatchers("/api/products/search/full-text").hasAnyRole("USER", "ADMIN")
-                    .anyRequest().authenticated())
+                    .anyRequest().authenticated()
             )
             .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
 
