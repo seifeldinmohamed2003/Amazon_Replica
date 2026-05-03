@@ -15,7 +15,6 @@ import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
-import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
@@ -39,12 +38,15 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     @Override
     protected boolean shouldNotFilter(HttpServletRequest request) {
         String path = request.getRequestURI();
+
         if (HttpMethod.OPTIONS.matches(request.getMethod())) {
             return true;
         }
+
         return "/api/shipments/health".equals(path)
                 || "/api/auth/register".equals(path)
-                || "/api/auth/login".equals(path);
+                || "/api/auth/login".equals(path)
+                || "/error".equals(path);
     }
 
     @Override
@@ -66,6 +68,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                         ? Collections.emptyList()
                         : Collections.singletonList(new SimpleGrantedAuthority("ROLE_" + context.getRole()))
         );
+
         authentication.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
         SecurityContextHolder.getContext().setAuthentication(authentication);
 
@@ -81,6 +84,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         tokenExtractionHandler.setNext(signatureValidationHandler);
         signatureValidationHandler.setNext(userLoaderHandler);
         userLoaderHandler.setNext(roleAuthorizationHandler);
+
         return tokenExtractionHandler;
     }
 }
