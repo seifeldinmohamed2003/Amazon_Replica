@@ -168,10 +168,9 @@ services:
       SPRING_DATA_REDIS_PASSWORD: redispass
       JWT_SECRET: MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=
       JWT_EXPIRATION_MS: 86400000
-      SPRING_AUTOCONFIGURE_EXCLUDE: >
-        org.springframework.boot.cassandra.autoconfigure.CassandraAutoConfiguration,
-        org.springframework.boot.data.cassandra.autoconfigure.DataCassandraAutoConfiguration
     depends_on:
+      cassandra-init:
+        condition: service_completed_successfully
       postgres:
         condition: service_healthy
   billing-service:

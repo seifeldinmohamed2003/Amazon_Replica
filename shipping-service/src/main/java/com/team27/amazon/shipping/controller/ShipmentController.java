@@ -6,6 +6,7 @@ import com.team27.amazon.shipping.dto.CreateShipmentRequest;
 import com.team27.amazon.shipping.dto.DelayedShipmentDTO;
 import com.team27.amazon.shipping.dto.NearbyShipmentDTO;
 import com.team27.amazon.shipping.dto.ShippingAnalyticsDTO;
+import com.team27.amazon.shipping.dto.ShipmentTrackingDTO;
 import com.team27.amazon.shipping.dto.TrackingEventRequest;
 import com.team27.amazon.shipping.model.Shipment;
 import com.team27.amazon.shipping.model.ShipmentStatus;
@@ -153,4 +154,21 @@ public class ShipmentController {
         int count = shipmentService.batchUpdateStatus(requests);
         return ResponseEntity.status(HttpStatus.CREATED).body(Map.of("count", count));
     }
-} 
+
+    // F12: Get Shipment Tracking Timeline
+    // GET /api/shipments/{id}/tracking?startTime={datetime}&endTime={datetime}
+    // Cache key: shipping-service::S4-F12::{shipmentId}:{startTime}:{endTime}
+    // TTL: 5 minutes
+    @GetMapping("/{id}/tracking")
+    public ResponseEntity<List<ShipmentTrackingDTO>> getShipmentTrackingTimeline(
+            @PathVariable Long id,
+            @RequestParam(required = false) LocalDateTime startTime,
+            @RequestParam(required = false) LocalDateTime endTime
+    ) {
+        List<ShipmentTrackingDTO> trackingTimeline = shipmentService.getShipmentTrackingTimeline(
+                id, startTime, endTime
+        );
+        return ResponseEntity.ok(trackingTimeline);
+    }
+}
+

@@ -31,6 +31,7 @@ import com.team27.amazon.shipping.dto.CreateShipmentRequest;
 import com.team27.amazon.shipping.dto.DelayedShipmentDTO;
 import com.team27.amazon.shipping.dto.NearbyShipmentDTO;
 import com.team27.amazon.shipping.dto.ShippingAnalyticsDTO;
+import com.team27.amazon.shipping.dto.ShipmentTrackingDTO;
 import com.team27.amazon.shipping.dto.TrackingEventRequest;
 import com.team27.amazon.shipping.model.Shipment;
 import com.team27.amazon.shipping.model.ShipmentStatus;
@@ -38,6 +39,7 @@ import com.team27.amazon.shipping.model.cassandra.ShipmentTrackingEvent;
 import com.team27.amazon.shipping.model.cassandra.ShipmentTrackingEventKey;
 import com.team27.amazon.shipping.repository.ShipmentRepository;
 import com.team27.amazon.shipping.repository.ShipmentTrackingEventRepository;
+import com.team27.amazon.shipping.repository.TrackingEventRepository;
 
 import jakarta.annotation.PostConstruct;
 
@@ -49,6 +51,7 @@ public class ShipmentService extends AbstractEventSubject {
     private final JdbcTemplate jdbcTemplate;
     private final ObjectMapper objectMapper;
     private final ObjectArrayDtoAdapter objectArrayDtoAdapter;
+    private final TrackingEventRepository trackingEventRepository;
 
     @Autowired
     @Qualifier("shipmentEventLogger")
@@ -59,13 +62,15 @@ public class ShipmentService extends AbstractEventSubject {
             ShipmentTrackingEventRepository shipmentTrackingEventRepository,
             JdbcTemplate jdbcTemplate,
             ObjectMapper objectMapper,
-            ObjectArrayDtoAdapter objectArrayDtoAdapter
+            ObjectArrayDtoAdapter objectArrayDtoAdapter,
+            TrackingEventRepository trackingEventRepository
     ) {
         this.shipmentRepository = shipmentRepository;
         this.shipmentTrackingEventRepository = shipmentTrackingEventRepository;
         this.jdbcTemplate = jdbcTemplate;
         this.objectMapper = objectMapper;
         this.objectArrayDtoAdapter = objectArrayDtoAdapter;
+        this.trackingEventRepository = trackingEventRepository;
     }
 
     @PostConstruct
@@ -559,6 +564,63 @@ public class ShipmentService extends AbstractEventSubject {
 
         return existingShipments.size();
     }
+
+    // F12: Get Shipment Tracking Timeline - TTL 5 min
+    // Cache key: shipping-service::S4-F12::{shipmentId}:{startTime}:{endTime}
+    @Cacheable(cacheNames = RedisConfiguration.CACHE_S4_F12,
+               key = "#shipmentId + ':' + (#startTime != null ? #startTime.toString() : 'all') + ':' + (#endTime != null ? #endTime.toString() : 'all')")
+    public List<ShipmentTrackingDTO> getShipmentTrackingTimeline(
+            Long shipmentId,
+            LocalDateTime startTime,
+            LocalDateTime endTime
+    ) {
+        // Verify shipment exists in PostgreSQL
+        if (!shipmentRepository.existsById(shipmentId)) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Shipment not found");
+        }
+
+        List<ShipmentTrackingEvent> events;
+
+        if (startTime != null && endTime != null) {
+            events = trackingEventRepository.findByShipmentIdAndTimestampBetweenOrderByTimestampDesc(
+                    shipmentId, startTime, endTime
+            );
+        } else if (startTime != null) {
+            events = trackingEventRepository.findByShipmentIdAndTimestampAfterOrderByTimestampDesc(
+                    shipmentId, startTime
+            );
+        } else if (endTime != null) {
+            events = trackingEventRepository.findByShipmentIdAndTimestampBeforeOrderByTimestampDesc(
+                    shipmentId, endTime
+            );
+        } else {
+            events = trackingEventRepository.findByShipmentIdOrderByTimestampDesc(shipmentId);
+        }
+
+        return events.stream()
+                .map(event -> ShipmentTrackingDTO.builder()
+                        .timestamp(event.getKey().getTimestamp())
+                        .status(event.getStatus())
+                        .carrier(event.getCarrier())
+                        .trackingNumber(event.getTrackingNumber())
+                        .latitude(event.getLatitude())
+                        .longitude(event.getLongitude())
+                        .notes(event.getNotes())
+                        .build())
+                .collect(Collectors.toList());
+    }
+
+    /**
+     * Save a tracking event for a shipment (used by S4-F11).
+     * This method also invalidates the S4-F12 cache for this shipment.
+     */
+    @Caching(evict = {
+        @CacheEvict(cacheNames = RedisConfiguration.CACHE_S4_F12, allEntries = true)
+    })
+    public ShipmentTrackingEvent saveTrackingEvent(ShipmentTrackingEvent event) {
+        return trackingEventRepository.save(event);
+    }
+
 
     private LocalDate toLocalDate(Object value) {
         if (value == null) {
