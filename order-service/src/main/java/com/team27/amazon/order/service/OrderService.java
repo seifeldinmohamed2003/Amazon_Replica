@@ -19,9 +19,12 @@ import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
+import org.springframework.data.redis.core.StringRedisTemplate;
+import com.fasterxml.jackson.databind.ObjectMapper;
 
 import com.team27.amazon.order.dto.AddOrderItemRequest;
 import com.team27.amazon.order.dto.OrderAnalyticsDTO;
+import com.team27.amazon.order.dto.OrderAnalyticsDashboardDTO;
 import com.team27.amazon.order.dto.OrderDetailsDTO;
 import com.team27.amazon.order.dto.OrderEstimateDTO;
 import com.team27.amazon.order.dto.OrderEstimateItemRequestDTO;
@@ -72,6 +75,12 @@ public class OrderService extends AbstractEventSubject {
 }
     @Autowired
     private TransactionJdbcRepository transactionJdbcRepository;
+
+    @Autowired(required = false)
+    private StringRedisTemplate stringRedisTemplate;
+
+    @Autowired
+    private ObjectMapper objectMapper;
 
     @Autowired
     @Qualifier("orderEventLogger")
@@ -455,6 +464,96 @@ public class OrderService extends AbstractEventSubject {
                 .build();
     }
 
+    /**
+     * S3-F10 Get Order Analytics Dashboard
+     */
+    public OrderAnalyticsDashboardDTO getOrderAnalyticsDashboard(LocalDate startDate, LocalDate endDate) {
+        if (startDate == null || endDate == null || startDate.isAfter(endDate)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid date range");
+        }
+
+        // Expand to full-day range
+        LocalDateTime rangeStart = startDate.atStartOfDay();
+        LocalDateTime rangeEnd = endDate.atTime(java.time.LocalTime.MAX);
+
+        // Prepare analytics viewed event payload and notify observers (orderId=0 for dashboard-level events)
+        Map<String, Object> details = new HashMap<>();
+        details.put("startDate", startDate.toString());
+        details.put("endDate", endDate.toString());
+        details.put("featureId", "S3-F10");
+        details.put("endpoint", "/api/orders/analytics/dashboard");
+
+        notifyObservers("ANALYTICS_VIEWED", orderEventPayload(0L, details));
+
+        String paramKey = startDate.toString() + "_" + endDate.toString();
+        String cacheKey = "order-service::S3-F10::" + paramKey;
+
+        // Try Redis read (soft dependency)
+        if (stringRedisTemplate != null) {
+            try {
+                String cached = stringRedisTemplate.opsForValue().get(cacheKey);
+                if (cached != null) {
+                    try {
+                        return objectMapper.readValue(cached, OrderAnalyticsDashboardDTO.class);
+                    } catch (Exception ex) {
+                        // fall through to recompute
+                    }
+                }
+            } catch (RuntimeException ex) {
+                // Soft dependency: log and continue
+                System.err.println("Warning: Redis read failed: " + ex.getMessage());
+            }
+        }
+
+        // Compute from DB
+        List<Order> orders = orderRepository.findByOrderedAtBetween(rangeStart, rangeEnd);
+
+        long totalOrders = orders.size();
+
+        double totalRevenue = orders.stream()
+                .map(Order::getTotalAmount)
+                .filter(amount -> amount != null)
+                .mapToDouble(Double::doubleValue)
+                .sum();
+
+        double averageOrderValue = totalOrders == 0 ? 0.0 : totalRevenue / (double) totalOrders;
+
+        long deliveredOrders = orders.stream().filter(o -> o.getStatus() == OrderStatus.DELIVERED).count();
+
+        double completionRate = totalOrders == 0 ? 0.0 : ((double) deliveredOrders) / (double) totalOrders;
+
+        // Build ordersByStatus with all supported statuses included
+        Map<String, Long> ordersByStatus = new HashMap<>();
+        for (OrderStatus s : OrderStatus.values()) {
+            ordersByStatus.put(s.name(), 0L);
+        }
+        orders.stream().forEach(o -> ordersByStatus.put(o.getStatus().name(), ordersByStatus.getOrDefault(o.getStatus().name(), 0L) + 1));
+
+        OrderAnalyticsDashboardDTO dto = OrderAnalyticsDashboardDTO.builder()
+                .totalOrders(totalOrders)
+                .totalRevenue(totalRevenue)
+                .averageOrderValue(averageOrderValue)
+                .completionRate(completionRate)
+                .ordersByStatus(ordersByStatus)
+                .build();
+
+        // Try Redis write
+        if (stringRedisTemplate != null) {
+            try {
+                try {
+                    String payload = objectMapper.writeValueAsString(dto);
+                    stringRedisTemplate.opsForValue().set(cacheKey, payload, java.time.Duration.ofMinutes(10));
+                } catch (Exception ex) {
+                    System.err.println("Warning: Redis write serialization failed: " + ex.getMessage());
+                }
+            } catch (RuntimeException ex) {
+                System.err.println("Warning: Redis write failed: " + ex.getMessage());
+            }
+        }
+
+        return dto;
+    }
+
     @Transactional
     public Order confirmOrder(Long orderId, Long shippingAddressId) {
         Order order = orderRepository.findById(orderId)
@@ -559,11 +658,15 @@ public class OrderService extends AbstractEventSubject {
 
         order.setStatus(OrderStatus.CANCELLED);
         Order savedOrder = orderRepository.save(order);
-        notifyObservers("ORDER_CANCELLED", orderEventPayload(savedOrder.getId(), Map.of(
-                "status", savedOrder.getStatus().name(),
-                "userId", savedOrder.getUserId(),
-                "totalAmount", savedOrder.getTotalAmount()
-        )));
+        Map<String, Object> cancelDetails = new HashMap<>();
+        cancelDetails.put("status", savedOrder.getStatus().name());
+        if (savedOrder.getUserId() != null) {
+            cancelDetails.put("userId", savedOrder.getUserId());
+        }
+        if (savedOrder.getTotalAmount() != null) {
+            cancelDetails.put("totalAmount", savedOrder.getTotalAmount());
+        }
+        notifyObservers("ORDER_CANCELLED", orderEventPayload(savedOrder.getId(), cancelDetails));
         return savedOrder;
     }
 
