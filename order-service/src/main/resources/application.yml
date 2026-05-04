@@ -19,6 +19,8 @@ spring:
       host: redis
       port: 6379
       password: redispass
+      timeout: 1s
+      connect-timeout: 1s
   neo4j:
     uri: bolt://neo4j:7687
     username: neo4j

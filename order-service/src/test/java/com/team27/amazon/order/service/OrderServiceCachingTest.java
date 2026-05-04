@@ -21,6 +21,11 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.ArgumentMatchers;
+import org.slf4j.LoggerFactory;
+import ch.qos.logback.classic.Level;
+import ch.qos.logback.classic.Logger;
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.core.read.ListAppender;
 
 import java.time.Duration;
 import java.time.LocalDate;
@@ -33,9 +38,12 @@ import java.util.Optional;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doReturn;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.verify;
@@ -193,17 +201,106 @@ class OrderServiceCachingTest {
     }
 
     @Test
-    void orderGetByIdCachingUsesEntityKeyAndFifteenMinutes() {
+    void orderGetByIdCacheMissStoresSnapshotWithEntityKeyAndFifteenMinutes() {
         Order order = new Order();
         order.setId(42L);
+        order.setUserId(7L);
+        order.setStatus(OrderStatus.PENDING);
+        order.setMetadata(Map.of("source", "WEB"));
+        order.setOrderedAt(LocalDateTime.of(2026, 3, 10, 9, 15));
 
-        when(orderRedisCacheService.get("order-service::order::42", Order.class)).thenReturn(Optional.empty());
+        when(orderRedisCacheService.orderKey(42L)).thenReturn("order-service::order::42");
+        doReturn(Optional.empty()).when(orderRedisCacheService).get(eq("order-service::order::42"), ArgumentMatchers.any(Class.class));
         when(orderRepository.findById(42L)).thenReturn(Optional.of(order));
 
         Optional<Order> result = orderService.getOrderById(42L);
 
         assertEquals(42L, result.orElseThrow().getId());
-        verify(orderRedisCacheService).set("order-service::order::42", order, Duration.ofMinutes(15));
+        verify(orderRedisCacheService).set(eq("order-service::order::42"), any(), eq(Duration.ofMinutes(15)));
+    }
+
+    @Test
+    void orderGetByIdCacheHitReturnsCachedOrderAndSkipsRepository() {
+        Order order = new Order();
+        order.setId(42L);
+        order.setUserId(7L);
+        order.setStatus(OrderStatus.CONFIRMED);
+        order.setMetadata(Map.of("source", "MOBILE"));
+        order.setOrderedAt(LocalDateTime.of(2026, 3, 10, 9, 15));
+
+        when(orderRedisCacheService.orderKey(42L)).thenReturn("order-service::order::42");
+        doReturn(Optional.of(OrderService.OrderCacheSnapshot.from(order)))
+                .when(orderRedisCacheService)
+                .get(eq("order-service::order::42"), ArgumentMatchers.any(Class.class));
+
+        Optional<Order> result = orderService.getOrderById(42L);
+
+        assertEquals(42L, result.orElseThrow().getId());
+        assertEquals(OrderStatus.CONFIRMED, result.orElseThrow().getStatus());
+        verify(orderRepository, never()).findById(42L);
+        verify(orderRedisCacheService, never()).set(eq("order-service::order::42"), any(), any(Duration.class));
+    }
+
+    @Test
+    void orderGetByIdRedisFailuresStillReturnDbResultAndLogWarnings() {
+        Order order = new Order();
+        order.setId(42L);
+        order.setUserId(7L);
+        order.setStatus(OrderStatus.PENDING);
+        order.setMetadata(Map.of("source", "WEB"));
+        order.setOrderedAt(LocalDateTime.of(2026, 3, 10, 9, 15));
+
+        when(orderRedisCacheService.orderKey(42L)).thenReturn("order-service::order::42");
+        doThrow(new RuntimeException("redis get failed"))
+                .when(orderRedisCacheService)
+                .get(eq("order-service::order::42"), ArgumentMatchers.any(Class.class));
+        when(orderRepository.findById(42L)).thenReturn(Optional.of(order));
+
+        Logger logger = (Logger) LoggerFactory.getLogger(OrderService.class);
+        ListAppender<ILoggingEvent> appender = new ListAppender<>();
+        appender.start();
+        logger.addAppender(appender);
+        try {
+            Optional<Order> result = orderService.getOrderById(42L);
+
+            assertEquals(42L, result.orElseThrow().getId());
+            assertTrue(appender.list.stream().anyMatch(event ->
+                    event.getLevel() == Level.WARN
+                            && event.getFormattedMessage().contains("Redis get failed for key order-service::order::42")));
+        } finally {
+            logger.detachAppender(appender);
+        }
+
+        Order setFailureOrder = new Order();
+        setFailureOrder.setId(43L);
+        setFailureOrder.setUserId(7L);
+        setFailureOrder.setStatus(OrderStatus.PENDING);
+        setFailureOrder.setMetadata(Map.of("source", "WEB"));
+        setFailureOrder.setOrderedAt(LocalDateTime.of(2026, 3, 10, 9, 15));
+
+        when(orderRedisCacheService.orderKey(43L)).thenReturn("order-service::order::43");
+        doReturn(Optional.empty())
+                .when(orderRedisCacheService)
+                .get(eq("order-service::order::43"), ArgumentMatchers.any(Class.class));
+        when(orderRepository.findById(43L)).thenReturn(Optional.of(setFailureOrder));
+        doThrow(new RuntimeException("redis set failed"))
+                .when(orderRedisCacheService)
+                .set(eq("order-service::order::43"), any(), eq(Duration.ofMinutes(15)));
+
+        Logger loggerForSet = (Logger) LoggerFactory.getLogger(OrderService.class);
+        ListAppender<ILoggingEvent> setAppender = new ListAppender<>();
+        setAppender.start();
+        loggerForSet.addAppender(setAppender);
+        try {
+            Optional<Order> result = orderService.getOrderById(43L);
+
+            assertEquals(43L, result.orElseThrow().getId());
+            assertTrue(setAppender.list.stream().anyMatch(event ->
+                    event.getLevel() == Level.WARN
+                            && event.getFormattedMessage().contains("Redis set failed for key order-service::order::43")));
+        } finally {
+            loggerForSet.detachAppender(setAppender);
+        }
     }
 
     @Test

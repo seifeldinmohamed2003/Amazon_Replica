@@ -16,6 +16,8 @@ import com.team27.amazon.common.events.AbstractEventSubject;
 import com.team27.amazon.common.events.MongoEventLogger;
 import com.team27.amazon.order.cache.OrderRedisCacheService;
 import com.fasterxml.jackson.core.type.TypeReference;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.http.HttpStatus;
@@ -43,6 +45,8 @@ import jakarta.annotation.PostConstruct;
 
 @Service
 public class OrderService extends AbstractEventSubject {
+
+    private static final Logger log = LoggerFactory.getLogger(OrderService.class);
 
     private static final double SHIPPING_THRESHOLD = 500.0;
     private static final double SHIPPING_FLAT_RATE = 50.0;
@@ -297,14 +301,14 @@ public class OrderService extends AbstractEventSubject {
 
     // READ - Get order by ID
     public Optional<Order> getOrderById(Long id) {
-        String cacheKey = "order-service::order::" + id;
-        Optional<Order> cached = cacheGet(cacheKey, Order.class);
+        String cacheKey = orderRedisCacheService == null ? null : orderRedisCacheService.orderKey(id);
+        Optional<OrderCacheSnapshot> cached = cacheGet(cacheKey, OrderCacheSnapshot.class);
         if (cached.isPresent()) {
-            return cached;
+            return Optional.of(cached.get().toOrder());
         }
 
         Optional<Order> dbOrder = orderRepository.findById(id);
-        dbOrder.ifPresent(order -> cacheSet(cacheKey, order, FIFTEEN_MINUTES));
+        dbOrder.ifPresent(order -> cacheSet(cacheKey, OrderCacheSnapshot.from(order), FIFTEEN_MINUTES));
         return dbOrder;
     }
 
@@ -751,6 +755,7 @@ public class OrderService extends AbstractEventSubject {
         try {
             return orderRedisCacheService.get(key, type);
         } catch (RuntimeException ex) {
+            log.warn("Redis get failed for key {}", key, ex);
             return Optional.empty();
         }
     }
@@ -762,6 +767,7 @@ public class OrderService extends AbstractEventSubject {
         try {
             return orderRedisCacheService.get(key, typeReference);
         } catch (RuntimeException ex) {
+            log.warn("Redis get failed for key {}", key, ex);
             return Optional.empty();
         }
     }
@@ -773,7 +779,7 @@ public class OrderService extends AbstractEventSubject {
         try {
             orderRedisCacheService.set(key, value, ttl);
         } catch (RuntimeException ex) {
-            // Redis is a soft dependency; ignore cache write failures.
+            log.warn("Redis set failed for key {}", key, ex);
         }
     }
 
@@ -833,6 +839,116 @@ public class OrderService extends AbstractEventSubject {
         payload.put("orderId", orderId);
         payload.put("details", details == null ? new HashMap<>() : new HashMap<>(details));
         return payload;
+    }
+
+    static final class OrderCacheSnapshot {
+        private Long id;
+        private Long userId;
+        private Long shippingAddressId;
+        private String status;
+        private Double totalAmount;
+        private Map<String, Object> metadata;
+        private String orderedAt;
+        private String deliveredAt;
+
+        public OrderCacheSnapshot() {
+        }
+
+        static OrderCacheSnapshot from(Order order) {
+            OrderCacheSnapshot snapshot = new OrderCacheSnapshot();
+            snapshot.setId(order.getId());
+            snapshot.setUserId(order.getUserId());
+            snapshot.setShippingAddressId(order.getShippingAddressId());
+            snapshot.setStatus(order.getStatus() == null ? null : order.getStatus().name());
+            snapshot.setTotalAmount(order.getTotalAmount());
+            snapshot.setMetadata(order.getMetadata() == null ? new HashMap<>() : new HashMap<>(order.getMetadata()));
+            snapshot.setOrderedAt(order.getOrderedAt() == null ? null : order.getOrderedAt().toString());
+            snapshot.setDeliveredAt(order.getDeliveredAt() == null ? null : order.getDeliveredAt().toString());
+            return snapshot;
+        }
+
+        Order toOrder() {
+            Order order = new Order();
+            order.setId(id);
+            order.setUserId(userId);
+            order.setShippingAddressId(shippingAddressId);
+            if (status != null) {
+                order.setStatus(OrderStatus.valueOf(status));
+            }
+            order.setTotalAmount(totalAmount);
+            order.setMetadata(metadata == null ? new HashMap<>() : new HashMap<>(metadata));
+            if (orderedAt != null) {
+                order.setOrderedAt(LocalDateTime.parse(orderedAt));
+            }
+            if (deliveredAt != null) {
+                order.setDeliveredAt(LocalDateTime.parse(deliveredAt));
+            }
+            return order;
+        }
+
+        public Long getId() {
+            return id;
+        }
+
+        public void setId(Long id) {
+            this.id = id;
+        }
+
+        public Long getUserId() {
+            return userId;
+        }
+
+        public void setUserId(Long userId) {
+            this.userId = userId;
+        }
+
+        public Long getShippingAddressId() {
+            return shippingAddressId;
+        }
+
+        public void setShippingAddressId(Long shippingAddressId) {
+            this.shippingAddressId = shippingAddressId;
+        }
+
+        public String getStatus() {
+            return status;
+        }
+
+        public void setStatus(String status) {
+            this.status = status;
+        }
+
+        public Double getTotalAmount() {
+            return totalAmount;
+        }
+
+        public void setTotalAmount(Double totalAmount) {
+            this.totalAmount = totalAmount;
+        }
+
+        public Map<String, Object> getMetadata() {
+            return metadata;
+        }
+
+        public void setMetadata(Map<String, Object> metadata) {
+            this.metadata = metadata;
+        }
+
+        public String getOrderedAt() {
+            return orderedAt;
+        }
+
+        public void setOrderedAt(String orderedAt) {
+            this.orderedAt = orderedAt;
+        }
+
+        public String getDeliveredAt() {
+            return deliveredAt;
+        }
+
+        public void setDeliveredAt(String deliveredAt) {
+            this.deliveredAt = deliveredAt;
+        }
     }
 
 }
