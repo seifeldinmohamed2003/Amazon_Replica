@@ -10,6 +10,7 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.Optional;
 import java.util.Map;
+import org.springframework.data.neo4j.core.Neo4jClient;
 import java.util.LinkedHashSet;
 
 import com.team27.amazon.common.events.AbstractEventSubject;
@@ -24,7 +25,8 @@ import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
-
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.cache.CacheManager;
 import com.team27.amazon.order.dto.AddOrderItemRequest;
 import com.team27.amazon.order.dto.OrderAnalyticsDTO;
 import com.team27.amazon.order.dto.OrderAnalyticsDashboardDTO;
@@ -40,7 +42,16 @@ import com.team27.amazon.order.repository.ProductJdbcRepository;
 import com.team27.amazon.order.repository.ShipmentJdbcRepository;
 import com.team27.amazon.order.repository.ShippingAddressJdbcRepository;
 import com.team27.amazon.order.repository.TransactionJdbcRepository;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import org.springframework.cache.CacheManager;
+import org.springframework.http.HttpStatus;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.server.ResponseStatusException;
 
+import com.team27.amazon.order.dto.CoPurchaseRecordResponse;
 import jakarta.annotation.PostConstruct;
 
 @Service
@@ -50,6 +61,9 @@ public class OrderService extends AbstractEventSubject {
 
     private static final double SHIPPING_THRESHOLD = 500.0;
     private static final double SHIPPING_FLAT_RATE = 50.0;
+    private OrderItemRepository orderItemRepository;
+    @Autowired
+    private CacheManager cacheManager;
     private static final Duration FIVE_MINUTES = Duration.ofMinutes(5);
     private static final Duration TEN_MINUTES = Duration.ofMinutes(10);
     private static final Duration FIFTEEN_MINUTES = Duration.ofMinutes(15);
@@ -58,7 +72,8 @@ public class OrderService extends AbstractEventSubject {
     private OrderRepository orderRepository;
     @Autowired
     private ShipmentJdbcRepository shipmentJdbcRepository;
-
+    @Autowired
+    private Neo4jClient neo4jClient;
     @Autowired
     private ShippingAddressJdbcRepository shippingAddressJdbcRepository;
 
@@ -720,6 +735,11 @@ public class OrderService extends AbstractEventSubject {
 
         order.setStatus(OrderStatus.CANCELLED);
         Order savedOrder = orderRepository.save(order);
+        Map<String, Object> eventDetails = new HashMap<>();
+        eventDetails.put("status", savedOrder.getStatus().name());
+        eventDetails.put("userId", savedOrder.getUserId());
+        eventDetails.put("totalAmount", savedOrder.getTotalAmount() == null ? 0 : savedOrder.getTotalAmount());
+        notifyObservers("ORDER_CANCELLED", orderEventPayload(savedOrder.getId(), eventDetails));
         Map<String, Object> cancelDetails = new HashMap<>();
         cancelDetails.put("status", savedOrder.getStatus().name());
         if (savedOrder.getUserId() != null) {
@@ -733,7 +753,138 @@ public class OrderService extends AbstractEventSubject {
         invalidateProductDashboardCache();
         return savedOrder;
     }
+    @Transactional
+    public CoPurchaseRecordResponse recordProductCoPurchase(Long orderId) {
+        Order order = orderRepository.findByIdWithItems(orderId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Order not found"));
 
+        if (order.getStatus() != OrderStatus.DELIVERED) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "Only DELIVERED orders can be recorded for co-purchase");
+        }
+
+        List<Long> productIds = order.getOrderItems().stream()
+                .map(OrderItem::getProductId)
+                .filter(Objects::nonNull)
+                .distinct()
+                .sorted()
+                .toList();
+
+        if (productIds.size() < 2) {
+            return new CoPurchaseRecordResponse(
+                    orderId,
+                    productIds,
+                    0,
+                    false,
+                    "Order has fewer than two distinct products; no co-purchase pairs recorded"
+            );
+        }
+
+        boolean alreadyRecorded = neo4jClient.query("""
+                    MATCH (ro:RecordedOrder {orderId: $orderId})
+                    RETURN count(ro) > 0 AS recorded
+                    """)
+                .bind(orderId).to("orderId")
+                .fetchAs(Boolean.class)
+                .one()
+                .orElse(false);
+
+        if (alreadyRecorded) {
+            return new CoPurchaseRecordResponse(
+                    orderId,
+                    productIds,
+                    0,
+                    true,
+                    "Order was already recorded; no changes made"
+            );
+        }
+
+        Map<Long, ProductSnapshot> snapshots = loadProductSnapshots(productIds);
+
+        for (Long productId : productIds) {
+            ProductSnapshot snapshot = snapshots.get(productId);
+
+            neo4jClient.query("""
+                        MERGE (p:ProductNode {productId: $productId})
+                        SET p.name = $name,
+                            p.category = $category
+                        """)
+                    .bind(productId).to("productId")
+                    .bind(snapshot == null ? "" : snapshot.name).to("name")
+                    .bind(snapshot == null ? "" : snapshot.category).to("category")
+                    .run();
+        }
+
+        int pairsRecorded = 0;
+
+        for (int i = 0; i < productIds.size(); i++) {
+            for (int j = i + 1; j < productIds.size(); j++) {
+                Long firstId = productIds.get(i);
+                Long secondId = productIds.get(j);
+
+                neo4jClient.query("""
+                            MATCH (a:ProductNode {productId: $firstId})
+                            MATCH (b:ProductNode {productId: $secondId})
+                            MERGE (a)-[r:BOUGHT_TOGETHER]->(b)
+                            ON CREATE SET
+                                r.coPurchaseCount = 1,
+                                r.lastCoPurchaseDate = datetime()
+                            ON MATCH SET
+                                r.coPurchaseCount = coalesce(r.coPurchaseCount, 0) + 1,
+                                r.lastCoPurchaseDate = datetime()
+                            """)
+                        .bind(firstId).to("firstId")
+                        .bind(secondId).to("secondId")
+                        .run();
+
+                pairsRecorded++;
+            }
+        }
+
+        neo4jClient.query("""
+                    MERGE (:RecordedOrder {orderId: $orderId})
+                    """)
+                .bind(orderId).to("orderId")
+                .run();
+        var cache = cacheManager.getCache("order:recommendations");
+        if (cache != null) {
+            cache.clear();
+        }
+        notifyObservers("INTERACTION_RECORDED", Map.of(
+                "orderId", orderId,
+                "details", Map.of(
+                        "orderId", orderId,
+                        "productIds", productIds,
+                        "pairsRecorded", pairsRecorded
+                )
+        ));
+
+        // Optional, if your project already has Redis wildcard invalidation:
+        // cacheService.deleteByPattern("order-service::S3-F12::*");
+
+        return new CoPurchaseRecordResponse(
+                orderId,
+                productIds,
+                pairsRecorded,
+                false,
+                "Co-purchase relationships recorded successfully"
+        );
+    }
+    private Map<Long, ProductSnapshot> loadProductSnapshots(List<Long> productIds) {
+        Map<Long, ProductSnapshot> snapshots = new HashMap<>();
+
+        List<Object[]> rows = orderRepository.findProductSnapshotsByIds(productIds);
+
+        for (Object[] row : rows) {
+            Long productId = ((Number) row[0]).longValue();
+            String name = row[1] == null ? "" : row[1].toString();
+            String category = row[2] == null ? "" : row[2].toString();
+
+            snapshots.put(productId, new ProductSnapshot(productId, name, category));
+        }
+
+        return snapshots;
+    }
     private Map<String, Object> cacheParams(Object... keyValues) {
         if (orderRedisCacheService == null) {
             return new HashMap<>();
@@ -840,6 +991,15 @@ public class OrderService extends AbstractEventSubject {
         payload.put("details", details == null ? new HashMap<>() : new HashMap<>(details));
         return payload;
     }
+    private static class ProductSnapshot {
+        private final Long productId;
+        private final String name;
+        private final String category;
+
+        private ProductSnapshot(Long productId, String name, String category) {
+            this.productId = productId;
+            this.name = name;
+            this.category = category;
 
     static final class OrderCacheSnapshot {
         private Long id;
