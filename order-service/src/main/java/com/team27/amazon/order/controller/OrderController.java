@@ -24,6 +24,7 @@ import com.team27.amazon.order.service.OrderService;
 import org.springframework.web.bind.annotation.*;
 
 import com.team27.amazon.order.dto.OrderAnalyticsDTO;
+import com.team27.amazon.order.dto.OrderAnalyticsDashboardDTO;
 import com.team27.amazon.order.dto.OrderDetailsDTO;
 import com.team27.amazon.order.dto.OrderEstimateDTO;
 import com.team27.amazon.order.dto.OrderEstimateItemRequestDTO;
@@ -191,6 +192,15 @@ public class OrderController {
     @PostMapping("/{orderId}/record-co-purchase")
     public ResponseEntity<CoPurchaseRecordResponse> recordProductCoPurchase(@PathVariable Long orderId) {
         return ResponseEntity.ok(orderService.recordProductCoPurchase(orderId));
+
+    @GetMapping("/analytics/dashboard")
+    public ResponseEntity<OrderAnalyticsDashboardDTO> getOrderAnalyticsDashboard(
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate) {
+
+        return ResponseEntity.ok(
+                orderService.getOrderAnalyticsDashboard(startDate, endDate)
+        );
     }
 }
 

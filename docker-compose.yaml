@@ -162,21 +162,21 @@ services:
       SPRING_DATASOURCE_USERNAME: postgres
       SPRING_DATASOURCE_PASSWORD: postgres
       SPRING_DATA_MONGODB_URI: mongodb://root:rootpass@mongo:27017/amazonmongo?authSource=admin
+      SPRING_MONGODB_URI: mongodb://root:rootpass@mongo:27017/amazonmongo?authSource=admin
       SPRING_DATA_REDIS_HOST: redis
       SPRING_DATA_REDIS_PORT: 6379
       SPRING_DATA_REDIS_PASSWORD: redispass
       JWT_SECRET: MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=
       JWT_EXPIRATION_MS: 86400000
-      SPRING_AUTOCONFIGURE_EXCLUDE: >
-        org.springframework.boot.cassandra.autoconfigure.CassandraAutoConfiguration,
-        org.springframework.boot.data.cassandra.autoconfigure.DataCassandraAutoConfiguration
     depends_on:
+      cassandra-init:
+        condition: service_completed_successfully
       postgres:
         condition: service_healthy
   billing-service:
     build: ./billing-service
     ports:
-      - "8080:8080"
+      - "8085:8080"
     environment:
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/amazondb
       SPRING_DATASOURCE_USERNAME: postgres

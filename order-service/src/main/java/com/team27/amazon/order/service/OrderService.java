@@ -3,16 +3,22 @@ package com.team27.amazon.order.service;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
+import java.time.Duration;
 import java.util.HashMap;
-import java.util.Collections;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Optional;
 import java.util.Map;
 import org.springframework.data.neo4j.core.Neo4jClient;
+import java.util.LinkedHashSet;
+
 import com.team27.amazon.common.events.AbstractEventSubject;
 import com.team27.amazon.common.events.MongoEventLogger;
+import com.team27.amazon.order.cache.OrderRedisCacheService;
+import com.fasterxml.jackson.core.type.TypeReference;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.http.HttpStatus;
@@ -23,6 +29,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.cache.CacheManager;
 import com.team27.amazon.order.dto.AddOrderItemRequest;
 import com.team27.amazon.order.dto.OrderAnalyticsDTO;
+import com.team27.amazon.order.dto.OrderAnalyticsDashboardDTO;
 import com.team27.amazon.order.dto.OrderDetailsDTO;
 import com.team27.amazon.order.dto.OrderEstimateDTO;
 import com.team27.amazon.order.dto.OrderEstimateItemRequestDTO;
@@ -30,7 +37,6 @@ import com.team27.amazon.order.dto.OrderItemDetailsDTO;
 import com.team27.amazon.order.model.Order;
 import com.team27.amazon.order.model.OrderItem;
 import com.team27.amazon.order.model.OrderStatus;
-import com.team27.amazon.order.repository.OrderItemRepository;
 import com.team27.amazon.order.repository.OrderRepository;
 import com.team27.amazon.order.repository.ProductJdbcRepository;
 import com.team27.amazon.order.repository.ShipmentJdbcRepository;
@@ -51,11 +57,17 @@ import jakarta.annotation.PostConstruct;
 @Service
 public class OrderService extends AbstractEventSubject {
 
+    private static final Logger log = LoggerFactory.getLogger(OrderService.class);
+
     private static final double SHIPPING_THRESHOLD = 500.0;
     private static final double SHIPPING_FLAT_RATE = 50.0;
     private OrderItemRepository orderItemRepository;
     @Autowired
     private CacheManager cacheManager;
+    private static final Duration FIVE_MINUTES = Duration.ofMinutes(5);
+    private static final Duration TEN_MINUTES = Duration.ofMinutes(10);
+    private static final Duration FIFTEEN_MINUTES = Duration.ofMinutes(15);
+
     @Autowired
     private OrderRepository orderRepository;
     @Autowired
@@ -84,6 +96,9 @@ public class OrderService extends AbstractEventSubject {
     @Autowired
     private TransactionJdbcRepository transactionJdbcRepository;
 
+    @Autowired(required = false)
+    private OrderRedisCacheService orderRedisCacheService;
+
     @Autowired
     @Qualifier("orderEventLogger")
     private MongoEventLogger mongoEventLogger;
@@ -104,6 +119,7 @@ public class OrderService extends AbstractEventSubject {
                 "status", savedOrder.getStatus() == null ? null : savedOrder.getStatus().name(),
                 "totalAmount", savedOrder.getTotalAmount()
         )));
+            invalidateOrderFeatureCaches();
         return savedOrder;
     }
     @Transactional
@@ -181,12 +197,21 @@ public class OrderService extends AbstractEventSubject {
         notifyObservers("ITEMS_ADDED", orderEventPayload(savedOrder.getId(), Map.of(
                 "details", Map.of("addedItems", requests.size())
         )));
+        invalidateOrderCaches(orderId);
+        invalidateOrderItemFeatureCaches();
+        invalidateProductDashboardCache();
         return reloadOrderWithSortedItems(orderId);
     }
 
     public OrderEstimateDTO estimateOrderPrice(List<OrderEstimateItemRequestDTO> items) {
         if (items == null || items.isEmpty()) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Items list must not be empty");
+        }
+
+        String cacheKey = buildFeatureKey("S3-F3", items);
+        Optional<OrderEstimateDTO> cached = cacheGet(cacheKey, OrderEstimateDTO.class);
+        if (cached.isPresent()) {
+            return cached.get();
         }
 
         int itemCount = 0;
@@ -210,13 +235,16 @@ public class OrderService extends AbstractEventSubject {
         double shippingCost = subtotal >= SHIPPING_THRESHOLD ? 0.0 : SHIPPING_FLAT_RATE;
         double estimatedTotal = (subtotal * (1 - (discountApplied / 100.0))) + shippingCost;
 
-        return OrderEstimateDTO.builder()
+        OrderEstimateDTO estimate = OrderEstimateDTO.builder()
                 .itemCount(itemCount)
                 .subtotal(subtotal)
                 .shippingCost(shippingCost)
                 .estimatedTotal(estimatedTotal)
                 .discountApplied(discountApplied)
                 .build();
+
+        cacheSet(cacheKey, estimate, FIVE_MINUTES);
+        return estimate;
     }
 
     private double calculateDiscountPercent(int itemCount) {
@@ -232,6 +260,12 @@ public class OrderService extends AbstractEventSubject {
 
 
     public OrderDetailsDTO getOrderDetails(Long orderId) {
+        String cacheKey = "order-service::S3-F9::" + orderId;
+        Optional<OrderDetailsDTO> cached = cacheGet(cacheKey, OrderDetailsDTO.class);
+        if (cached.isPresent()) {
+            return cached.get();
+        }
+
         Order order = orderRepository.findByIdWithItems(orderId)
                 .orElseThrow(() -> new ResponseStatusException(
                         HttpStatus.NOT_FOUND,
@@ -260,7 +294,7 @@ public class OrderService extends AbstractEventSubject {
             totalQuantity += item.getQuantity();
         }
 
-        return OrderDetailsDTO.builder()
+        OrderDetailsDTO detailsDTO = OrderDetailsDTO.builder()
                 .orderId(order.getId())
                 .userId(order.getUserId())
                 .shippingAddressId(order.getShippingAddressId())
@@ -271,6 +305,9 @@ public class OrderService extends AbstractEventSubject {
                 .totalItems(itemDTOs.size())
                 .totalQuantity(totalQuantity)
                 .build();
+
+            cacheSet(cacheKey, detailsDTO, TEN_MINUTES);
+            return detailsDTO;
     }
     // READ - Get all orders
     public List<Order> getAllOrders() {
@@ -279,7 +316,15 @@ public class OrderService extends AbstractEventSubject {
 
     // READ - Get order by ID
     public Optional<Order> getOrderById(Long id) {
-        return orderRepository.findById(id);
+        String cacheKey = orderRedisCacheService == null ? null : orderRedisCacheService.orderKey(id);
+        Optional<OrderCacheSnapshot> cached = cacheGet(cacheKey, OrderCacheSnapshot.class);
+        if (cached.isPresent()) {
+            return Optional.of(cached.get().toOrder());
+        }
+
+        Optional<Order> dbOrder = orderRepository.findById(id);
+        dbOrder.ifPresent(order -> cacheSet(cacheKey, OrderCacheSnapshot.from(order), FIFTEEN_MINUTES));
+        return dbOrder;
     }
 
     // READ - Get orders by user ID
@@ -307,10 +352,23 @@ public class OrderService extends AbstractEventSubject {
         LocalDateTime rangeStart = startDate.atStartOfDay();
         LocalDateTime rangeEnd = endDate.atTime(LocalTime.MAX);
 
-        return orderRepository.findByOrderedAtBetween(rangeStart, rangeEnd).stream()
+        String cacheKey = buildFeatureKey("S3-F1", cacheParams(
+                "status", status == null ? null : status.name(),
+                "startDate", startDate,
+                "endDate", endDate
+        ));
+        Optional<List<Order>> cached = cacheGet(cacheKey, new TypeReference<List<Order>>() {});
+        if (cached.isPresent()) {
+            return cached.get();
+        }
+
+        List<Order> result = orderRepository.findByOrderedAtBetween(rangeStart, rangeEnd).stream()
                 .filter(order -> status == null || order.getStatus() == status)
                 .sorted(Comparator.comparing(Order::getOrderedAt).reversed())
                 .toList();
+
+        cacheSet(cacheKey, result, FIVE_MINUTES);
+        return result;
     }
 
     // UPDATE
@@ -340,6 +398,8 @@ public class OrderService extends AbstractEventSubject {
                     "totalAmount", savedOrder.getTotalAmount(),
                     "userId", savedOrder.getUserId()
             )));
+            invalidateOrderCaches(savedOrder.getId());
+            invalidateProductDashboardCache();
             return savedOrder;
         });
     }
@@ -349,6 +409,8 @@ public class OrderService extends AbstractEventSubject {
         if (orderRepository.existsById(id)) {
             orderRepository.deleteById(id);
             notifyObservers("ORDER_DELETED", orderEventPayload(id, Map.of()));
+            invalidateOrderCaches(id);
+            invalidateProductDashboardCache();
             return true;
         }
         return false;
@@ -413,6 +475,9 @@ public class OrderService extends AbstractEventSubject {
             "totalAmount", savedOrder.getTotalAmount()
         )));
 
+        invalidateOrderCaches(savedOrder.getId());
+        invalidateProductDashboardCache();
+
         return savedOrder;
     }
     public List<Order> searchOrdersByMetadata(String key, String value) {
@@ -423,7 +488,15 @@ public class OrderService extends AbstractEventSubject {
             );
         }
 
-        return orderRepository.findByMetadataField(key, value);
+        String cacheKey = buildFeatureKey("S3-F5", cacheParams("key", key, "value", value));
+        Optional<List<Order>> cached = cacheGet(cacheKey, new TypeReference<List<Order>>() {});
+        if (cached.isPresent()) {
+            return cached.get();
+        }
+
+        List<Order> result = orderRepository.findByMetadataField(key, value);
+        cacheSet(cacheKey, result, FIVE_MINUTES);
+        return result;
     }
     public OrderAnalyticsDTO getOrderAnalytics(LocalDateTime startDate, LocalDateTime endDate) {
         if (startDate == null || endDate == null || startDate.isAfter(endDate)) {
@@ -431,6 +504,12 @@ public class OrderService extends AbstractEventSubject {
                     HttpStatus.BAD_REQUEST,
                     "Invalid date range"
             );
+        }
+
+        String cacheKey = buildFeatureKey("S3-F6", cacheParams("startDate", startDate, "endDate", endDate));
+        Optional<OrderAnalyticsDTO> cached = cacheGet(cacheKey, OrderAnalyticsDTO.class);
+        if (cached.isPresent()) {
+            return cached.get();
         }
 
         List<Order> orders = orderRepository.findByOrderedAtBetween(startDate, endDate);
@@ -456,7 +535,7 @@ public class OrderService extends AbstractEventSubject {
 
         double completionRate = totalOrders == 0 ? 0.0 : (deliveredOrders * 100.0) / totalOrders;
 
-        return OrderAnalyticsDTO.builder()
+        OrderAnalyticsDTO analyticsDTO = OrderAnalyticsDTO.builder()
                 .totalOrders(totalOrders)
                 .deliveredOrders(deliveredOrders)
                 .cancelledOrders(cancelledOrders)
@@ -464,6 +543,90 @@ public class OrderService extends AbstractEventSubject {
                 .averageOrderValue(averageOrderValue)
                 .completionRate(completionRate)
                 .build();
+
+        cacheSet(cacheKey, analyticsDTO, TEN_MINUTES);
+        return analyticsDTO;
+    }
+
+    /**
+     * S3-F10 Get Order Analytics Dashboard
+     */
+    public OrderAnalyticsDashboardDTO getOrderAnalyticsDashboard(LocalDate startDate, LocalDate endDate) {
+        if (startDate == null || endDate == null || startDate.isAfter(endDate)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid date range");
+        }
+
+        // Expand to full-day range
+        LocalDateTime rangeStart = startDate.atStartOfDay();
+        LocalDateTime rangeEnd = endDate.atTime(java.time.LocalTime.MAX);
+
+        // Prepare analytics viewed event payload and notify observers (orderId=0 for dashboard-level events)
+        Map<String, Object> details = new HashMap<>();
+        details.put("startDate", startDate.toString());
+        details.put("endDate", endDate.toString());
+        details.put("featureId", "S3-F10");
+        details.put("endpoint", "/api/orders/analytics/dashboard");
+
+        notifyObservers("ANALYTICS_VIEWED", orderEventPayload(0L, details));
+
+        String cacheKey = orderRedisCacheService == null
+                ? "order-service::S3-F10::" + startDate + "_" + endDate
+                : orderRedisCacheService.s3f10DashboardKey(startDate, endDate);
+
+        if (orderRedisCacheService != null) {
+            try {
+                Optional<OrderAnalyticsDashboardDTO> cached = orderRedisCacheService.get(cacheKey, OrderAnalyticsDashboardDTO.class);
+                if (cached.isPresent()) {
+                    return cached.get();
+                }
+            } catch (RuntimeException ex) {
+                // Soft dependency: log and continue
+                System.err.println("Warning: Redis read failed: " + ex.getMessage());
+            }
+        }
+
+        // Compute from DB
+        List<Order> orders = orderRepository.findByOrderedAtBetween(rangeStart, rangeEnd);
+
+        long totalOrders = orders.size();
+
+        double totalRevenue = orders.stream()
+                .map(Order::getTotalAmount)
+                .filter(amount -> amount != null)
+                .mapToDouble(Double::doubleValue)
+                .sum();
+
+        double averageOrderValue = totalOrders == 0 ? 0.0 : totalRevenue / (double) totalOrders;
+
+        long deliveredOrders = orders.stream().filter(o -> o.getStatus() == OrderStatus.DELIVERED).count();
+
+        double completionRate = totalOrders == 0 ? 0.0 : ((double) deliveredOrders) / (double) totalOrders;
+
+        // Build ordersByStatus with all supported statuses included
+        Map<String, Long> ordersByStatus = new HashMap<>();
+        for (OrderStatus s : OrderStatus.values()) {
+            ordersByStatus.put(s.name(), 0L);
+        }
+        orders.stream().forEach(o -> ordersByStatus.put(o.getStatus().name(), ordersByStatus.getOrDefault(o.getStatus().name(), 0L) + 1));
+
+        OrderAnalyticsDashboardDTO dto = OrderAnalyticsDashboardDTO.builder()
+                .totalOrders(totalOrders)
+                .totalRevenue(totalRevenue)
+                .averageOrderValue(averageOrderValue)
+                .completionRate(completionRate)
+                .ordersByStatus(ordersByStatus)
+                .build();
+
+        // Try Redis write
+        if (orderRedisCacheService != null) {
+            try {
+                orderRedisCacheService.set(cacheKey, dto, Duration.ofMinutes(10));
+            } catch (RuntimeException ex) {
+                System.err.println("Warning: Redis write failed: " + ex.getMessage());
+            }
+        }
+
+        return dto;
     }
 
     @Transactional
@@ -539,6 +702,8 @@ public class OrderService extends AbstractEventSubject {
             "totalAmount", savedOrder.getTotalAmount(),
             "shippingAddressId", savedOrder.getShippingAddressId()
         )));
+        invalidateOrderCaches(savedOrder.getId());
+        invalidateProductDashboardCache();
         return savedOrder;
     }
 
@@ -575,6 +740,17 @@ public class OrderService extends AbstractEventSubject {
         eventDetails.put("userId", savedOrder.getUserId());
         eventDetails.put("totalAmount", savedOrder.getTotalAmount() == null ? 0 : savedOrder.getTotalAmount());
         notifyObservers("ORDER_CANCELLED", orderEventPayload(savedOrder.getId(), eventDetails));
+        Map<String, Object> cancelDetails = new HashMap<>();
+        cancelDetails.put("status", savedOrder.getStatus().name());
+        if (savedOrder.getUserId() != null) {
+            cancelDetails.put("userId", savedOrder.getUserId());
+        }
+        if (savedOrder.getTotalAmount() != null) {
+            cancelDetails.put("totalAmount", savedOrder.getTotalAmount());
+        }
+        notifyObservers("ORDER_CANCELLED", orderEventPayload(savedOrder.getId(), cancelDetails));
+        invalidateOrderCaches(savedOrder.getId());
+        invalidateProductDashboardCache();
         return savedOrder;
     }
     @Transactional
@@ -709,6 +885,106 @@ public class OrderService extends AbstractEventSubject {
 
         return snapshots;
     }
+    private Map<String, Object> cacheParams(Object... keyValues) {
+        if (orderRedisCacheService == null) {
+            return new HashMap<>();
+        }
+        return orderRedisCacheService.orderedParams(keyValues);
+    }
+
+    private String buildFeatureKey(String featureId, Object params) {
+        if (orderRedisCacheService == null) {
+            return "";
+        }
+        return orderRedisCacheService.featureKey(featureId, params);
+    }
+
+    private <T> Optional<T> cacheGet(String key, Class<T> type) {
+        if (orderRedisCacheService == null || key == null || key.isBlank()) {
+            return Optional.empty();
+        }
+        try {
+            return orderRedisCacheService.get(key, type);
+        } catch (RuntimeException ex) {
+            log.warn("Redis get failed for key {}", key, ex);
+            return Optional.empty();
+        }
+    }
+
+    private <T> Optional<T> cacheGet(String key, TypeReference<T> typeReference) {
+        if (orderRedisCacheService == null || key == null || key.isBlank()) {
+            return Optional.empty();
+        }
+        try {
+            return orderRedisCacheService.get(key, typeReference);
+        } catch (RuntimeException ex) {
+            log.warn("Redis get failed for key {}", key, ex);
+            return Optional.empty();
+        }
+    }
+
+    private void cacheSet(String key, Object value, Duration ttl) {
+        if (orderRedisCacheService == null || key == null || key.isBlank()) {
+            return;
+        }
+        try {
+            orderRedisCacheService.set(key, value, ttl);
+        } catch (RuntimeException ex) {
+            log.warn("Redis set failed for key {}", key, ex);
+        }
+    }
+
+    private void invalidateOrderCaches(Long orderId) {
+        if (orderRedisCacheService == null) {
+            return;
+        }
+        if (orderId != null) {
+            try {
+                orderRedisCacheService.delete(orderRedisCacheService.orderKey(orderId));
+            } catch (RuntimeException ex) {
+                // Redis is a soft dependency; ignore cache delete failures.
+            }
+        }
+        invalidateOrderFeatureCaches();
+    }
+
+    private void invalidateOrderFeatureCaches() {
+        if (orderRedisCacheService == null) {
+            return;
+        }
+        for (String featureId : new LinkedHashSet<>(List.of("S3-F1", "S3-F3", "S3-F5", "S3-F6", "S3-F9", "S3-F10"))) {
+            try {
+                orderRedisCacheService.deleteByPattern("order-service::" + featureId + "::*");
+            } catch (RuntimeException ex) {
+                // Redis is a soft dependency; ignore wildcard delete failures.
+            }
+        }
+    }
+
+    private void invalidateOrderItemFeatureCaches() {
+        if (orderRedisCacheService == null) {
+            return;
+        }
+        for (String featureId : List.of("S3-F3", "S3-F6", "S3-F9", "S3-F10")) {
+            try {
+                orderRedisCacheService.deleteByPattern("order-service::" + featureId + "::*");
+            } catch (RuntimeException ex) {
+                // Redis is a soft dependency; ignore wildcard delete failures.
+            }
+        }
+    }
+
+    private void invalidateProductDashboardCache() {
+        if (orderRedisCacheService == null) {
+            return;
+        }
+        try {
+            orderRedisCacheService.deleteByPattern("product-service::S2-F12::*");
+        } catch (RuntimeException ex) {
+            // Redis is a soft dependency; ignore wildcard delete failures.
+        }
+    }
+
     private Map<String, Object> orderEventPayload(Long orderId, Map<String, Object> details) {
         Map<String, Object> payload = new HashMap<>();
         payload.put("orderId", orderId);
@@ -724,6 +1000,114 @@ public class OrderService extends AbstractEventSubject {
             this.productId = productId;
             this.name = name;
             this.category = category;
+
+    static final class OrderCacheSnapshot {
+        private Long id;
+        private Long userId;
+        private Long shippingAddressId;
+        private String status;
+        private Double totalAmount;
+        private Map<String, Object> metadata;
+        private String orderedAt;
+        private String deliveredAt;
+
+        public OrderCacheSnapshot() {
+        }
+
+        static OrderCacheSnapshot from(Order order) {
+            OrderCacheSnapshot snapshot = new OrderCacheSnapshot();
+            snapshot.setId(order.getId());
+            snapshot.setUserId(order.getUserId());
+            snapshot.setShippingAddressId(order.getShippingAddressId());
+            snapshot.setStatus(order.getStatus() == null ? null : order.getStatus().name());
+            snapshot.setTotalAmount(order.getTotalAmount());
+            snapshot.setMetadata(order.getMetadata() == null ? new HashMap<>() : new HashMap<>(order.getMetadata()));
+            snapshot.setOrderedAt(order.getOrderedAt() == null ? null : order.getOrderedAt().toString());
+            snapshot.setDeliveredAt(order.getDeliveredAt() == null ? null : order.getDeliveredAt().toString());
+            return snapshot;
+        }
+
+        Order toOrder() {
+            Order order = new Order();
+            order.setId(id);
+            order.setUserId(userId);
+            order.setShippingAddressId(shippingAddressId);
+            if (status != null) {
+                order.setStatus(OrderStatus.valueOf(status));
+            }
+            order.setTotalAmount(totalAmount);
+            order.setMetadata(metadata == null ? new HashMap<>() : new HashMap<>(metadata));
+            if (orderedAt != null) {
+                order.setOrderedAt(LocalDateTime.parse(orderedAt));
+            }
+            if (deliveredAt != null) {
+                order.setDeliveredAt(LocalDateTime.parse(deliveredAt));
+            }
+            return order;
+        }
+
+        public Long getId() {
+            return id;
+        }
+
+        public void setId(Long id) {
+            this.id = id;
+        }
+
+        public Long getUserId() {
+            return userId;
+        }
+
+        public void setUserId(Long userId) {
+            this.userId = userId;
+        }
+
+        public Long getShippingAddressId() {
+            return shippingAddressId;
+        }
+
+        public void setShippingAddressId(Long shippingAddressId) {
+            this.shippingAddressId = shippingAddressId;
+        }
+
+        public String getStatus() {
+            return status;
+        }
+
+        public void setStatus(String status) {
+            this.status = status;
+        }
+
+        public Double getTotalAmount() {
+            return totalAmount;
+        }
+
+        public void setTotalAmount(Double totalAmount) {
+            this.totalAmount = totalAmount;
+        }
+
+        public Map<String, Object> getMetadata() {
+            return metadata;
+        }
+
+        public void setMetadata(Map<String, Object> metadata) {
+            this.metadata = metadata;
+        }
+
+        public String getOrderedAt() {
+            return orderedAt;
+        }
+
+        public void setOrderedAt(String orderedAt) {
+            this.orderedAt = orderedAt;
+        }
+
+        public String getDeliveredAt() {
+            return deliveredAt;
+        }
+
+        public void setDeliveredAt(String deliveredAt) {
+            this.deliveredAt = deliveredAt;
         }
     }
 

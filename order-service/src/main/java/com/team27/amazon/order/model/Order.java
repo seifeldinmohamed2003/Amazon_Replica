@@ -46,7 +46,7 @@ public class Order {
     private Double totalAmount;
 
     @JdbcTypeCode(SqlTypes.JSON)
-    @Column(columnDefinition = "text", nullable = false)
+    @Column(columnDefinition = "jsonb", nullable = false)
     private Map<String, Object> metadata = new HashMap<>();
 
     @CreationTimestamp

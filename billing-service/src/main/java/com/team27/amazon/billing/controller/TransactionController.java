@@ -16,11 +16,13 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
-
+import com.team27.amazon.billing.dto.RefundRequest;
 import com.team27.amazon.billing.dto.RevenueReportDTO;
 import com.team27.amazon.billing.dto.TransactionDetailsDTO;
 import com.team27.amazon.billing.dto.UserTransactionSummaryDTO;
 import com.team27.amazon.billing.dto.VoucherUsageDTO;
+import com.team27.amazon.billing.dto.CategoryRevenueDTO;
+import com.team27.amazon.billing.dto.AuditLogDTO;
 import com.team27.amazon.billing.model.Transaction;
 import com.team27.amazon.billing.service.BillingService;
 
@@ -62,21 +64,21 @@ public class TransactionController {
         return ResponseEntity.ok(billingService.getUserTransactionSummary(userId));
     }
 
-@PostMapping("/order/{orderId}")
-public ResponseEntity<Transaction> processTransactionForOrder(
-        @PathVariable Long orderId,
-        @RequestBody Map<String, String> body,
-        @RequestParam(defaultValue = "false") boolean simulateFailure) {
+    @PostMapping("/order/{orderId}")
+    public ResponseEntity<Transaction> processTransactionForOrder(
+            @PathVariable Long orderId,
+            @RequestBody Map<String, String> body,
+            @RequestParam(defaultValue = "false") boolean simulateFailure) {
 
-    Transaction t = billingService.processTransactionForOrder(
-            orderId,
-            body.get("method"),
-            body.get("cardLastFour"),
-            simulateFailure
-    );
+        Transaction t = billingService.processTransactionForOrder(
+                orderId,
+                body.get("method"),
+                body.get("cardLastFour"),
+                simulateFailure
+        );
 
-    return ResponseEntity.status(201).body(t);
-}
+        return ResponseEntity.status(201).body(t);
+    }
     @PostMapping("/{transactionId}/voucher/{voucherId}")
     public ResponseEntity<TransactionDetailsDTO> applyVoucher(
             @PathVariable Long transactionId,
@@ -123,6 +125,21 @@ public ResponseEntity<Transaction> processTransactionForOrder(
         return ResponseEntity.ok(billingService.getTopUsedVouchers(limit));
     }
 
+    // ── S5-F10 ── GET /api/transactions/reports/category-revenue ──────────────
+
+    @GetMapping("/reports/category-revenue")
+    public ResponseEntity<List<CategoryRevenueDTO>> getCategoryRevenueReport() {
+        return ResponseEntity.ok(billingService.getCategoryRevenueReport());
+    }
+
+    // ── S5-F11 ── GET /api/transactions/{transactionId}/audit-trail ──────────
+
+    @GetMapping("/{transactionId}/audit-trail")
+    public ResponseEntity<List<AuditLogDTO>> getTransactionAuditTrail(
+            @PathVariable String transactionId) {
+        return ResponseEntity.ok(billingService.getTransactionAuditTrail(transactionId));
+    }
+
     @GetMapping
     public ResponseEntity<List<Transaction>> getAllTransactions() {
         return ResponseEntity.ok(billingService.getAllTransactions());
@@ -140,10 +157,19 @@ public ResponseEntity<Transaction> processTransactionForOrder(
         return ResponseEntity.ok(billingService.updateTransaction(id, transaction));
     }
 
+
     @DeleteMapping("/{id}")
     public ResponseEntity<Void> deleteTransaction(@PathVariable Long id) {
         billingService.deleteTransaction(id);
         return ResponseEntity.noContent().build();
+    }
+
+
+    @PostMapping("/{id}/refund-items")
+    public ResponseEntity<Transaction> processPartialRefund(
+            @PathVariable Long id,
+            @RequestBody RefundRequest request) {
+        return ResponseEntity.ok(billingService.processPartialRefund(id, request));
     }
 
 }
