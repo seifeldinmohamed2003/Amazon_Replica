@@ -570,11 +570,11 @@ public class OrderService extends AbstractEventSubject {
 
         order.setStatus(OrderStatus.CANCELLED);
         Order savedOrder = orderRepository.save(order);
-        notifyObservers("ORDER_CANCELLED", orderEventPayload(savedOrder.getId(), Map.of(
-                "status", savedOrder.getStatus().name(),
-                "userId", savedOrder.getUserId(),
-                "totalAmount", savedOrder.getTotalAmount()
-        )));
+        Map<String, Object> eventDetails = new HashMap<>();
+        eventDetails.put("status", savedOrder.getStatus().name());
+        eventDetails.put("userId", savedOrder.getUserId());
+        eventDetails.put("totalAmount", savedOrder.getTotalAmount() == null ? 0 : savedOrder.getTotalAmount());
+        notifyObservers("ORDER_CANCELLED", orderEventPayload(savedOrder.getId(), eventDetails));
         return savedOrder;
     }
     @Transactional
