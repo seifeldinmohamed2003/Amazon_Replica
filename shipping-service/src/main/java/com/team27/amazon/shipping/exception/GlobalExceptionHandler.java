@@ -1,4 +1,4 @@
-package com.team27.amazon.billing.controller;
+package com.team27.amazon.shipping.exception;
 
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;

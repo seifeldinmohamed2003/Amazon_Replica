@@ -17,7 +17,10 @@ public class RoleAuthorizationHandler extends AuthHandler {
             return AuthResult.failure(HttpStatus.FORBIDDEN.value(), "Insufficient role");
         }
 
-        // ADMIN can access CUSTOMER-level endpoints too
+        if ("USER".equalsIgnoreCase(requiredRole) || "AUTHENTICATED".equalsIgnoreCase(requiredRole)) {
+            return callNext(context);
+        }
+
         if ("ADMIN".equalsIgnoreCase(actualRole)) {
             return callNext(context);
         }
