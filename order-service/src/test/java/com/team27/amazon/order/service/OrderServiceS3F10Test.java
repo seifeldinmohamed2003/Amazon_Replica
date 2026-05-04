@@ -1,12 +1,10 @@
 package com.team27.amazon.order.service;
 
+import com.team27.amazon.order.cache.OrderRedisCacheService;
 import com.team27.amazon.order.dto.OrderAnalyticsDashboardDTO;
 import com.team27.amazon.order.model.Order;
 import com.team27.amazon.order.model.OrderStatus;
 import com.team27.amazon.order.repository.OrderRepository;
-import org.springframework.data.redis.core.StringRedisTemplate;
-import org.springframework.data.redis.core.ValueOperations;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import java.time.Duration;
 import org.mockito.ArgumentCaptor;
 import org.junit.jupiter.api.BeforeEach;
@@ -15,7 +13,6 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.data.redis.core.StringRedisTemplate;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -36,13 +33,7 @@ class OrderServiceS3F10Test {
     private com.team27.amazon.common.events.MongoEventLogger orderEventLogger; // stub only
 
     @Mock
-    private StringRedisTemplate stringRedisTemplate;
-
-    @Mock
-    private ValueOperations<String, String> valueOperations;
-
-    @Mock
-    private ObjectMapper objectMapper;
+    private OrderRedisCacheService orderRedisCacheService;
 
     @InjectMocks
     private OrderService orderService;
@@ -100,7 +91,7 @@ class OrderServiceS3F10Test {
         LocalDate start = LocalDate.of(2026, 3, 1);
         LocalDate end = LocalDate.of(2026, 3, 31);
 
-        String cacheKey = "order-service::S3-F10::" + start.toString() + "_" + end.toString();
+        String cacheKey = "order-service::S3-F10::" + start + "_" + end;
 
         OrderAnalyticsDashboardDTO cachedDto = OrderAnalyticsDashboardDTO.builder()
                 .totalOrders(5)
@@ -110,9 +101,8 @@ class OrderServiceS3F10Test {
                 .ordersByStatus(Map.of("DELIVERED", 2L))
                 .build();
 
-        when(stringRedisTemplate.opsForValue()).thenReturn(valueOperations);
-        when(valueOperations.get(cacheKey)).thenReturn("cached-json");
-        when(objectMapper.readValue("cached-json", OrderAnalyticsDashboardDTO.class)).thenReturn(cachedDto);
+        when(orderRedisCacheService.s3f10DashboardKey(start, end)).thenReturn(cacheKey);
+        when(orderRedisCacheService.get(cacheKey, OrderAnalyticsDashboardDTO.class)).thenReturn(java.util.Optional.of(cachedDto));
 
         registerObserver();
 
@@ -120,7 +110,7 @@ class OrderServiceS3F10Test {
 
         assertSame(cachedDto, result);
         verify(orderRepository, never()).findByOrderedAtBetween(any(LocalDateTime.class), any(LocalDateTime.class));
-        verify(valueOperations, never()).set(anyString(), anyString(), any(Duration.class));
+        verify(orderRedisCacheService, never()).set(anyString(), any(), any(Duration.class));
         verify(orderEventLogger).onEvent(eq("ANALYTICS_VIEWED"), any());
     }
 
@@ -129,18 +119,13 @@ class OrderServiceS3F10Test {
         LocalDate start = LocalDate.of(2026, 3, 1);
         LocalDate end = LocalDate.of(2026, 3, 31);
 
-        String cacheKey = "order-service::S3-F10::" + start.toString() + "_" + end.toString();
+        String cacheKey = "order-service::S3-F10::" + start + "_" + end;
 
-        when(stringRedisTemplate.opsForValue()).thenReturn(valueOperations);
-        when(valueOperations.get(cacheKey)).thenReturn(null);
+        when(orderRedisCacheService.s3f10DashboardKey(start, end)).thenReturn(cacheKey);
+        when(orderRedisCacheService.get(cacheKey, OrderAnalyticsDashboardDTO.class)).thenReturn(java.util.Optional.empty());
 
         when(orderRepository.findByOrderedAtBetween(any(LocalDateTime.class), any(LocalDateTime.class)))
                 .thenReturn(marchOrders);
-
-        // objectMapper serialization for cache set
-        when(objectMapper.writeValueAsString(any(OrderAnalyticsDashboardDTO.class))).thenReturn("json-payload");
-
-        doNothing().when(valueOperations).set(anyString(), anyString(), any(Duration.class));
 
         registerObserver();
 
@@ -148,7 +133,7 @@ class OrderServiceS3F10Test {
 
         assertEquals(10, dto.getTotalOrders());
         verify(orderRepository).findByOrderedAtBetween(any(LocalDateTime.class), any(LocalDateTime.class));
-        verify(valueOperations).set(eq(cacheKey), eq("json-payload"), any(Duration.class));
+        verify(orderRedisCacheService).set(eq(cacheKey), eq(dto), eq(Duration.ofMinutes(10)));
         verify(orderEventLogger).onEvent(eq("ANALYTICS_VIEWED"), any());
     }
 
@@ -157,10 +142,10 @@ class OrderServiceS3F10Test {
         LocalDate start = LocalDate.of(2026, 3, 1);
         LocalDate end = LocalDate.of(2026, 3, 31);
 
-        String cacheKey = "order-service::S3-F10::" + start.toString() + "_" + end.toString();
+        String cacheKey = "order-service::S3-F10::" + start + "_" + end;
 
-        when(stringRedisTemplate.opsForValue()).thenReturn(valueOperations);
-        when(valueOperations.get(cacheKey)).thenThrow(new RuntimeException("redis-down"));
+        when(orderRedisCacheService.s3f10DashboardKey(start, end)).thenReturn(cacheKey);
+        when(orderRedisCacheService.get(cacheKey, OrderAnalyticsDashboardDTO.class)).thenThrow(new RuntimeException("redis-down"));
 
         when(orderRepository.findByOrderedAtBetween(any(LocalDateTime.class), any(LocalDateTime.class)))
                 .thenReturn(marchOrders);
@@ -179,16 +164,13 @@ class OrderServiceS3F10Test {
         LocalDate start = LocalDate.of(2026, 3, 1);
         LocalDate end = LocalDate.of(2026, 3, 31);
 
-        String cacheKey = "order-service::S3-F10::" + start.toString() + "_" + end.toString();
+        String cacheKey = "order-service::S3-F10::" + start + "_" + end;
 
-        when(stringRedisTemplate.opsForValue()).thenReturn(valueOperations);
-        when(valueOperations.get(cacheKey)).thenReturn(null);
+        when(orderRedisCacheService.s3f10DashboardKey(start, end)).thenReturn(cacheKey);
+        when(orderRedisCacheService.get(cacheKey, OrderAnalyticsDashboardDTO.class)).thenReturn(java.util.Optional.empty());
 
         when(orderRepository.findByOrderedAtBetween(any(LocalDateTime.class), any(LocalDateTime.class)))
                 .thenReturn(marchOrders);
-
-        when(objectMapper.writeValueAsString(any(OrderAnalyticsDashboardDTO.class))).thenReturn("json-payload");
-        doThrow(new RuntimeException("redis-set-fail")).when(valueOperations).set(anyString(), anyString(), any(Duration.class));
 
         registerObserver();
 
@@ -204,13 +186,10 @@ class OrderServiceS3F10Test {
         LocalDate start = LocalDate.of(2026, 3, 1);
         LocalDate end = LocalDate.of(2026, 3, 31);
 
-        when(stringRedisTemplate.opsForValue()).thenReturn(valueOperations);
-        when(valueOperations.get(anyString())).thenReturn(null);
+        when(orderRedisCacheService.s3f10DashboardKey(start, end)).thenReturn("order-service::S3-F10::2026-03-01_2026-03-31");
+        when(orderRedisCacheService.get(anyString(), org.mockito.ArgumentMatchers.<Class<OrderAnalyticsDashboardDTO>>any())).thenReturn(java.util.Optional.empty());
         when(orderRepository.findByOrderedAtBetween(any(LocalDateTime.class), any(LocalDateTime.class)))
                 .thenReturn(marchOrders);
-
-        when(objectMapper.writeValueAsString(any(OrderAnalyticsDashboardDTO.class))).thenReturn("json-payload");
-        doNothing().when(valueOperations).set(anyString(), anyString(), any(Duration.class));
 
         registerObserver();
 
@@ -238,6 +217,8 @@ class OrderServiceS3F10Test {
         LocalDate start = LocalDate.of(2026, 3, 1);
         LocalDate end = LocalDate.of(2026, 3, 31);
 
+        when(orderRedisCacheService.s3f10DashboardKey(start, end)).thenReturn("order-service::S3-F10::2026-03-01_2026-03-31");
+        when(orderRedisCacheService.get(anyString(), org.mockito.ArgumentMatchers.<Class<OrderAnalyticsDashboardDTO>>any())).thenReturn(java.util.Optional.empty());
         when(orderRepository.findByOrderedAtBetween(any(LocalDateTime.class), any(LocalDateTime.class)))
                 .thenReturn(marchOrders);
 
@@ -260,6 +241,8 @@ class OrderServiceS3F10Test {
         LocalDate start = LocalDate.of(2026, 1, 1);
         LocalDate end = LocalDate.of(2026, 1, 2);
 
+        when(orderRedisCacheService.s3f10DashboardKey(start, end)).thenReturn("order-service::S3-F10::2026-03-01_2026-03-31");
+        when(orderRedisCacheService.get(anyString(), org.mockito.ArgumentMatchers.<Class<OrderAnalyticsDashboardDTO>>any())).thenReturn(java.util.Optional.empty());
         when(orderRepository.findByOrderedAtBetween(any(LocalDateTime.class), any(LocalDateTime.class)))
                 .thenReturn(List.of());
 
