@@ -192,6 +192,7 @@ public class OrderController {
     @PostMapping("/{orderId}/record-co-purchase")
     public ResponseEntity<CoPurchaseRecordResponse> recordProductCoPurchase(@PathVariable Long orderId) {
         return ResponseEntity.ok(orderService.recordProductCoPurchase(orderId));
+    }
 
     @GetMapping("/analytics/dashboard")
     public ResponseEntity<OrderAnalyticsDashboardDTO> getOrderAnalyticsDashboard(

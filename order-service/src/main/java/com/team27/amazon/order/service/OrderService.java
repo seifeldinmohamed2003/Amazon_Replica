@@ -38,6 +38,7 @@ import com.team27.amazon.order.model.Order;
 import com.team27.amazon.order.model.OrderItem;
 import com.team27.amazon.order.model.OrderStatus;
 import com.team27.amazon.order.repository.OrderRepository;
+import com.team27.amazon.order.repository.OrderItemRepository;
 import com.team27.amazon.order.repository.ProductJdbcRepository;
 import com.team27.amazon.order.repository.ShipmentJdbcRepository;
 import com.team27.amazon.order.repository.ShippingAddressJdbcRepository;
@@ -1000,6 +1001,8 @@ public class OrderService extends AbstractEventSubject {
             this.productId = productId;
             this.name = name;
             this.category = category;
+        }
+    }
 
     static final class OrderCacheSnapshot {
         private Long id;
