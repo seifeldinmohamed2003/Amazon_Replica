@@ -2,7 +2,9 @@ package com.team27.amazon.user.service;
 
 import com.team27.amazon.common.events.AuthEvent;
 import com.team27.amazon.common.events.MongoEventLogger;
-import com.team27.amazon.user.model.ShippingAddress;
+import com.team27.amazon.user.adapter.ObjectArrayDtoAdapter;
+import com.team27.amazon.user.cache.CacheInvalidationService;
+import com.team27.amazon.user.cache.RedisCacheService;
 import com.team27.amazon.user.model.Status;
 import com.team27.amazon.user.model.User;
 import com.team27.amazon.user.repository.AuthEventRepository;
@@ -26,6 +28,10 @@ class UserServiceObserverTest {
     private final ShippingAddressRepository shippingAddressRepository = mock(ShippingAddressRepository.class);
     private final PasswordEncoder passwordEncoder = mock(PasswordEncoder.class);
     private final AuthEventRepository authEventRepository = mock(AuthEventRepository.class);
+    private final ObjectArrayDtoAdapter objectArrayDtoAdapter = new ObjectArrayDtoAdapter();
+    private final RedisCacheService redisCacheService = mock(RedisCacheService.class);
+    private final CacheInvalidationService cacheInvalidationService = mock(CacheInvalidationService.class);
+
     private final MongoEventLogger mongoEventLogger = new MongoEventLogger(
             com.team27.amazon.common.events.EventType.AUTH,
             new com.team27.amazon.common.events.EventFactory(),
@@ -47,7 +53,10 @@ class UserServiceObserverTest {
                 userRepository,
                 shippingAddressRepository,
                 passwordEncoder,
-                mongoEventLogger
+                mongoEventLogger,
+                objectArrayDtoAdapter,
+                redisCacheService,
+                cacheInvalidationService
         );
 
         service.updateUserPreferences(55L, Map.of("theme", "dark", "language", "en"));
@@ -55,7 +64,7 @@ class UserServiceObserverTest {
         verify(authEventRepository).save(org.mockito.ArgumentMatchers.argThat(event -> {
             AuthEvent authEvent = (AuthEvent) event;
             assertEquals(55L, authEvent.getUserId());
-            assertEquals("PREFERENCES_UPDATED", authEvent.getAction());
+            assertEquals("USER_UPDATED", authEvent.getAction());
             assertEquals("dark", authEvent.getDetails().get("theme"));
             assertEquals("en", authEvent.getDetails().get("language"));
             return true;

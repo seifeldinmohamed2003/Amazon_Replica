@@ -5,6 +5,12 @@ spring:
     url: jdbc:postgresql://postgres:5432/amazondb
     username: postgres
     password: postgres
+  data:
+    redis:
+      host: amazon-redis
+      port: 6379
+      password: redispass
+
   jpa:
     hibernate:
       ddl-auto: update
@@ -14,11 +20,7 @@ spring:
         dialect: org.hibernate.dialect.PostgreSQLDialect
   mongodb:
     uri: mongodb://root:rootpass@mongo:27017/amazonmongo?authSource=admin
-  data:
-    redis:
-      host: redis
-      port: 6379
-      password: redispass
+
 server:
   port: 8080
 jwt:

@@ -21,14 +21,12 @@ spring:
   mongodb:
     uri: mongodb://root:rootpass@mongo:27017/amazonmongo?authSource=admin
   data:
+    mongodb:
+      uri: mongodb://root:rootpass@mongo:27017/amazonmongo?authSource=admin
     redis:
       host: redis
       port: 6379
       password: redispass
-  autoconfigure:
-    exclude:
-      - org.springframework.boot.cassandra.autoconfigure.CassandraAutoConfiguration
-      - org.springframework.boot.data.cassandra.autoconfigure.DataCassandraAutoConfiguration
 server:
   port: 8080
 jwt:

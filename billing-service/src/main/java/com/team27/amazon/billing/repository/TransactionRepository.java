@@ -77,4 +77,33 @@ public interface TransactionRepository extends JpaRepository<Transaction, Long> 
     @Query(value = "SELECT user_id FROM orders WHERE id = :orderId", nativeQuery = true)
     Long findUserIdByOrderId(@Param("orderId") Long orderId);
 
+    @Query(value = "SELECT id FROM order_items WHERE order_id = :orderId", nativeQuery = true)
+    List<Long> findOrderItemIdsByOrderId(@Param("orderId") Long orderId);
+
+    @Query(value = """
+    SELECT COALESCE(SUM(price_at_purchase * quantity), 0)
+    FROM order_items
+    WHERE id IN (:itemIds)
+    """, nativeQuery = true)
+    Double sumItemAmounts(@Param("itemIds") List<Long> itemIds);
+
+    @Query(value = """
+    SELECT COUNT(*)
+    FROM order_items
+    WHERE id IN (:itemIds)
+    AND order_id = :orderId
+    """, nativeQuery = true)
+    int countItemsBelongingToOrder(
+            @Param("itemIds") List<Long> itemIds,
+            @Param("orderId") Long orderId);
+
+    @Query(value = """
+    SELECT id, quantity, price_at_purchase
+    FROM order_items
+    WHERE id IN (:itemIds)
+    """, nativeQuery = true)
+    List<Object[]> findItemDetailsByIds(@Param("itemIds") List<Long> itemIds);
+
+
+
 }

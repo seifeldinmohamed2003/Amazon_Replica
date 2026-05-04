@@ -12,6 +12,12 @@ import org.springframework.beans.factory.annotation.Qualifier;
 import jakarta.transaction.Transactional;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.team27.amazon.product.cache.ProductCacheInvalidator;
+import com.team27.amazon.product.cache.ProductCacheKeys;
+import com.team27.amazon.product.cache.RedisCacheService;
+
+import java.time.Duration;
 
 import jakarta.annotation.PostConstruct;
 import java.util.HashMap;
@@ -30,6 +36,12 @@ public class ProductReviewService extends AbstractEventSubject {
     @Autowired
     @Qualifier("productReviewEventLogger")
     private MongoEventLogger mongoEventLogger;
+
+    @Autowired
+    private RedisCacheService redisCacheService;
+
+    @Autowired
+    private ProductCacheInvalidator productCacheInvalidator;
 
     @PostConstruct
     public void initObserver() {
@@ -55,6 +67,7 @@ public class ProductReviewService extends AbstractEventSubject {
             "rating", savedReview.getRating(),
             "details", reviewDetails(savedReview)
         )));
+        productCacheInvalidator.invalidateProductReview(savedReview.getId(), productId);
         return savedReview;
     }
 
@@ -63,8 +76,15 @@ public class ProductReviewService extends AbstractEventSubject {
     }
 
     public ProductReview getReviewById(Long id) {
-        return productReviewRepository.findById(id)
-                .orElseThrow(() -> new ProductReviewNotFoundException(id));
+        String cacheKey = ProductCacheKeys.productReviewDetail(id);
+
+        return redisCacheService.getOrLoad(
+                cacheKey,
+                Duration.ofMinutes(15),
+                new TypeReference<ProductReview>() {},
+                () -> productReviewRepository.findById(id)
+                        .orElseThrow(() -> new ProductReviewNotFoundException(id))
+        );
     }
 
     public List<ProductReview> getReviewsByProductId(Long productId) {
@@ -79,19 +99,26 @@ public class ProductReviewService extends AbstractEventSubject {
         existing.setTitle(request.getTitle());
         existing.setComment(request.getComment());
         ProductReview savedReview = productReviewRepository.save(existing);
+        Long productId = savedReview.getProduct() == null ? null : savedReview.getProduct().getId();
         notifyObservers("REVIEW_UPDATED", productReviewEventPayload(savedReview.getProduct() == null ? null : savedReview.getProduct().getId(), savedReview.getId(), Map.of(
                 "userId", savedReview.getUserId(),
                 "rating", savedReview.getRating(),
                 "details", reviewDetails(savedReview)
         )));
+        productCacheInvalidator.invalidateProductReview(savedReview.getId(), productId);
         return savedReview;
     }
 
     @Transactional
     public void deleteReview(Long id) {
         ProductReview existing = getReviewById(id);
+        Long productId = existing.getProduct() == null ? null : existing.getProduct().getId();
+
         productReviewRepository.delete(existing);
-        notifyObservers("REVIEW_DELETED", productReviewEventPayload(existing.getProduct() == null ? null : existing.getProduct().getId(), id, Map.of()));
+
+        notifyObservers("REVIEW_DELETED", productReviewEventPayload(productId, id, Map.of()));
+
+        productCacheInvalidator.invalidateProductReview(id, productId);
     }
 
     private Map<String, Object> productReviewEventPayload(Long productId, Long reviewId, Map<String, Object> details) {

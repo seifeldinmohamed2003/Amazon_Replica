@@ -15,6 +15,9 @@ public interface ShipmentRepository extends JpaRepository<Shipment, Long> {
 
     Optional<Shipment> findFirstByOrderIdOrderByCreatedAtDesc(Long orderId);
 
+
+    List<Shipment> findByCreatedAtBetween(LocalDateTime startDate, LocalDateTime endDate);
+
     List<Shipment> findByStatusAndLatitudeIsNotNullAndLongitudeIsNotNull(ShipmentStatus status);
 
     @Query(value = "SELECT COUNT(*) FROM shipments s WHERE s.last_update < :cutoff", nativeQuery = true)
@@ -64,20 +67,33 @@ public interface ShipmentRepository extends JpaRepository<Shipment, Long> {
 
     @Query(value = """
             SELECT * FROM shipments s
-            WHERE REGEXP_SUBSTR(s.metadata, CONCAT('(?i)"', :key, '"\\s*:\\s*"([^"]*)"'), 1, 1, NULL, 1) = :value
-               OR REGEXP_SUBSTR(s.metadata, CONCAT('"', :key, '"\\s*:\\s*([0-9.]+)'), 1, 1, NULL, 1) = :value
+            WHERE jsonb_exists(s.metadata, :key)
+              AND LOWER(jsonb_extract_path_text(s.metadata, :key)) = LOWER(:value)
             """, nativeQuery = true)
-    List<Shipment> findByMetadataKeyAndValueEquals(@Param("key") String key, @Param("value") String value);
+    List<Shipment> findByMetadataKeyAndValueEquals(
+            @Param("key") String key,
+            @Param("value") String value
+    );
 
     @Query(value = """
             SELECT * FROM shipments s
-            WHERE CAST(REGEXP_SUBSTR(s.metadata, CONCAT('"', :key, '"\\s*:\\s*([0-9.]+)'), 1, 1, NULL, 1) AS DOUBLE) > CAST(:value AS DOUBLE)
+            WHERE jsonb_exists(s.metadata, :key)
+              AND jsonb_extract_path_text(s.metadata, :key) ~ '^[0-9]+(\\.[0-9]+)?$'
+              AND CAST(jsonb_extract_path_text(s.metadata, :key) AS DOUBLE PRECISION) > CAST(:value AS DOUBLE PRECISION)
             """, nativeQuery = true)
-    List<Shipment> findByMetadataKeyAndValueGreaterThan(@Param("key") String key, @Param("value") String value);
+    List<Shipment> findByMetadataKeyAndValueGreaterThan(
+            @Param("key") String key,
+            @Param("value") String value
+    );
 
     @Query(value = """
             SELECT * FROM shipments s
-            WHERE CAST(REGEXP_SUBSTR(s.metadata, CONCAT('"', :key, '"\\s*:\\s*([0-9.]+)'), 1, 1, NULL, 1) AS DOUBLE) < CAST(:value AS DOUBLE)
+            WHERE jsonb_exists(s.metadata, :key)
+              AND jsonb_extract_path_text(s.metadata, :key) ~ '^[0-9]+(\\.[0-9]+)?$'
+              AND CAST(jsonb_extract_path_text(s.metadata, :key) AS DOUBLE PRECISION) < CAST(:value AS DOUBLE PRECISION)
             """, nativeQuery = true)
-    List<Shipment> findByMetadataKeyAndValueLessThan(@Param("key") String key, @Param("value") String value);
+    List<Shipment> findByMetadataKeyAndValueLessThan(
+            @Param("key") String key,
+            @Param("value") String value
+    );
 }
