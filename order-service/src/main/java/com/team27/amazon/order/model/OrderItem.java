@@ -16,6 +16,8 @@ import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
+import jakarta.persistence.PrePersist;
+import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotNull;
@@ -46,7 +48,7 @@ public class OrderItem {
     private Integer itemOrder;
 
     @JdbcTypeCode(SqlTypes.JSON)
-    @Column(columnDefinition = "jsonb", nullable = false)
+    @Column(columnDefinition = "jsonb default '{}'::jsonb", nullable = false)
     private Map<String, Object> metadata = new HashMap<>();
 
     @JsonIgnore
@@ -54,14 +56,23 @@ public class OrderItem {
     @JoinColumn(name = "order_id", nullable = false)
     private Order order;
 
-    public OrderItem() {}
+    @PrePersist
+    @PreUpdate
+    private void ensureDefaults() {
+        if (metadata == null) {
+            metadata = new HashMap<>();
+        }
+    }
+
+    public OrderItem() {
+    }
 
     public OrderItem(Long productId, Integer quantity, Double priceAtPurchase, Integer itemOrder, Map<String, Object> metadata) {
         this.productId = productId;
         this.quantity = quantity;
         this.priceAtPurchase = priceAtPurchase;
         this.itemOrder = itemOrder;
-        this.metadata = metadata;
+        this.metadata = metadata == null ? new HashMap<>() : metadata;
     }
 
     // Getters and Setters
@@ -110,7 +121,7 @@ public class OrderItem {
     }
 
     public void setMetadata(Map<String, Object> metadata) {
-        this.metadata = metadata;
+        this.metadata = metadata == null ? new HashMap<>() : metadata;
     }
 
     public Order getOrder() {
@@ -121,4 +132,3 @@ public class OrderItem {
         this.order = order;
     }
 }
-

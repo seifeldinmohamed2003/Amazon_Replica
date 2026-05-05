@@ -1,5 +1,6 @@
 package com.team27.amazon.order.dto;
 
+import java.util.HashMap;
 import java.util.Map;
 
 public class AddOrderItemRequest {
@@ -32,6 +33,6 @@ public class AddOrderItemRequest {
     }
 
     public void setMetadata(Map<String, Object> metadata) {
-        this.metadata = metadata;
+        this.metadata = metadata == null ? new HashMap<>() : metadata;
     }
 }
