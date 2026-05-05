@@ -1,5 +1,14 @@
 package com.team27.amazon.product.model;
 
+import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
+
 import jakarta.persistence.CascadeType;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -11,14 +20,6 @@ import jakarta.persistence.Id;
 import jakarta.persistence.OneToMany;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.Table;
-import org.hibernate.annotations.JdbcTypeCode;
-import org.hibernate.type.SqlTypes;
-
-import java.time.LocalDateTime;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
 
 @Entity
 @Table(name = "products")
@@ -53,11 +54,11 @@ public class Product {
     @Column(nullable = false)
     private ProductStatus status = ProductStatus.ACTIVE;
 
-    @Column(nullable = false)
-    private Double rating = 0.0;
+@Column(nullable = false, columnDefinition = "double precision default 0.0")
+private Double rating = 0.0;
 
-    @Column(nullable = false)
-    private Integer totalRatings = 0;
+@Column(name = "total_ratings", nullable = false, columnDefinition = "integer default 0")
+private Integer totalRatings = 0;
 
     @JdbcTypeCode(SqlTypes.JSON)
     @Column(columnDefinition = "jsonb")

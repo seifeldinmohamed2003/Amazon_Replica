@@ -1,0 +1,2640 @@
+{
+  "scannedPath" : "/repo",
+  "scannedAt" : "2026-05-05T20:26:36.427005982Z",
+  "basePackage" : "com.team27.amazon",
+  "entities" : [ {
+    "className" : "Product",
+    "packageName" : "com.team27.amazon.billing.model",
+    "tableName" : "products",
+    "columns" : [ {
+      "fieldName" : "id",
+      "columnName" : "id",
+      "javaType" : "Long",
+      "nullable" : true,
+      "unique" : false,
+      "required" : false,
+      "isId" : true,
+      "isGenerated" : false,
+      "isEnum" : false,
+      "relationKind" : null
+    }, {
+      "fieldName" : "name",
+      "columnName" : "name",
+      "javaType" : "String",
+      "nullable" : true,
+      "unique" : false,
+      "required" : false,
+      "isId" : false,
+      "isGenerated" : false,
+      "isEnum" : false,
+      "relationKind" : null
+    }, {
+      "fieldName" : "description",
+      "columnName" : "description",
+      "javaType" : "String",
+      "nullable" : true,
+      "unique" : false,
+      "required" : false,
+      "isId" : false,
+      "isGenerated" : false,
+      "isEnum" : false,
+      "relationKind" : null
+    }, {
+      "fieldName" : "price",
+      "columnName" : "price",
+      "javaType" : "Double",
+      "nullable" : true,
+      "unique" : false,
+      "required" : false,
+      "isId" : false,
+      "isGenerated" : false,
+      "isEnum" : false,
+      "relationKind" : null
+    }, {
+      "fieldName" : "category",
+      "columnName" : "category",
+      "javaType" : "String",
+      "nullable" : true,
+      "unique" : false,
+      "required" : false,
+      "isId" : false,
+      "isGenerated" : false,
+      "isEnum" : false,
+      "relationKind" : null
+    }, {
+      "fieldName" : "brand",
+      "columnName" : "brand",
+      "javaType" : "String",
+      "nullable" : true,
+      "unique" : false,
+      "required" : false,
+      "isId" : false,
+      "isGenerated" : false,
+      "isEnum" : false,
+      "relationKind" : null
+    }, {
+      "fieldName" : "stockQuantity",
+      "columnName" : "stock_quantity",
+      "javaType" : "Integer",
+      "nullable" : true,
+      "unique" : false,
+      "required" : false,
+      "isId" : false,
+      "isGenerated" : false,
+      "isEnum" : false,
+      "relationKind" : null
+    }, {
+      "fieldName" : "status",
+      "columnName" : "status",
+      "javaType" : "ProductStatus",
+      "nullable" : true,
+      "unique" : false,
+      "required" : false,
+      "isId" : false,
+      "isGenerated" : false,
+      "isEnum" : true,
+      "relationKind" : null
+    }, {
+      "fieldName" : "rating",
+      "columnName" : "rating",
+      "javaType" : "Double",
+      "nullable" : true,
+      "unique" : false,
+      "required" : false,
+      "isId" : false,
+      "isGenerated" : false,
+      "isEnum" : false,
+      "relationKind" : null
+    }, {
+      "fieldName" : "totalRatings",
+      "columnName" : "total_ratings",
+      "javaType" : "Integer",
+      "nullable" : true,
+      "unique" : false,
+      "required" : false,
+      "isId" : false,
+      "isGenerated" : false,
+      "isEnum" : false,
+      "relationKind" : null
+    }, {
+      "fieldName" : "specifications",
+      "columnName" : "specifications",
+      "javaType" : "Map<String,Object>",
+      "nullable" : true,
+      "unique" : false,
+      "required" : false,
+      "isId" : false,
+      "isGenerated" : false,
+      "isEnum" : false,
+      "relationKind" : null
+    }, {
+      "fieldName" : "createdAt",
+      "columnName" : "created_at",
+      "javaType" : "LocalDateTime",
+      "nullable" : true,
+      "unique" : false,
+      "required" : false,
+      "isId" : false,
+      "isGenerated" : false,
+      "isEnum" : false,
+      "relationKind" : null
+    } ]
+  }, {
+    "className" : "Transaction",
+    "packageName" : "com.team27.amazon.billing.model",
+    "tableName" : "transactions",
+    "columns" : [ {
+      "fieldName" : "id",
+      "columnName" : "id",
+      "javaType" : "Long",
+      "nullable" : true,
+      "unique" : false,
+      "required" : false,
+      "isId" : true,
+      "isGenerated" : true,
+      "isEnum" : false,
+      "relationKind" : null
+    }, {
+      "fieldName" : "orderId",
+      "columnName" : "order_id",
+      "javaType" : "Long",
+      "nullable" : false,
+      "unique" : false,
+      "required" : true,
+      "isId" : false,
+      "isGenerated" : false,
+      "isEnum" : false,
+      "relationKind" : null
+    }, {
+      "fieldName" : "userId",
+      "columnName" : "user_id",
+      "javaType" : "Long",
+      "nullable" : false,
+      "unique" : false,
+      "required" : true,
+      "isId" : false,
+      "isGenerated" : false,
+      "isEnum" : false,
+      "relationKind" : null
+    }, {
+      "fieldName" : "amount",
+      "columnName" : "amount",
+      "javaType" : "Double",
+      "nullable" : false,
+      "unique" : false,
+      "required" : true,
+      "isId" : false,
+      "isGenerated" : false,
+      "isEnum" : false,
+      "relationKind" : null
+    }, {
+      "fieldName" : "method",
+      "columnName" : "method",
+      "javaType" : "TransactionMethod",
+      "nullable" : false,
+      "unique" : false,
+      "required" : true,
+      "isId" : false,
+      "isGenerated" : false,
+      "isEnum" : true,
+      "relationKind" : null
+    }, {
+      "fieldName" : "status",
+      "columnName" : "status",
+      "javaType" : "TransactionStatus",
+      "nullable" : false,
+      "unique" : false,
+      "required" : true,
+      "isId" : false,
+      "isGenerated" : false,
+      "isEnum" : true,
+      "relationKind" : null
+    }, {
+      "fieldName" : "transactionDetails",
+      "columnName" : "transaction_details",
+      "javaType" : "Map<String,Object>",
+      "nullable" : true,
+      "unique" : false,
+      "required" : false,
+      "isId" : false,
+      "isGenerated" : false,
+      "isEnum" : false,
+      "relationKind" : null
+    }, {
+      "fieldName" : "createdAt",
+      "columnName" : "created_at",
+      "javaType" : "LocalDateTime",
+      "nullable" : false,
+      "unique" : false,
+      "required" : true,
+      "isId" : false,
+      "isGenerated" : false,
+      "isEnum" : false,
+      "relationKind" : null
+    }, {
+      "fieldName" : "transactionVouchers",
+      "columnName" : "transaction_vouchers",
+      "javaType" : "List<TransactionVoucher>",
+      "nullable" : true,
+      "unique" : false,
+      "required" : false,
+      "isId" : false,
+      "isGenerated" : false,
+      "isEnum" : false,
+      "relationKind" : "OneToMany"
+    } ]
+  }, {
+    "className" : "TransactionVoucher",
+    "packageName" : "com.team27.amazon.billing.model",
+    "tableName" : "transaction_vouchers",
+    "columns" : [ {
+      "fieldName" : "id",
+      "columnName" : "id",
+      "javaType" : "Long",
+      "nullable" : true,
+      "unique" : false,
+      "required" : false,
+      "isId" : true,
+      "isGenerated" : true,
+      "isEnum" : false,
+      "relationKind" : null
+    }, {
+      "fieldName" : "discountApplied",
+      "columnName" : "discount_applied",
+      "javaType" : "Double",
+      "nullable" : false,
+      "unique" : false,
+      "required" : true,
+      "isId" : false,
+      "isGenerated" : false,
+      "isEnum" : false,
+      "relationKind" : null
+    }, {
+      "fieldName" : "appliedAt",
+      "columnName" : "applied_at",
+      "javaType" : "LocalDateTime",
+      "nullable" : false,
+      "unique" : false,
+      "required" : true,
+      "isId" : false,
+      "isGenerated" : false,
+      "isEnum" : false,
+      "relationKind" : null
+    }, {
+      "fieldName" : "transaction",
+      "columnName" : "transaction",
+      "javaType" : "Transaction",
+      "nullable" : true,
+      "unique" : false,
+      "required" : false,
+      "isId" : false,
+      "isGenerated" : false,
+      "isEnum" : false,
+      "relationKind" : "ManyToOne"
+    }, {
+      "fieldName" : "voucher",
+      "columnName" : "voucher",
+      "javaType" : "Voucher",
+      "nullable" : true,
+      "unique" : false,
+      "required" : false,
+      "isId" : false,
+      "isGenerated" : false,
+      "isEnum" : false,
+      "relationKind" : "ManyToOne"
+    } ]
+  }, {
+    "className" : "Voucher",
+    "packageName" : "com.team27.amazon.billing.model",
+    "tableName" : "vouchers",
+    "columns" : [ {
+      "fieldName" : "id",
+      "columnName" : "id",
+      "javaType" : "Long",
+      "nullable" : true,
+      "unique" : false,
+      "required" : false,
+      "isId" : true,
+      "isGenerated" : true,
+      "isEnum" : false,
+      "relationKind" : null
+    }, {
+      "fieldName" : "code",
+      "columnName" : "code",
+      "javaType" : "String",
+      "nullable" : false,
+      "unique" : true,
+      "required" : true,
+      "isId" : false,
+      "isGenerated" : false,
+      "isEnum" : false,
+      "relationKind" : null
+    }, {
+      "fieldName" : "discountType",
+      "columnName" : "discount_type",
+      "javaType" : "DiscountType",
+      "nullable" : false,
+      "unique" : false,
+      "required" : true,
+      "isId" : false,
+      "isGenerated" : false,
+      "isEnum" : true,
+      "relationKind" : null
+    }, {
+      "fieldName" : "discountValue",
+      "columnName" : "discount_value",
+      "javaType" : "Double",
+      "nullable" : false,
+      "unique" : false,
+      "required" : true,
+      "isId" : false,
+      "isGenerated" : false,
+      "isEnum" : false,
+      "relationKind" : null
+    }, {
+      "fieldName" : "maxUses",
+      "columnName" : "max_uses",
+      "javaType" : "Integer",
+      "nullable" : false,
+      "unique" : false,
+      "required" : true,
+      "isId" : false,
+      "isGenerated" : false,
+      "isEnum" : false,
+      "relationKind" : null
+    }, {
+      "fieldName" : "currentUses",
+      "columnName" : "current_uses",
+      "javaType" : "Integer",
+      "nullable" : true,
+      "unique" : false,
+      "required" : false,
+      "isId" : false,
+      "isGenerated" : false,
+      "isEnum" : false,
+      "relationKind" : null
+    }, {
+      "fieldName" : "expiryDate",
+      "columnName" : "expiry_date",
+      "javaType" : "LocalDateTime",
+      "nullable" : false,
+      "unique" : false,
+      "required" : true,
+      "isId" : false,
+      "isGenerated" : false,
+      "isEnum" : false,
+      "relationKind" : null
+    }, {
+      "fieldName" : "active",
+      "columnName" : "active",
+      "javaType" : "Boolean",
+      "nullable" : false,
+      "unique" : false,
+      "required" : true,
+      "isId" : false,
+      "isGenerated" : false,
+      "isEnum" : false,
+      "relationKind" : null
+    }, {
+      "fieldName" : "metadata",
+      "columnName" : "metadata",
+      "javaType" : "Map<String,Object>",
+      "nullable" : true,
+      "unique" : false,
+      "required" : false,
+      "isId" : false,
+      "isGenerated" : false,
+      "isEnum" : false,
+      "relationKind" : null
+    }, {
+      "fieldName" : "transactionVouchers",
+      "columnName" : "transaction_vouchers",
+      "javaType" : "List<TransactionVoucher>",
+      "nullable" : true,
+      "unique" : false,
+      "required" : false,
+      "isId" : false,
+      "isGenerated" : false,
+      "isEnum" : false,
+      "relationKind" : "OneToMany"
+    } ]
+  }, {
+    "className" : "Order",
+    "packageName" : "com.team27.amazon.order.model",
+    "tableName" : "orders",
+    "columns" : [ {
+      "fieldName" : "id",
+      "columnName" : "id",
+      "javaType" : "Long",
+      "nullable" : true,
+      "unique" : false,
+      "required" : false,
+      "isId" : true,
+      "isGenerated" : true,
+      "isEnum" : false,
+      "relationKind" : null
+    }, {
+      "fieldName" : "userId",
+      "columnName" : "user_id",
+      "javaType" : "Long",
+      "nullable" : false,
+      "unique" : false,
+      "required" : true,
+      "isId" : false,
+      "isGenerated" : false,
+      "isEnum" : false,
+      "relationKind" : null
+    }, {
+      "fieldName" : "shippingAddressId",
+      "columnName" : "shipping_address_id",
+      "javaType" : "Long",
+      "nullable" : true,
+      "unique" : false,
+      "required" : false,
+      "isId" : false,
+      "isGenerated" : false,
+      "isEnum" : false,
+      "relationKind" : null
+    }, {
+      "fieldName" : "status",
+      "columnName" : "status",
+      "javaType" : "OrderStatus",
+      "nullable" : false,
+      "unique" : false,
+      "required" : true,
+      "isId" : false,
+      "isGenerated" : false,
+      "isEnum" : true,
+      "relationKind" : null
+    }, {
+      "fieldName" : "totalAmount",
+      "columnName" : "total_amount",
+      "javaType" : "Double",
+      "nullable" : true,
+      "unique" : false,
+      "required" : false,
+      "isId" : false,
+      "isGenerated" : false,
+      "isEnum" : false,
+      "relationKind" : null
+    }, {
+      "fieldName" : "metadata",
+      "columnName" : "metadata",
+      "javaType" : "Map<String,Object>",
+      "nullable" : false,
+      "unique" : false,
+      "required" : true,
+      "isId" : false,
+      "isGenerated" : false,
+      "isEnum" : false,
+      "relationKind" : null
+    }, {
+      "fieldName" : "orderedAt",
+      "columnName" : "ordered_at",
+      "javaType" : "LocalDateTime",
+      "nullable" : false,
+      "unique" : false,
+      "required" : true,
+      "isId" : false,
+      "isGenerated" : false,
+      "isEnum" : false,
+      "relationKind" : null
+    }, {
+      "fieldName" : "deliveredAt",
+      "columnName" : "delivered_at",
+      "javaType" : "LocalDateTime",
+      "nullable" : true,
+      "unique" : false,
+      "required" : false,
+      "isId" : false,
+      "isGenerated" : false,
+      "isEnum" : false,
+      "relationKind" : null
+    }, {
+      "fieldName" : "orderItems",
+      "columnName" : "order_items",
+      "javaType" : "List<OrderItem>",
+      "nullable" : true,
+      "unique" : false,
+      "required" : false,
+      "isId" : false,
+      "isGenerated" : false,
+      "isEnum" : false,
+      "relationKind" : "OneToMany"
+    } ]
+  }, {
+    "className" : "OrderItem",
+    "packageName" : "com.team27.amazon.order.model",
+    "tableName" : "order_items",
+    "columns" : [ {
+      "fieldName" : "id",
+      "columnName" : "id",
+      "javaType" : "Long",
+      "nullable" : true,
+      "unique" : false,
+      "required" : false,
+      "isId" : true,
+      "isGenerated" : true,
+      "isEnum" : false,
+      "relationKind" : null
+    }, {
+      "fieldName" : "productId",
+      "columnName" : "product_id",
+      "javaType" : "Long",
+      "nullable" : false,
+      "unique" : false,
+      "required" : true,
+      "isId" : false,
+      "isGenerated" : false,
+      "isEnum" : false,
+      "relationKind" : null
+    }, {
+      "fieldName" : "quantity",
+      "columnName" : "quantity",
+      "javaType" : "Integer",
+      "nullable" : false,
+      "unique" : false,
+      "required" : true,
+      "isId" : false,
+      "isGenerated" : false,
+      "isEnum" : false,
+      "relationKind" : null
+    }, {
+      "fieldName" : "priceAtPurchase",
+      "columnName" : "price_at_purchase",
+      "javaType" : "Double",
+      "nullable" : false,
+      "unique" : false,
+      "required" : true,
+      "isId" : false,
+      "isGenerated" : false,
+      "isEnum" : false,
+      "relationKind" : null
+    }, {
+      "fieldName" : "itemOrder",
+      "columnName" : "item_order",
+      "javaType" : "Integer",
+      "nullable" : false,
+      "unique" : false,
+      "required" : true,
+      "isId" : false,
+      "isGenerated" : false,
+      "isEnum" : false,
+      "relationKind" : null
+    }, {
+      "fieldName" : "metadata",
+      "columnName" : "metadata",
+      "javaType" : "Map<String,Object>",
+      "nullable" : false,
+      "unique" : false,
+      "required" : true,
+      "isId" : false,
+      "isGenerated" : false,
+      "isEnum" : false,
+      "relationKind" : null
+    }, {
+      "fieldName" : "order",
+      "columnName" : "order",
+      "javaType" : "Order",
+      "nullable" : true,
+      "unique" : false,
+      "required" : false,
+      "isId" : false,
+      "isGenerated" : false,
+      "isEnum" : false,
+      "relationKind" : "ManyToOne"
+    } ]
+  }, {
+    "className" : "Product",
+    "packageName" : "com.team27.amazon.product.model",
+    "tableName" : "products",
+    "columns" : [ {
+      "fieldName" : "id",
+      "columnName" : "id",
+      "javaType" : "Long",
+      "nullable" : true,
+      "unique" : false,
+      "required" : false,
+      "isId" : true,
+      "isGenerated" : true,
+      "isEnum" : false,
+      "relationKind" : null
+    }, {
+      "fieldName" : "name",
+      "columnName" : "name",
+      "javaType" : "String",
+      "nullable" : false,
+      "unique" : false,
+      "required" : true,
+      "isId" : false,
+      "isGenerated" : false,
+      "isEnum" : false,
+      "relationKind" : null
+    }, {
+      "fieldName" : "description",
+      "columnName" : "description",
+      "javaType" : "String",
+      "nullable" : false,
+      "unique" : false,
+      "required" : true,
+      "isId" : false,
+      "isGenerated" : false,
+      "isEnum" : false,
+      "relationKind" : null
+    }, {
+      "fieldName" : "price",
+      "columnName" : "price",
+      "javaType" : "Double",
+      "nullable" : false,
+      "unique" : false,
+      "required" : true,
+      "isId" : false,
+      "isGenerated" : false,
+      "isEnum" : false,
+      "relationKind" : null
+    }, {
+      "fieldName" : "category",
+      "columnName" : "category",
+      "javaType" : "ProductCategory",
+      "nullable" : false,
+      "unique" : false,
+      "required" : true,
+      "isId" : false,
+      "isGenerated" : false,
+      "isEnum" : true,
+      "relationKind" : null
+    }, {
+      "fieldName" : "brand",
+      "columnName" : "brand",
+      "javaType" : "String",
+      "nullable" : false,
+      "unique" : false,
+      "required" : true,
+      "isId" : false,
+      "isGenerated" : false,
+      "isEnum" : false,
+      "relationKind" : null
+    }, {
+      "fieldName" : "stockQuantity",
+      "columnName" : "stock_quantity",
+      "javaType" : "Integer",
+      "nullable" : false,
+      "unique" : false,
+      "required" : true,
+      "isId" : false,
+      "isGenerated" : false,
+      "isEnum" : false,
+      "relationKind" : null
+    }, {
+      "fieldName" : "status",
+      "columnName" : "status",
+      "javaType" : "ProductStatus",
+      "nullable" : false,
+      "unique" : false,
+      "required" : true,
+      "isId" : false,
+      "isGenerated" : false,
+      "isEnum" : true,
+      "relationKind" : null
+    }, {
+      "fieldName" : "rating",
+      "columnName" : "rating",
+      "javaType" : "Double",
+      "nullable" : false,
+      "unique" : false,
+      "required" : true,
+      "isId" : false,
+      "isGenerated" : false,
+      "isEnum" : false,
+      "relationKind" : null
+    }, {
+      "fieldName" : "totalRatings",
+      "columnName" : "total_ratings",
+      "javaType" : "Integer",
+      "nullable" : false,
+      "unique" : false,
+      "required" : true,
+      "isId" : false,
+      "isGenerated" : false,
+      "isEnum" : false,
+      "relationKind" : null
+    }, {
+      "fieldName" : "specifications",
+      "columnName" : "specifications",
+      "javaType" : "Map<String,Object>",
+      "nullable" : true,
+      "unique" : false,
+      "required" : false,
+      "isId" : false,
+      "isGenerated" : false,
+      "isEnum" : false,
+      "relationKind" : null
+    }, {
+      "fieldName" : "createdAt",
+      "columnName" : "created_at",
+      "javaType" : "LocalDateTime",
+      "nullable" : false,
+      "unique" : false,
+      "required" : true,
+      "isId" : false,
+      "isGenerated" : false,
+      "isEnum" : false,
+      "relationKind" : null
+    }, {
+      "fieldName" : "productReviews",
+      "columnName" : "product_reviews",
+      "javaType" : "List<ProductReview>",
+      "nullable" : true,
+      "unique" : false,
+      "required" : false,
+      "isId" : false,
+      "isGenerated" : false,
+      "isEnum" : false,
+      "relationKind" : "OneToMany"
+    } ]
+  }, {
+    "className" : "ProductReview",
+    "packageName" : "com.team27.amazon.product.model",
+    "tableName" : "product_reviews",
+    "columns" : [ {
+      "fieldName" : "id",
+      "columnName" : "id",
+      "javaType" : "Long",
+      "nullable" : true,
+      "unique" : false,
+      "required" : false,
+      "isId" : true,
+      "isGenerated" : true,
+      "isEnum" : false,
+      "relationKind" : null
+    }, {
+      "fieldName" : "userId",
+      "columnName" : "user_id",
+      "javaType" : "Long",
+      "nullable" : false,
+      "unique" : false,
+      "required" : true,
+      "isId" : false,
+      "isGenerated" : false,
+      "isEnum" : false,
+      "relationKind" : null
+    }, {
+      "fieldName" : "rating",
+      "columnName" : "rating",
+      "javaType" : "Integer",
+      "nullable" : false,
+      "unique" : false,
+      "required" : true,
+      "isId" : false,
+      "isGenerated" : false,
+      "isEnum" : false,
+      "relationKind" : null
+    }, {
+      "fieldName" : "title",
+      "columnName" : "title",
+      "javaType" : "String",
+      "nullable" : false,
+      "unique" : false,
+      "required" : true,
+      "isId" : false,
+      "isGenerated" : false,
+      "isEnum" : false,
+      "relationKind" : null
+    }, {
+      "fieldName" : "comment",
+      "columnName" : "comment",
+      "javaType" : "String",
+      "nullable" : false,
+      "unique" : false,
+      "required" : true,
+      "isId" : false,
+      "isGenerated" : false,
+      "isEnum" : false,
+      "relationKind" : null
+    }, {
+      "fieldName" : "verified",
+      "columnName" : "verified",
+      "javaType" : "Boolean",
+      "nullable" : false,
+      "unique" : false,
+      "required" : true,
+      "isId" : false,
+      "isGenerated" : false,
+      "isEnum" : false,
+      "relationKind" : null
+    }, {
+      "fieldName" : "metadata",
+      "columnName" : "metadata",
+      "javaType" : "Map<String,Object>",
+      "nullable" : false,
+      "unique" : false,
+      "required" : true,
+      "isId" : false,
+      "isGenerated" : false,
+      "isEnum" : false,
+      "relationKind" : null
+    }, {
+      "fieldName" : "createdAt",
+      "columnName" : "created_at",
+      "javaType" : "LocalDateTime",
+      "nullable" : false,
+      "unique" : false,
+      "required" : true,
+      "isId" : false,
+      "isGenerated" : false,
+      "isEnum" : false,
+      "relationKind" : null
+    }, {
+      "fieldName" : "product",
+      "columnName" : "product",
+      "javaType" : "Product",
+      "nullable" : true,
+      "unique" : false,
+      "required" : false,
+      "isId" : false,
+      "isGenerated" : false,
+      "isEnum" : false,
+      "relationKind" : "ManyToOne"
+    } ]
+  }, {
+    "className" : "Shipment",
+    "packageName" : "com.team27.amazon.shipping.model",
+    "tableName" : "shipments",
+    "columns" : [ {
+      "fieldName" : "id",
+      "columnName" : "id",
+      "javaType" : "Long",
+      "nullable" : true,
+      "unique" : false,
+      "required" : false,
+      "isId" : true,
+      "isGenerated" : true,
+      "isEnum" : false,
+      "relationKind" : null
+    }, {
+      "fieldName" : "orderId",
+      "columnName" : "order_id",
+      "javaType" : "Long",
+      "nullable" : false,
+      "unique" : false,
+      "required" : true,
+      "isId" : false,
+      "isGenerated" : false,
+      "isEnum" : false,
+      "relationKind" : null
+    }, {
+      "fieldName" : "carrier",
+      "columnName" : "carrier",
+      "javaType" : "String",
+      "nullable" : false,
+      "unique" : false,
+      "required" : true,
+      "isId" : false,
+      "isGenerated" : false,
+      "isEnum" : false,
+      "relationKind" : null
+    }, {
+      "fieldName" : "trackingNumber",
+      "columnName" : "tracking_number",
+      "javaType" : "String",
+      "nullable" : false,
+      "unique" : true,
+      "required" : true,
+      "isId" : false,
+      "isGenerated" : false,
+      "isEnum" : false,
+      "relationKind" : null
+    }, {
+      "fieldName" : "status",
+      "columnName" : "status",
+      "javaType" : "ShipmentStatus",
+      "nullable" : false,
+      "unique" : false,
+      "required" : true,
+      "isId" : false,
+      "isGenerated" : false,
+      "isEnum" : true,
+      "relationKind" : null
+    }, {
+      "fieldName" : "latitude",
+      "columnName" : "latitude",
+      "javaType" : "Double",
+      "nullable" : true,
+      "unique" : false,
+      "required" : false,
+      "isId" : false,
+      "isGenerated" : false,
+      "isEnum" : false,
+      "relationKind" : null
+    }, {
+      "fieldName" : "longitude",
+      "columnName" : "longitude",
+      "javaType" : "Double",
+      "nullable" : true,
+      "unique" : false,
+      "required" : false,
+      "isId" : false,
+      "isGenerated" : false,
+      "isEnum" : false,
+      "relationKind" : null
+    }, {
+      "fieldName" : "estimatedDelivery",
+      "columnName" : "estimated_delivery",
+      "javaType" : "LocalDate",
+      "nullable" : true,
+      "unique" : false,
+      "required" : false,
+      "isId" : false,
+      "isGenerated" : false,
+      "isEnum" : false,
+      "relationKind" : null
+    }, {
+      "fieldName" : "actualDelivery",
+      "columnName" : "actual_delivery",
+      "javaType" : "LocalDate",
+      "nullable" : true,
+      "unique" : false,
+      "required" : false,
+      "isId" : false,
+      "isGenerated" : false,
+      "isEnum" : false,
+      "relationKind" : null
+    }, {
+      "fieldName" : "metadata",
+      "columnName" : "metadata",
+      "javaType" : "Map<String,Object>",
+      "nullable" : true,
+      "unique" : false,
+      "required" : false,
+      "isId" : false,
+      "isGenerated" : false,
+      "isEnum" : false,
+      "relationKind" : null
+    }, {
+      "fieldName" : "lastUpdate",
+      "columnName" : "last_update",
+      "javaType" : "LocalDateTime",
+      "nullable" : false,
+      "unique" : false,
+      "required" : true,
+      "isId" : false,
+      "isGenerated" : false,
+      "isEnum" : false,
+      "relationKind" : null
+    }, {
+      "fieldName" : "createdAt",
+      "columnName" : "created_at",
+      "javaType" : "LocalDateTime",
+      "nullable" : false,
+      "unique" : false,
+      "required" : true,
+      "isId" : false,
+      "isGenerated" : false,
+      "isEnum" : false,
+      "relationKind" : null
+    } ]
+  }, {
+    "className" : "ShippingAddress",
+    "packageName" : "com.team27.amazon.user.model",
+    "tableName" : "shipping_addresses",
+    "columns" : [ {
+      "fieldName" : "id",
+      "columnName" : "id",
+      "javaType" : "Long",
+      "nullable" : true,
+      "unique" : false,
+      "required" : false,
+      "isId" : true,
+      "isGenerated" : true,
+      "isEnum" : false,
+      "relationKind" : null
+    }, {
+      "fieldName" : "label",
+      "columnName" : "label",
+      "javaType" : "String",
+      "nullable" : false,
+      "unique" : false,
+      "required" : true,
+      "isId" : false,
+      "isGenerated" : false,
+      "isEnum" : false,
+      "relationKind" : null
+    }, {
+      "fieldName" : "streetAddress",
+      "columnName" : "street_address",
+      "javaType" : "String",
+      "nullable" : false,
+      "unique" : false,
+      "required" : true,
+      "isId" : false,
+      "isGenerated" : false,
+      "isEnum" : false,
+      "relationKind" : null
+    }, {
+      "fieldName" : "city",
+      "columnName" : "city",
+      "javaType" : "String",
+      "nullable" : false,
+      "unique" : false,
+      "required" : true,
+      "isId" : false,
+      "isGenerated" : false,
+      "isEnum" : false,
+      "relationKind" : null
+    }, {
+      "fieldName" : "country",
+      "columnName" : "country",
+      "javaType" : "String",
+      "nullable" : false,
+      "unique" : false,
+      "required" : true,
+      "isId" : false,
+      "isGenerated" : false,
+      "isEnum" : false,
+      "relationKind" : null
+    }, {
+      "fieldName" : "zipCode",
+      "columnName" : "zip_code",
+      "javaType" : "String",
+      "nullable" : false,
+      "unique" : false,
+      "required" : true,
+      "isId" : false,
+      "isGenerated" : false,
+      "isEnum" : false,
+      "relationKind" : null
+    }, {
+      "fieldName" : "isDefault",
+      "columnName" : "is_default",
+      "javaType" : "Boolean",
+      "nullable" : false,
+      "unique" : false,
+      "required" : true,
+      "isId" : false,
+      "isGenerated" : false,
+      "isEnum" : false,
+      "relationKind" : null
+    }, {
+      "fieldName" : "metadata",
+      "columnName" : "metadata",
+      "javaType" : "Map<String,Object>",
+      "nullable" : true,
+      "unique" : false,
+      "required" : false,
+      "isId" : false,
+      "isGenerated" : false,
+      "isEnum" : false,
+      "relationKind" : null
+    }, {
+      "fieldName" : "createdAt",
+      "columnName" : "created_at",
+      "javaType" : "LocalDateTime",
+      "nullable" : false,
+      "unique" : false,
+      "required" : true,
+      "isId" : false,
+      "isGenerated" : false,
+      "isEnum" : false,
+      "relationKind" : null
+    }, {
+      "fieldName" : "user",
+      "columnName" : "user",
+      "javaType" : "User",
+      "nullable" : true,
+      "unique" : false,
+      "required" : false,
+      "isId" : false,
+      "isGenerated" : false,
+      "isEnum" : false,
+      "relationKind" : "ManyToOne"
+    } ]
+  }, {
+    "className" : "User",
+    "packageName" : "com.team27.amazon.user.model",
+    "tableName" : "users",
+    "columns" : [ {
+      "fieldName" : "id",
+      "columnName" : "id",
+      "javaType" : "Long",
+      "nullable" : true,
+      "unique" : false,
+      "required" : false,
+      "isId" : true,
+      "isGenerated" : true,
+      "isEnum" : false,
+      "relationKind" : null
+    }, {
+      "fieldName" : "name",
+      "columnName" : "name",
+      "javaType" : "String",
+      "nullable" : false,
+      "unique" : false,
+      "required" : true,
+      "isId" : false,
+      "isGenerated" : false,
+      "isEnum" : false,
+      "relationKind" : null
+    }, {
+      "fieldName" : "email",
+      "columnName" : "email",
+      "javaType" : "String",
+      "nullable" : false,
+      "unique" : true,
+      "required" : true,
+      "isId" : false,
+      "isGenerated" : false,
+      "isEnum" : false,
+      "relationKind" : null
+    }, {
+      "fieldName" : "password",
+      "columnName" : "password",
+      "javaType" : "String",
+      "nullable" : false,
+      "unique" : false,
+      "required" : true,
+      "isId" : false,
+      "isGenerated" : false,
+      "isEnum" : false,
+      "relationKind" : null
+    }, {
+      "fieldName" : "phone",
+      "columnName" : "phone",
+      "javaType" : "String",
+      "nullable" : false,
+      "unique" : true,
+      "required" : true,
+      "isId" : false,
+      "isGenerated" : false,
+      "isEnum" : false,
+      "relationKind" : null
+    }, {
+      "fieldName" : "role",
+      "columnName" : "role",
+      "javaType" : "Role",
+      "nullable" : false,
+      "unique" : false,
+      "required" : true,
+      "isId" : false,
+      "isGenerated" : false,
+      "isEnum" : true,
+      "relationKind" : null
+    }, {
+      "fieldName" : "status",
+      "columnName" : "status",
+      "javaType" : "Status",
+      "nullable" : false,
+      "unique" : false,
+      "required" : true,
+      "isId" : false,
+      "isGenerated" : false,
+      "isEnum" : true,
+      "relationKind" : null
+    }, {
+      "fieldName" : "preferences",
+      "columnName" : "preferences",
+      "javaType" : "Map<String,Object>",
+      "nullable" : true,
+      "unique" : false,
+      "required" : false,
+      "isId" : false,
+      "isGenerated" : false,
+      "isEnum" : false,
+      "relationKind" : null
+    }, {
+      "fieldName" : "createdAt",
+      "columnName" : "created_at",
+      "javaType" : "LocalDateTime",
+      "nullable" : false,
+      "unique" : false,
+      "required" : true,
+      "isId" : false,
+      "isGenerated" : false,
+      "isEnum" : false,
+      "relationKind" : null
+    }, {
+      "fieldName" : "shippingAddresses",
+      "columnName" : "shipping_addresses",
+      "javaType" : "List<ShippingAddress>",
+      "nullable" : true,
+      "unique" : false,
+      "required" : false,
+      "isId" : false,
+      "isGenerated" : false,
+      "isEnum" : false,
+      "relationKind" : "OneToMany"
+    } ]
+  } ],
+  "enums" : [ {
+    "enumName" : "DiscountType",
+    "packageName" : "com.team27.amazon.billing.model",
+    "values" : [ "PERCENTAGE", "FIXED" ]
+  }, {
+    "enumName" : "ProductStatus",
+    "packageName" : "com.team27.amazon.billing.model",
+    "values" : [ "ACTIVE", "INACTIVE", "OUT_OF_STOCK" ]
+  }, {
+    "enumName" : "TransactionMethod",
+    "packageName" : "com.team27.amazon.billing.model",
+    "values" : [ "CREDIT_CARD", "CASH_ON_DELIVERY", "WALLET" ]
+  }, {
+    "enumName" : "TransactionStatus",
+    "packageName" : "com.team27.amazon.billing.model",
+    "values" : [ "PENDING", "COMPLETED", "FAILED", "REFUNDED" ]
+  }, {
+    "enumName" : "EventType",
+    "packageName" : "com.team27.amazon.common.events",
+    "values" : [ "AUTH", "PRODUCT", "ORDER", "SHIPMENT", "TRANSACTION_AUDIT" ]
+  }, {
+    "enumName" : "OrderStatus",
+    "packageName" : "com.team27.amazon.order.model",
+    "values" : [ "PENDING", "CONFIRMED", "SHIPPED", "DELIVERED", "CANCELLED", "RETURNED" ]
+  }, {
+    "enumName" : "ProductCategory",
+    "packageName" : "com.team27.amazon.product.model",
+    "values" : [ "ELECTRONICS", "BOOKS", "CLOTHING", "HOME", "BEAUTY", "SPORTS", "TOYS", "GROCERIES", "HEALTH", "AUTOMOTIVE", "OTHER" ]
+  }, {
+    "enumName" : "ProductStatus",
+    "packageName" : "com.team27.amazon.product.model",
+    "values" : [ "ACTIVE", "INACTIVE", "OUT_OF_STOCK" ]
+  }, {
+    "enumName" : "ShipmentStatus",
+    "packageName" : "com.team27.amazon.shipping.model",
+    "values" : [ "PROCESSING", "SHIPPED", "IN_TRANSIT", "OUT_FOR_DELIVERY", "DELIVERED", "RETURNED" ]
+  }, {
+    "enumName" : "Role",
+    "packageName" : "com.team27.amazon.user.model",
+    "values" : [ "CUSTOMER", "ADMIN" ]
+  }, {
+    "enumName" : "Status",
+    "packageName" : "com.team27.amazon.user.model",
+    "values" : [ "ACTIVE", "DEACTIVATED" ]
+  } ],
+  "controllers" : [ {
+    "className" : "HealthController",
+    "packageName" : "com.team27.amazon.billing.controller",
+    "basePaths" : [ "" ],
+    "endpoints" : [ {
+      "verb" : "GET",
+      "path" : "/api/transactions/health",
+      "methodName" : "health",
+      "pathVariables" : [ ],
+      "requestBodyType" : null,
+      "responseType" : "String"
+    } ]
+  }, {
+    "className" : "TransactionController",
+    "packageName" : "com.team27.amazon.billing.controller",
+    "basePaths" : [ "/api/transactions" ],
+    "endpoints" : [ {
+      "verb" : "GET",
+      "path" : "/api/transactions/search",
+      "methodName" : "searchTransactions",
+      "pathVariables" : [ ],
+      "requestBodyType" : null,
+      "responseType" : "ResponseEntity<List<Transaction>>"
+    }, {
+      "verb" : "PUT",
+      "path" : "/api/transactions/{id}/refund",
+      "methodName" : "refundTransaction",
+      "pathVariables" : [ "id" ],
+      "requestBodyType" : "Map<String,String>",
+      "responseType" : "ResponseEntity<Transaction>"
+    }, {
+      "verb" : "GET",
+      "path" : "/api/transactions/user/{userId}/summary",
+      "methodName" : "getUserTransactionSummary",
+      "pathVariables" : [ "userId" ],
+      "requestBodyType" : null,
+      "responseType" : "ResponseEntity<UserTransactionSummaryDTO>"
+    }, {
+      "verb" : "POST",
+      "path" : "/api/transactions/order/{orderId}",
+      "methodName" : "processTransactionForOrder",
+      "pathVariables" : [ "orderId" ],
+      "requestBodyType" : "Map<String,String>",
+      "responseType" : "ResponseEntity<Transaction>"
+    }, {
+      "verb" : "POST",
+      "path" : "/api/transactions/{transactionId}/voucher/{voucherId}",
+      "methodName" : "applyVoucher",
+      "pathVariables" : [ "transactionId", "voucherId" ],
+      "requestBodyType" : null,
+      "responseType" : "ResponseEntity<TransactionDetailsDTO>"
+    }, {
+      "verb" : "POST",
+      "path" : "/api/transactions",
+      "methodName" : "createTransaction",
+      "pathVariables" : [ ],
+      "requestBodyType" : "Transaction",
+      "responseType" : "ResponseEntity<Transaction>"
+    }, {
+      "verb" : "GET",
+      "path" : "/api/transactions/reports/revenue",
+      "methodName" : "getRevenueReport",
+      "pathVariables" : [ ],
+      "requestBodyType" : null,
+      "responseType" : "ResponseEntity<RevenueReportDTO>"
+    }, {
+      "verb" : "PUT",
+      "path" : "/api/transactions/{id}/retry",
+      "methodName" : "retryTransaction",
+      "pathVariables" : [ "id" ],
+      "requestBodyType" : null,
+      "responseType" : "ResponseEntity<Transaction>"
+    }, {
+      "verb" : "GET",
+      "path" : "/api/transactions/{transactionId}/details",
+      "methodName" : "getTransactionDetails",
+      "pathVariables" : [ "transactionId" ],
+      "requestBodyType" : null,
+      "responseType" : "ResponseEntity<TransactionDetailsDTO>"
+    }, {
+      "verb" : "GET",
+      "path" : "/api/transactions/voucher/top-used",
+      "methodName" : "getTopUsedVouchers",
+      "pathVariables" : [ ],
+      "requestBodyType" : null,
+      "responseType" : "ResponseEntity<List<VoucherUsageDTO>>"
+    }, {
+      "verb" : "GET",
+      "path" : "/api/transactions/reports/category-revenue",
+      "methodName" : "getCategoryRevenueReport",
+      "pathVariables" : [ ],
+      "requestBodyType" : null,
+      "responseType" : "ResponseEntity<List<CategoryRevenueDTO>>"
+    }, {
+      "verb" : "GET",
+      "path" : "/api/transactions/{transactionId}/audit-trail",
+      "methodName" : "getTransactionAuditTrail",
+      "pathVariables" : [ "transactionId" ],
+      "requestBodyType" : null,
+      "responseType" : "ResponseEntity<List<AuditLogDTO>>"
+    }, {
+      "verb" : "GET",
+      "path" : "/api/transactions",
+      "methodName" : "getAllTransactions",
+      "pathVariables" : [ ],
+      "requestBodyType" : null,
+      "responseType" : "ResponseEntity<List<Transaction>>"
+    }, {
+      "verb" : "GET",
+      "path" : "/api/transactions/{id}",
+      "methodName" : "getTransactionById",
+      "pathVariables" : [ "id" ],
+      "requestBodyType" : null,
+      "responseType" : "ResponseEntity<Transaction>"
+    }, {
+      "verb" : "PUT",
+      "path" : "/api/transactions/{id}",
+      "methodName" : "updateTransaction",
+      "pathVariables" : [ "id" ],
+      "requestBodyType" : "Transaction",
+      "responseType" : "ResponseEntity<Transaction>"
+    }, {
+      "verb" : "DELETE",
+      "path" : "/api/transactions/{id}",
+      "methodName" : "deleteTransaction",
+      "pathVariables" : [ "id" ],
+      "requestBodyType" : null,
+      "responseType" : "ResponseEntity<Void>"
+    }, {
+      "verb" : "POST",
+      "path" : "/api/transactions/{id}/refund-items",
+      "methodName" : "processPartialRefund",
+      "pathVariables" : [ "id" ],
+      "requestBodyType" : "RefundRequest",
+      "responseType" : "ResponseEntity<Transaction>"
+    } ]
+  }, {
+    "className" : "TransactionVoucherController",
+    "packageName" : "com.team27.amazon.billing.controller",
+    "basePaths" : [ "/api/transaction-vouchers" ],
+    "endpoints" : [ {
+      "verb" : "POST",
+      "path" : "/api/transaction-vouchers",
+      "methodName" : "create",
+      "pathVariables" : [ ],
+      "requestBodyType" : "TransactionVoucher",
+      "responseType" : "ResponseEntity<TransactionVoucher>"
+    }, {
+      "verb" : "GET",
+      "path" : "/api/transaction-vouchers/{id}",
+      "methodName" : "getById",
+      "pathVariables" : [ "id" ],
+      "requestBodyType" : null,
+      "responseType" : "ResponseEntity<TransactionVoucher>"
+    }, {
+      "verb" : "GET",
+      "path" : "/api/transaction-vouchers",
+      "methodName" : "getAll",
+      "pathVariables" : [ ],
+      "requestBodyType" : null,
+      "responseType" : "ResponseEntity<List<TransactionVoucher>>"
+    }, {
+      "verb" : "DELETE",
+      "path" : "/api/transaction-vouchers/{id}",
+      "methodName" : "delete",
+      "pathVariables" : [ "id" ],
+      "requestBodyType" : null,
+      "responseType" : "ResponseEntity<Void>"
+    } ]
+  }, {
+    "className" : "VoucherController",
+    "packageName" : "com.team27.amazon.billing.controller",
+    "basePaths" : [ "/api/vouchers" ],
+    "endpoints" : [ {
+      "verb" : "POST",
+      "path" : "/api/vouchers",
+      "methodName" : "createVoucher",
+      "pathVariables" : [ ],
+      "requestBodyType" : "Voucher",
+      "responseType" : "ResponseEntity<Voucher>"
+    }, {
+      "verb" : "GET",
+      "path" : "/api/vouchers",
+      "methodName" : "getAllVouchers",
+      "pathVariables" : [ ],
+      "requestBodyType" : null,
+      "responseType" : "ResponseEntity<List<Voucher>>"
+    }, {
+      "verb" : "GET",
+      "path" : "/api/vouchers/{id}",
+      "methodName" : "getVoucherById",
+      "pathVariables" : [ "id" ],
+      "requestBodyType" : null,
+      "responseType" : "ResponseEntity<Voucher>"
+    }, {
+      "verb" : "PUT",
+      "path" : "/api/vouchers/{id}",
+      "methodName" : "updateVoucher",
+      "pathVariables" : [ "id" ],
+      "requestBodyType" : "Voucher",
+      "responseType" : "ResponseEntity<Voucher>"
+    }, {
+      "verb" : "DELETE",
+      "path" : "/api/vouchers/{id}",
+      "methodName" : "deleteVoucher",
+      "pathVariables" : [ "id" ],
+      "requestBodyType" : null,
+      "responseType" : "ResponseEntity<Void>"
+    } ]
+  }, {
+    "className" : "HealthController",
+    "packageName" : "com.team27.amazon.order.controller",
+    "basePaths" : [ "" ],
+    "endpoints" : [ {
+      "verb" : "GET",
+      "path" : "/api/orders/health",
+      "methodName" : "health",
+      "pathVariables" : [ ],
+      "requestBodyType" : null,
+      "responseType" : "String"
+    } ]
+  }, {
+    "className" : "OrderController",
+    "packageName" : "com.team27.amazon.order.controller",
+    "basePaths" : [ "/api/orders" ],
+    "endpoints" : [ {
+      "verb" : "POST",
+      "path" : "/api/orders",
+      "methodName" : "createOrder",
+      "pathVariables" : [ ],
+      "requestBodyType" : "Order",
+      "responseType" : "ResponseEntity<Order>"
+    }, {
+      "verb" : "POST",
+      "path" : "/api/orders/estimate",
+      "methodName" : "estimateOrder",
+      "pathVariables" : [ ],
+      "requestBodyType" : "List<OrderEstimateItemRequestDTO>",
+      "responseType" : "ResponseEntity<OrderEstimateDTO>"
+    }, {
+      "verb" : "GET",
+      "path" : "/api/orders",
+      "methodName" : "getAllOrders",
+      "pathVariables" : [ ],
+      "requestBodyType" : null,
+      "responseType" : "ResponseEntity<List<Order>>"
+    }, {
+      "verb" : "GET",
+      "path" : "/api/orders/{id}",
+      "methodName" : "getOrderById",
+      "pathVariables" : [ "id" ],
+      "requestBodyType" : null,
+      "responseType" : "ResponseEntity<Order>"
+    }, {
+      "verb" : "GET",
+      "path" : "/api/orders/user/{userId}",
+      "methodName" : "getOrdersByUserId",
+      "pathVariables" : [ "userId" ],
+      "requestBodyType" : null,
+      "responseType" : "ResponseEntity<List<Order>>"
+    }, {
+      "verb" : "POST",
+      "path" : "/api/orders/{orderId}/items",
+      "methodName" : "addItemsToExistingOrder",
+      "pathVariables" : [ "orderId" ],
+      "requestBodyType" : "List<AddOrderItemRequest>",
+      "responseType" : "Order"
+    }, {
+      "verb" : "GET",
+      "path" : "/api/orders/{orderId}/details",
+      "methodName" : "getOrderDetails",
+      "pathVariables" : [ "orderId" ],
+      "requestBodyType" : null,
+      "responseType" : "OrderDetailsDTO"
+    }, {
+      "verb" : "GET",
+      "path" : "/api/orders/status/{status}",
+      "methodName" : "getOrdersByStatus",
+      "pathVariables" : [ "status" ],
+      "requestBodyType" : null,
+      "responseType" : "ResponseEntity<List<Order>>"
+    }, {
+      "verb" : "GET",
+      "path" : "/api/orders/user/{userId}/status/{status}",
+      "methodName" : "getOrdersByUserIdAndStatus",
+      "pathVariables" : [ "userId", "status" ],
+      "requestBodyType" : null,
+      "responseType" : "ResponseEntity<List<Order>>"
+    }, {
+      "verb" : "GET",
+      "path" : "/api/orders/date-range",
+      "methodName" : "getOrdersByDateRange",
+      "pathVariables" : [ ],
+      "requestBodyType" : null,
+      "responseType" : "ResponseEntity<List<Order>>"
+    }, {
+      "verb" : "GET",
+      "path" : "/api/orders/search",
+      "methodName" : "searchOrders",
+      "pathVariables" : [ ],
+      "requestBodyType" : null,
+      "responseType" : "ResponseEntity<List<Order>>"
+    }, {
+      "verb" : "PUT",
+      "path" : "/api/orders/{id}",
+      "methodName" : "updateOrder",
+      "pathVariables" : [ "id" ],
+      "requestBodyType" : "Order",
+      "responseType" : "ResponseEntity<Order>"
+    }, {
+      "verb" : "DELETE",
+      "path" : "/api/orders/{id}",
+      "methodName" : "deleteOrder",
+      "pathVariables" : [ "id" ],
+      "requestBodyType" : null,
+      "responseType" : "ResponseEntity<Void>"
+    }, {
+      "verb" : "GET",
+      "path" : "/api/orders/{id}/total",
+      "methodName" : "calculateOrderTotal",
+      "pathVariables" : [ "id" ],
+      "requestBodyType" : null,
+      "responseType" : "ResponseEntity<Double>"
+    }, {
+      "verb" : "PUT",
+      "path" : "/api/orders/{id}/deliver",
+      "methodName" : "deliverOrder",
+      "pathVariables" : [ "id" ],
+      "requestBodyType" : null,
+      "responseType" : "ResponseEntity<Order>"
+    }, {
+      "verb" : "PUT",
+      "path" : "/api/orders/{orderId}/confirm",
+      "methodName" : "confirmOrder",
+      "pathVariables" : [ "orderId" ],
+      "requestBodyType" : null,
+      "responseType" : "ResponseEntity<Order>"
+    }, {
+      "verb" : "PUT",
+      "path" : "/api/orders/{id}/cancel",
+      "methodName" : "cancelOrder",
+      "pathVariables" : [ "id" ],
+      "requestBodyType" : null,
+      "responseType" : "ResponseEntity<?>"
+    }, {
+      "verb" : "GET",
+      "path" : "/api/orders/metadata/search",
+      "methodName" : "searchOrdersByMetadata",
+      "pathVariables" : [ ],
+      "requestBodyType" : null,
+      "responseType" : "ResponseEntity<List<Order>>"
+    }, {
+      "verb" : "GET",
+      "path" : "/api/orders/analytics",
+      "methodName" : "getOrderAnalytics",
+      "pathVariables" : [ ],
+      "requestBodyType" : null,
+      "responseType" : "ResponseEntity<OrderAnalyticsDTO>"
+    }, {
+      "verb" : "POST",
+      "path" : "/api/orders/{orderId}/record-co-purchase",
+      "methodName" : "recordProductCoPurchase",
+      "pathVariables" : [ "orderId" ],
+      "requestBodyType" : null,
+      "responseType" : "ResponseEntity<CoPurchaseRecordResponse>"
+    }, {
+      "verb" : "GET",
+      "path" : "/api/orders/analytics/dashboard",
+      "methodName" : "getOrderAnalyticsDashboard",
+      "pathVariables" : [ ],
+      "requestBodyType" : null,
+      "responseType" : "ResponseEntity<OrderAnalyticsDashboardDTO>"
+    } ]
+  }, {
+    "className" : "OrderItemController",
+    "packageName" : "com.team27.amazon.order.controller",
+    "basePaths" : [ "/api/order-items" ],
+    "endpoints" : [ {
+      "verb" : "POST",
+      "path" : "/api/order-items",
+      "methodName" : "createOrderItem",
+      "pathVariables" : [ ],
+      "requestBodyType" : "OrderItem",
+      "responseType" : "ResponseEntity<OrderItem>"
+    }, {
+      "verb" : "GET",
+      "path" : "/api/order-items",
+      "methodName" : "getAllOrderItems",
+      "pathVariables" : [ ],
+      "requestBodyType" : null,
+      "responseType" : "ResponseEntity<List<OrderItem>>"
+    }, {
+      "verb" : "GET",
+      "path" : "/api/order-items/{id}",
+      "methodName" : "getOrderItemById",
+      "pathVariables" : [ "id" ],
+      "requestBodyType" : null,
+      "responseType" : "ResponseEntity<OrderItem>"
+    }, {
+      "verb" : "GET",
+      "path" : "/api/order-items/order/{orderId}",
+      "methodName" : "getOrderItemsByOrderId",
+      "pathVariables" : [ "orderId" ],
+      "requestBodyType" : null,
+      "responseType" : "ResponseEntity<List<OrderItem>>"
+    }, {
+      "verb" : "GET",
+      "path" : "/api/order-items/product/{productId}",
+      "methodName" : "getOrderItemsByProductId",
+      "pathVariables" : [ "productId" ],
+      "requestBodyType" : null,
+      "responseType" : "ResponseEntity<List<OrderItem>>"
+    }, {
+      "verb" : "PUT",
+      "path" : "/api/order-items/{id}",
+      "methodName" : "updateOrderItem",
+      "pathVariables" : [ "id" ],
+      "requestBodyType" : "OrderItem",
+      "responseType" : "ResponseEntity<OrderItem>"
+    }, {
+      "verb" : "DELETE",
+      "path" : "/api/order-items/{id}",
+      "methodName" : "deleteOrderItem",
+      "pathVariables" : [ "id" ],
+      "requestBodyType" : null,
+      "responseType" : "ResponseEntity<Void>"
+    } ]
+  }, {
+    "className" : "OrderRecommendationController",
+    "packageName" : "com.team27.amazon.order.controller",
+    "basePaths" : [ "/api/orders" ],
+    "endpoints" : [ {
+      "verb" : "GET",
+      "path" : "/api/orders/recommendations",
+      "methodName" : "getRecommendations",
+      "pathVariables" : [ ],
+      "requestBodyType" : null,
+      "responseType" : "ResponseEntity<List<ProductRecommendationDTO>>"
+    } ]
+  }, {
+    "className" : "HealthController",
+    "packageName" : "com.team27.amazon.product.controller",
+    "basePaths" : [ "" ],
+    "endpoints" : [ {
+      "verb" : "GET",
+      "path" : "/api/products/health",
+      "methodName" : "health",
+      "pathVariables" : [ ],
+      "requestBodyType" : null,
+      "responseType" : "String"
+    } ]
+  }, {
+    "className" : "ProductController",
+    "packageName" : "com.team27.amazon.product.controller",
+    "basePaths" : [ "/api/products" ],
+    "endpoints" : [ {
+      "verb" : "POST",
+      "path" : "/api/products",
+      "methodName" : "createProduct",
+      "pathVariables" : [ ],
+      "requestBodyType" : "ProductRequest",
+      "responseType" : "ResponseEntity<ProductResponse>"
+    }, {
+      "verb" : "GET",
+      "path" : "/api/products",
+      "methodName" : "getProducts",
+      "pathVariables" : [ ],
+      "requestBodyType" : null,
+      "responseType" : "List<ProductResponse>"
+    }, {
+      "verb" : "GET",
+      "path" : "/api/products/search",
+      "methodName" : "searchProducts",
+      "pathVariables" : [ ],
+      "requestBodyType" : null,
+      "responseType" : "List<ProductResponse>"
+    }, {
+      "verb" : "GET",
+      "path" : "/api/products/search/full-text",
+      "methodName" : "searchProductsFullText",
+      "pathVariables" : [ ],
+      "requestBodyType" : null,
+      "responseType" : "List<ProductResponse>"
+    }, {
+      "verb" : "GET",
+      "path" : "/api/products/catalog/dashboard",
+      "methodName" : "getProductCatalogDashboard",
+      "pathVariables" : [ ],
+      "requestBodyType" : null,
+      "responseType" : "ProductCatalogDashboardDTO"
+    }, {
+      "verb" : "GET",
+      "path" : "/api/products/{id}",
+      "methodName" : "getProductById",
+      "pathVariables" : [ "id" ],
+      "requestBodyType" : null,
+      "responseType" : "ProductResponse"
+    }, {
+      "verb" : "GET",
+      "path" : "/api/products/{id}/sales",
+      "methodName" : "getProductSalesSummary",
+      "pathVariables" : [ "id" ],
+      "requestBodyType" : null,
+      "responseType" : "ProductSalesDTO"
+    }, {
+      "verb" : "POST",
+      "path" : "/api/products/{id}/index",
+      "methodName" : "indexProduct",
+      "pathVariables" : [ "id" ],
+      "requestBodyType" : null,
+      "responseType" : "ResponseEntity<Map<String,Object>>"
+    }, {
+      "verb" : "PUT",
+      "path" : "/api/products/{id}",
+      "methodName" : "updateProduct",
+      "pathVariables" : [ "id" ],
+      "requestBodyType" : "ProductRequest",
+      "responseType" : "ProductResponse"
+    }, {
+      "verb" : "PUT",
+      "path" : "/api/products/{id}/specifications",
+      "methodName" : "updateSpecifications",
+      "pathVariables" : [ "id" ],
+      "requestBodyType" : "Map<String,Object>",
+      "responseType" : "ProductResponse"
+    }, {
+      "verb" : "DELETE",
+      "path" : "/api/products/{id}",
+      "methodName" : "deleteProduct",
+      "pathVariables" : [ "id" ],
+      "requestBodyType" : null,
+      "responseType" : "ResponseEntity<Void>"
+    }, {
+      "verb" : "PUT",
+      "path" : "/api/products/{id}/discontinue",
+      "methodName" : "discontinueProduct",
+      "pathVariables" : [ "id" ],
+      "requestBodyType" : null,
+      "responseType" : "ResponseEntity<Product>"
+    }, {
+      "verb" : "POST",
+      "path" : "/api/products/{id}/reviews",
+      "methodName" : "addReview",
+      "pathVariables" : [ "id" ],
+      "requestBodyType" : "ProductReviewRequest",
+      "responseType" : "ResponseEntity<ProductReviewResponse>"
+    }, {
+      "verb" : "PUT",
+      "path" : "/api/products/{productId}/reviews/{reviewId}/verify",
+      "methodName" : "verifyReview",
+      "pathVariables" : [ "productId", "reviewId" ],
+      "requestBodyType" : "ProductReviewVerificationRequest",
+      "responseType" : "ResponseEntity<ProductWithReviewsResponse>"
+    }, {
+      "verb" : "GET",
+      "path" : "/api/products/stock/low-stock",
+      "methodName" : "getLowStockAlerts",
+      "pathVariables" : [ ],
+      "requestBodyType" : null,
+      "responseType" : "List<LowStockAlertDTO>"
+    }, {
+      "verb" : "GET",
+      "path" : "/api/products/specifications/search",
+      "methodName" : "searchBySpecification",
+      "pathVariables" : [ ],
+      "requestBodyType" : null,
+      "responseType" : "List<ProductResponse>"
+    }, {
+      "verb" : "GET",
+      "path" : "/api/products/reports/top-rated",
+      "methodName" : "getTopRatedProducts",
+      "pathVariables" : [ ],
+      "requestBodyType" : null,
+      "responseType" : "List<TopProductDTO>"
+    } ]
+  }, {
+    "className" : "ProductReviewController",
+    "packageName" : "com.team27.amazon.product.controller",
+    "basePaths" : [ "/api/reviews" ],
+    "endpoints" : [ {
+      "verb" : "POST",
+      "path" : "/api/reviews",
+      "methodName" : "createReview",
+      "pathVariables" : [ ],
+      "requestBodyType" : "ProductReviewRequest",
+      "responseType" : "ResponseEntity<ProductReviewResponse>"
+    }, {
+      "verb" : "GET",
+      "path" : "/api/reviews",
+      "methodName" : "getReviews",
+      "pathVariables" : [ ],
+      "requestBodyType" : null,
+      "responseType" : "List<ProductReviewResponse>"
+    }, {
+      "verb" : "GET",
+      "path" : "/api/reviews/{id}",
+      "methodName" : "getReviewById",
+      "pathVariables" : [ "id" ],
+      "requestBodyType" : null,
+      "responseType" : "ProductReviewResponse"
+    }, {
+      "verb" : "PUT",
+      "path" : "/api/reviews/{id}",
+      "methodName" : "updateReview",
+      "pathVariables" : [ "id" ],
+      "requestBodyType" : "ProductReviewRequest",
+      "responseType" : "ProductReviewResponse"
+    }, {
+      "verb" : "DELETE",
+      "path" : "/api/reviews/{id}",
+      "methodName" : "deleteReview",
+      "pathVariables" : [ "id" ],
+      "requestBodyType" : null,
+      "responseType" : "ResponseEntity<Void>"
+    } ]
+  }, {
+    "className" : "HealthController",
+    "packageName" : "com.team27.amazon.shipping.controller",
+    "basePaths" : [ "" ],
+    "endpoints" : [ {
+      "verb" : "GET",
+      "path" : "/api/shipments/health",
+      "methodName" : "health",
+      "pathVariables" : [ ],
+      "requestBodyType" : null,
+      "responseType" : "String"
+    } ]
+  }, {
+    "className" : "ShipmentController",
+    "packageName" : "com.team27.amazon.shipping.controller",
+    "basePaths" : [ "/api/shipments" ],
+    "endpoints" : [ {
+      "verb" : "POST",
+      "path" : "/api/shipments",
+      "methodName" : "createShipment",
+      "pathVariables" : [ ],
+      "requestBodyType" : "Shipment",
+      "responseType" : "Shipment"
+    }, {
+      "verb" : "POST",
+      "path" : "/api/shipments/order/{orderId}",
+      "methodName" : "createShipmentForOrder",
+      "pathVariables" : [ "orderId" ],
+      "requestBodyType" : "CreateShipmentRequest",
+      "responseType" : "ResponseEntity<Shipment>"
+    }, {
+      "verb" : "POST",
+      "path" : "/api/shipments/{id}/tracking",
+      "methodName" : "recordTrackingEvent",
+      "pathVariables" : [ "id" ],
+      "requestBodyType" : "TrackingEventRequest",
+      "responseType" : "ResponseEntity<ShipmentTrackingEvent>"
+    }, {
+      "verb" : "GET",
+      "path" : "/api/shipments",
+      "methodName" : "getAllShipments",
+      "pathVariables" : [ ],
+      "requestBodyType" : null,
+      "responseType" : "List<Shipment>"
+    }, {
+      "verb" : "GET",
+      "path" : "/api/shipments/{id}",
+      "methodName" : "getShipment",
+      "pathVariables" : [ "id" ],
+      "requestBodyType" : null,
+      "responseType" : "Shipment"
+    }, {
+      "verb" : "PUT",
+      "path" : "/api/shipments/{id}",
+      "methodName" : "updateShipment",
+      "pathVariables" : [ "id" ],
+      "requestBodyType" : "Shipment",
+      "responseType" : "Shipment"
+    }, {
+      "verb" : "DELETE",
+      "path" : "/api/shipments/{id}",
+      "methodName" : "deleteShipment",
+      "pathVariables" : [ "id" ],
+      "requestBodyType" : null,
+      "responseType" : "void"
+    }, {
+      "verb" : "GET",
+      "path" : "/api/shipments/order/{orderId}/latest",
+      "methodName" : "getLatestShipmentByOrderId",
+      "pathVariables" : [ "orderId" ],
+      "requestBodyType" : null,
+      "responseType" : "Shipment"
+    }, {
+      "verb" : "GET",
+      "path" : "/api/shipments/nearby",
+      "methodName" : "findNearbyShipments",
+      "pathVariables" : [ ],
+      "requestBodyType" : null,
+      "responseType" : "List<NearbyShipmentDTO>"
+    }, {
+      "verb" : "DELETE",
+      "path" : "/api/shipments/purge",
+      "methodName" : "purgeOldShipments",
+      "pathVariables" : [ ],
+      "requestBodyType" : null,
+      "responseType" : "ResponseEntity<Map<String,Integer>>"
+    }, {
+      "verb" : "GET",
+      "path" : "/api/shipments/carrier/{carrier}/summary",
+      "methodName" : "getCarrierSummary",
+      "pathVariables" : [ "carrier" ],
+      "requestBodyType" : null,
+      "responseType" : "ResponseEntity<CarrierSummaryDTO>"
+    }, {
+      "verb" : "GET",
+      "path" : "/api/shipments/delayed",
+      "methodName" : "getDelayedShipments",
+      "pathVariables" : [ ],
+      "requestBodyType" : null,
+      "responseType" : "ResponseEntity<List<DelayedShipmentDTO>>"
+    }, {
+      "verb" : "GET",
+      "path" : "/api/shipments/history",
+      "methodName" : "getShipmentsInDateRange",
+      "pathVariables" : [ ],
+      "requestBodyType" : null,
+      "responseType" : "ResponseEntity<List<Shipment>>"
+    }, {
+      "verb" : "GET",
+      "path" : "/api/shipments/analytics",
+      "methodName" : "getShippingAnalytics",
+      "pathVariables" : [ ],
+      "requestBodyType" : null,
+      "responseType" : "ResponseEntity<ShippingAnalyticsDTO>"
+    }, {
+      "verb" : "GET",
+      "path" : "/api/shipments/metadata/search",
+      "methodName" : "searchShipmentsByMetadata",
+      "pathVariables" : [ ],
+      "requestBodyType" : null,
+      "responseType" : "ResponseEntity<List<Shipment>>"
+    }, {
+      "verb" : "PUT",
+      "path" : "/api/shipments/batch-status",
+      "methodName" : "batchUpdateStatus",
+      "pathVariables" : [ ],
+      "requestBodyType" : "List<BatchStatusUpdateRequest>",
+      "responseType" : "ResponseEntity<Map<String,Integer>>"
+    }, {
+      "verb" : "GET",
+      "path" : "/api/shipments/{id}/tracking",
+      "methodName" : "getShipmentTrackingTimeline",
+      "pathVariables" : [ "id" ],
+      "requestBodyType" : null,
+      "responseType" : "ResponseEntity<List<ShipmentTrackingDTO>>"
+    } ]
+  }, {
+    "className" : "AuthController",
+    "packageName" : "com.team27.amazon.user.controller",
+    "basePaths" : [ "/api/auth" ],
+    "endpoints" : [ {
+      "verb" : "POST",
+      "path" : "/api/auth/register",
+      "methodName" : "register",
+      "pathVariables" : [ ],
+      "requestBodyType" : "RegisterRequest",
+      "responseType" : "ResponseEntity<AuthResponse>"
+    }, {
+      "verb" : "POST",
+      "path" : "/api/auth/login",
+      "methodName" : "login",
+      "pathVariables" : [ ],
+      "requestBodyType" : "LoginRequest",
+      "responseType" : "ResponseEntity<AuthResponse>"
+    } ]
+  }, {
+    "className" : "HealthController",
+    "packageName" : "com.team27.amazon.user.controller",
+    "basePaths" : [ "" ],
+    "endpoints" : [ {
+      "verb" : "GET",
+      "path" : "/api/users/health",
+      "methodName" : "health",
+      "pathVariables" : [ ],
+      "requestBodyType" : null,
+      "responseType" : "String"
+    } ]
+  }, {
+    "className" : "UserController",
+    "packageName" : "com.team27.amazon.user.controller",
+    "basePaths" : [ "/api/users" ],
+    "endpoints" : [ {
+      "verb" : "POST",
+      "path" : "/api/users",
+      "methodName" : "createUser",
+      "pathVariables" : [ ],
+      "requestBodyType" : "User",
+      "responseType" : "ResponseEntity<User>"
+    }, {
+      "verb" : "GET",
+      "path" : "/api/users/{id}",
+      "methodName" : "getUserById",
+      "pathVariables" : [ "id" ],
+      "requestBodyType" : null,
+      "responseType" : "ResponseEntity<User>"
+    }, {
+      "verb" : "GET",
+      "path" : "/api/users",
+      "methodName" : "getAllUsers",
+      "pathVariables" : [ ],
+      "requestBodyType" : null,
+      "responseType" : "ResponseEntity<List<User>>"
+    }, {
+      "verb" : "PUT",
+      "path" : "/api/users/{id}",
+      "methodName" : "updateUser",
+      "pathVariables" : [ "id" ],
+      "requestBodyType" : "User",
+      "responseType" : "ResponseEntity<User>"
+    }, {
+      "verb" : "PUT",
+      "path" : "/api/users/{id}/role",
+      "methodName" : "updateUserRole",
+      "pathVariables" : [ "id" ],
+      "requestBodyType" : "RoleUpdateRequest",
+      "responseType" : "ResponseEntity<User>"
+    }, {
+      "verb" : "DELETE",
+      "path" : "/api/users/{id}",
+      "methodName" : "deleteUser",
+      "pathVariables" : [ "id" ],
+      "requestBodyType" : null,
+      "responseType" : "ResponseEntity<Void>"
+    }, {
+      "verb" : "POST",
+      "path" : "/api/users/{userId}/addresses",
+      "methodName" : "createAddress",
+      "pathVariables" : [ "userId" ],
+      "requestBodyType" : "ShippingAddress",
+      "responseType" : "ResponseEntity<ShippingAddress>"
+    }, {
+      "verb" : "GET",
+      "path" : "/api/users/{userId}/addresses/{addressId}",
+      "methodName" : "getAddressById",
+      "pathVariables" : [ "userId", "addressId" ],
+      "requestBodyType" : null,
+      "responseType" : "ResponseEntity<ShippingAddress>"
+    }, {
+      "verb" : "GET",
+      "path" : "/api/users/{userId}/addresses",
+      "methodName" : "getAllAddresses",
+      "pathVariables" : [ "userId" ],
+      "requestBodyType" : null,
+      "responseType" : "ResponseEntity<List<ShippingAddress>>"
+    }, {
+      "verb" : "PUT",
+      "path" : "/api/users/{userId}/addresses/{addressId}",
+      "methodName" : "updateAddress",
+      "pathVariables" : [ "userId", "addressId" ],
+      "requestBodyType" : "ShippingAddress",
+      "responseType" : "ResponseEntity<ShippingAddress>"
+    }, {
+      "verb" : "DELETE",
+      "path" : "/api/users/{userId}/addresses/{addressId}",
+      "methodName" : "deleteAddress",
+      "pathVariables" : [ "userId", "addressId" ],
+      "requestBodyType" : null,
+      "responseType" : "ResponseEntity<Void>"
+    }, {
+      "verb" : "GET",
+      "path" : "/api/users/search",
+      "methodName" : "searchUsers",
+      "pathVariables" : [ ],
+      "requestBodyType" : null,
+      "responseType" : "ResponseEntity<List<User>>"
+    }, {
+      "verb" : "PUT",
+      "path" : "/api/users/{id}/preferences",
+      "methodName" : "updateUserPreferences",
+      "pathVariables" : [ "id" ],
+      "requestBodyType" : "Map<String,Object>",
+      "responseType" : "ResponseEntity<User>"
+    }, {
+      "verb" : "GET",
+      "path" : "/api/users/{id}/order-summary",
+      "methodName" : "getUserOrderSummary",
+      "pathVariables" : [ "id" ],
+      "requestBodyType" : null,
+      "responseType" : "ResponseEntity<UserOrderSummaryDTO>"
+    }, {
+      "verb" : "PUT",
+      "path" : "/api/users/{id}/deactivate",
+      "methodName" : "deactivateUser",
+      "pathVariables" : [ "id" ],
+      "requestBodyType" : null,
+      "responseType" : "User"
+    }, {
+      "verb" : "GET",
+      "path" : "/api/users/preferences/search",
+      "methodName" : "findUsersByPreference",
+      "pathVariables" : [ ],
+      "requestBodyType" : null,
+      "responseType" : "List<User>"
+    }, {
+      "verb" : "GET",
+      "path" : "/api/users/reports/top-buyers",
+      "methodName" : "getTopBuyers",
+      "pathVariables" : [ ],
+      "requestBodyType" : null,
+      "responseType" : "List<TopBuyerDTO>"
+    }, {
+      "verb" : "PUT",
+      "path" : "/api/users/{userId}/addresses/{addressId}/default",
+      "methodName" : "setDefaultAddress",
+      "pathVariables" : [ "userId", "addressId" ],
+      "requestBodyType" : null,
+      "responseType" : "ResponseEntity<User>"
+    }, {
+      "verb" : "GET",
+      "path" : "/api/users/{id}/profile",
+      "methodName" : "getUserProfile",
+      "pathVariables" : [ "id" ],
+      "requestBodyType" : null,
+      "responseType" : "UserProfileDTO"
+    }, {
+      "verb" : "GET",
+      "path" : "/api/users/preferences/language",
+      "methodName" : "getUsersByLanguage",
+      "pathVariables" : [ ],
+      "requestBodyType" : null,
+      "responseType" : "ResponseEntity<List<User>>"
+    }, {
+      "verb" : "GET",
+      "path" : "/api/users/language",
+      "methodName" : "getUsersByLanguage",
+      "pathVariables" : [ ],
+      "requestBodyType" : null,
+      "responseType" : "ResponseEntity<List<User>>"
+    }, {
+      "verb" : "GET",
+      "path" : "/api/users/{id}/activity",
+      "methodName" : "getUserActivityFeed",
+      "pathVariables" : [ "id" ],
+      "requestBodyType" : null,
+      "responseType" : "ResponseEntity<ActivityFeedDTO>"
+    } ]
+  } ],
+  "mongoCollections" : [ {
+    "className" : "AuditLogDocument",
+    "packageName" : "com.team27.amazon.billing.model",
+    "collectionName" : "audit_logs",
+    "fields" : [ {
+      "fieldName" : "id",
+      "javaType" : "String",
+      "isId" : true
+    }, {
+      "fieldName" : "transactionId",
+      "javaType" : "String",
+      "isId" : false
+    }, {
+      "fieldName" : "eventType",
+      "javaType" : "String",
+      "isId" : false
+    }, {
+      "fieldName" : "details",
+      "javaType" : "String",
+      "isId" : false
+    }, {
+      "fieldName" : "timestamp",
+      "javaType" : "LocalDateTime",
+      "isId" : false
+    } ]
+  }, {
+    "className" : "AuthEvent",
+    "packageName" : "com.team27.amazon.common.events",
+    "collectionName" : "auth_events",
+    "fields" : [ {
+      "fieldName" : "id",
+      "javaType" : "String",
+      "isId" : true
+    }, {
+      "fieldName" : "userId",
+      "javaType" : "Long",
+      "isId" : false
+    }, {
+      "fieldName" : "email",
+      "javaType" : "String",
+      "isId" : false
+    }, {
+      "fieldName" : "action",
+      "javaType" : "String",
+      "isId" : false
+    }, {
+      "fieldName" : "timestamp",
+      "javaType" : "LocalDateTime",
+      "isId" : false
+    }, {
+      "fieldName" : "details",
+      "javaType" : "Map<String,Object>",
+      "isId" : false
+    } ]
+  }, {
+    "className" : "OrderEvent",
+    "packageName" : "com.team27.amazon.common.events",
+    "collectionName" : "order_events",
+    "fields" : [ {
+      "fieldName" : "id",
+      "javaType" : "String",
+      "isId" : true
+    }, {
+      "fieldName" : "orderId",
+      "javaType" : "Long",
+      "isId" : false
+    }, {
+      "fieldName" : "action",
+      "javaType" : "String",
+      "isId" : false
+    }, {
+      "fieldName" : "timestamp",
+      "javaType" : "LocalDateTime",
+      "isId" : false
+    }, {
+      "fieldName" : "details",
+      "javaType" : "Map<String,Object>",
+      "isId" : false
+    } ]
+  }, {
+    "className" : "ProductEvent",
+    "packageName" : "com.team27.amazon.common.events",
+    "collectionName" : "product_events",
+    "fields" : [ {
+      "fieldName" : "id",
+      "javaType" : "String",
+      "isId" : true
+    }, {
+      "fieldName" : "productId",
+      "javaType" : "Long",
+      "isId" : false
+    }, {
+      "fieldName" : "action",
+      "javaType" : "String",
+      "isId" : false
+    }, {
+      "fieldName" : "timestamp",
+      "javaType" : "LocalDateTime",
+      "isId" : false
+    }, {
+      "fieldName" : "details",
+      "javaType" : "Map<String,Object>",
+      "isId" : false
+    } ]
+  }, {
+    "className" : "ShipmentEvent",
+    "packageName" : "com.team27.amazon.common.events",
+    "collectionName" : "shipment_events",
+    "fields" : [ {
+      "fieldName" : "id",
+      "javaType" : "String",
+      "isId" : true
+    }, {
+      "fieldName" : "shipmentId",
+      "javaType" : "Long",
+      "isId" : false
+    }, {
+      "fieldName" : "action",
+      "javaType" : "String",
+      "isId" : false
+    }, {
+      "fieldName" : "timestamp",
+      "javaType" : "LocalDateTime",
+      "isId" : false
+    }, {
+      "fieldName" : "details",
+      "javaType" : "Map<String,Object>",
+      "isId" : false
+    } ]
+  }, {
+    "className" : "TransactionAuditEvent",
+    "packageName" : "com.team27.amazon.common.events",
+    "collectionName" : "transaction_audit_trail",
+    "fields" : [ {
+      "fieldName" : "id",
+      "javaType" : "String",
+      "isId" : true
+    }, {
+      "fieldName" : "transactionId",
+      "javaType" : "Long",
+      "isId" : false
+    }, {
+      "fieldName" : "action",
+      "javaType" : "String",
+      "isId" : false
+    }, {
+      "fieldName" : "timestamp",
+      "javaType" : "LocalDateTime",
+      "isId" : false
+    }, {
+      "fieldName" : "method",
+      "javaType" : "String",
+      "isId" : false
+    }, {
+      "fieldName" : "amount",
+      "javaType" : "Double",
+      "isId" : false
+    }, {
+      "fieldName" : "details",
+      "javaType" : "Map<String,Object>",
+      "isId" : false
+    } ]
+  } ],
+  "esIndices" : [ {
+    "className" : "ProductSearchDocument",
+    "packageName" : "com.team27.amazon.product.model.elasticsearch",
+    "indexName" : "products",
+    "fields" : [ {
+      "fieldName" : "id",
+      "javaType" : "String",
+      "isId" : true
+    }, {
+      "fieldName" : "productId",
+      "javaType" : "Long",
+      "isId" : false
+    }, {
+      "fieldName" : "name",
+      "javaType" : "String",
+      "isId" : false
+    }, {
+      "fieldName" : "description",
+      "javaType" : "String",
+      "isId" : false
+    }, {
+      "fieldName" : "category",
+      "javaType" : "String",
+      "isId" : false
+    }, {
+      "fieldName" : "brand",
+      "javaType" : "String",
+      "isId" : false
+    }, {
+      "fieldName" : "price",
+      "javaType" : "Double",
+      "isId" : false
+    }, {
+      "fieldName" : "stockQuantity",
+      "javaType" : "Integer",
+      "isId" : false
+    }, {
+      "fieldName" : "rating",
+      "javaType" : "Double",
+      "isId" : false
+    }, {
+      "fieldName" : "status",
+      "javaType" : "String",
+      "isId" : false
+    } ]
+  } ],
+  "neo4jNodes" : [ {
+    "className" : "ProductNode",
+    "packageName" : "com.team27.amazon.order.model.neo4j",
+    "label" : "Product",
+    "fields" : [ {
+      "fieldName" : "productId",
+      "javaType" : "Long",
+      "isId" : true
+    }, {
+      "fieldName" : "name",
+      "javaType" : "String",
+      "isId" : false
+    }, {
+      "fieldName" : "category",
+      "javaType" : "String",
+      "isId" : false
+    }, {
+      "fieldName" : "boughtTogether",
+      "javaType" : "Set<BoughtTogetherRelationship>",
+      "isId" : false
+    } ]
+  } ],
+  "neo4jRelationships" : [ {
+    "className" : "BoughtTogetherRelationship",
+    "packageName" : "com.team27.amazon.order.model.neo4j",
+    "fields" : [ {
+      "fieldName" : "id",
+      "javaType" : "Long",
+      "isId" : false
+    }, {
+      "fieldName" : "targetProduct",
+      "javaType" : "ProductNode",
+      "isId" : false
+    }, {
+      "fieldName" : "coPurchaseCount",
+      "javaType" : "Integer",
+      "isId" : false
+    }, {
+      "fieldName" : "lastCoPurchaseDate",
+      "javaType" : "LocalDateTime",
+      "isId" : false
+    }, {
+      "fieldName" : "recordedOrderIds",
+      "javaType" : "List<Long>",
+      "isId" : false
+    } ]
+  } ],
+  "cassandraTables" : [ {
+    "className" : "ShipmentTrackingEvent",
+    "packageName" : "com.team27.amazon.shipping.model.cassandra",
+    "tableName" : "shipment_tracking_events",
+    "columns" : [ {
+      "fieldName" : "key",
+      "columnName" : "key",
+      "javaType" : "ShipmentTrackingEventKey",
+      "isPartitionKey" : true,
+      "isClusteringKey" : false
+    }, {
+      "fieldName" : "status",
+      "columnName" : "status",
+      "javaType" : "String",
+      "isPartitionKey" : false,
+      "isClusteringKey" : false
+    }, {
+      "fieldName" : "carrier",
+      "columnName" : "carrier",
+      "javaType" : "String",
+      "isPartitionKey" : false,
+      "isClusteringKey" : false
+    }, {
+      "fieldName" : "trackingNumber",
+      "columnName" : "tracking_number",
+      "javaType" : "String",
+      "isPartitionKey" : false,
+      "isClusteringKey" : false
+    }, {
+      "fieldName" : "latitude",
+      "columnName" : "latitude",
+      "javaType" : "Double",
+      "isPartitionKey" : false,
+      "isClusteringKey" : false
+    }, {
+      "fieldName" : "longitude",
+      "columnName" : "longitude",
+      "javaType" : "Double",
+      "isPartitionKey" : false,
+      "isClusteringKey" : false
+    }, {
+      "fieldName" : "notes",
+      "columnName" : "notes",
+      "javaType" : "String",
+      "isPartitionKey" : false,
+      "isClusteringKey" : false
+    } ]
+  } ],
+  "auth" : {
+    "userTable" : "users",
+    "userColumns" : [ {
+      "fieldName" : "id",
+      "columnName" : "id",
+      "javaType" : "Long",
+      "nullable" : true,
+      "unique" : false,
+      "required" : false,
+      "isId" : true,
+      "isGenerated" : true,
+      "isEnum" : false,
+      "relationKind" : null
+    }, {
+      "fieldName" : "name",
+      "columnName" : "name",
+      "javaType" : "String",
+      "nullable" : false,
+      "unique" : false,
+      "required" : true,
+      "isId" : false,
+      "isGenerated" : false,
+      "isEnum" : false,
+      "relationKind" : null
+    }, {
+      "fieldName" : "email",
+      "columnName" : "email",
+      "javaType" : "String",
+      "nullable" : false,
+      "unique" : true,
+      "required" : true,
+      "isId" : false,
+      "isGenerated" : false,
+      "isEnum" : false,
+      "relationKind" : null
+    }, {
+      "fieldName" : "password",
+      "columnName" : "password",
+      "javaType" : "String",
+      "nullable" : false,
+      "unique" : false,
+      "required" : true,
+      "isId" : false,
+      "isGenerated" : false,
+      "isEnum" : false,
+      "relationKind" : null
+    }, {
+      "fieldName" : "phone",
+      "columnName" : "phone",
+      "javaType" : "String",
+      "nullable" : false,
+      "unique" : true,
+      "required" : true,
+      "isId" : false,
+      "isGenerated" : false,
+      "isEnum" : false,
+      "relationKind" : null
+    }, {
+      "fieldName" : "role",
+      "columnName" : "role",
+      "javaType" : "Role",
+      "nullable" : false,
+      "unique" : false,
+      "required" : true,
+      "isId" : false,
+      "isGenerated" : false,
+      "isEnum" : true,
+      "relationKind" : null
+    }, {
+      "fieldName" : "status",
+      "columnName" : "status",
+      "javaType" : "Status",
+      "nullable" : false,
+      "unique" : false,
+      "required" : true,
+      "isId" : false,
+      "isGenerated" : false,
+      "isEnum" : true,
+      "relationKind" : null
+    }, {
+      "fieldName" : "preferences",
+      "columnName" : "preferences",
+      "javaType" : "Map<String,Object>",
+      "nullable" : true,
+      "unique" : false,
+      "required" : false,
+      "isId" : false,
+      "isGenerated" : false,
+      "isEnum" : false,
+      "relationKind" : null
+    }, {
+      "fieldName" : "createdAt",
+      "columnName" : "created_at",
+      "javaType" : "LocalDateTime",
+      "nullable" : false,
+      "unique" : false,
+      "required" : true,
+      "isId" : false,
+      "isGenerated" : false,
+      "isEnum" : false,
+      "relationKind" : null
+    }, {
+      "fieldName" : "shippingAddresses",
+      "columnName" : "shipping_addresses",
+      "javaType" : "List<ShippingAddress>",
+      "nullable" : true,
+      "unique" : false,
+      "required" : false,
+      "isId" : false,
+      "isGenerated" : false,
+      "isEnum" : false,
+      "relationKind" : "OneToMany"
+    } ],
+    "roleColumn" : "role",
+    "roleEnumJavaType" : "Role",
+    "roleEnumValues" : [ "CUSTOMER", "ADMIN" ],
+    "adminLabel" : "ADMIN",
+    "emailColumn" : "email",
+    "passwordColumn" : "password",
+    "loginPath" : "/api/auth/register",
+    "loginVerb" : "POST"
+  }
+}
