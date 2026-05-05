@@ -1,35 +1,37 @@
 package com.team27.amazon.order.service;
 
-import com.team27.amazon.order.dto.ProductRecommendationDTO;
-import com.team27.amazon.order.repository.ProductRecommendationRepository;
-import org.springframework.cache.annotation.Cacheable;
+import java.time.Duration;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+
 import org.springframework.data.neo4j.core.Neo4jClient;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
 
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.team27.amazon.order.cache.OrderRedisCacheService;
+import com.team27.amazon.order.dto.ProductRecommendationDTO;
+import com.team27.amazon.order.repository.ProductRecommendationRepository;
 
 @Service
 public class RecommendationService {
 
     private final Neo4jClient neo4jClient;
     private final ProductRecommendationRepository productRecommendationRepository;
+    private final OrderRedisCacheService orderRedisCacheService;
 
     public RecommendationService(
             Neo4jClient neo4jClient,
-            ProductRecommendationRepository productRecommendationRepository
+            ProductRecommendationRepository productRecommendationRepository,
+            OrderRedisCacheService orderRedisCacheService
     ) {
         this.neo4jClient = neo4jClient;
         this.productRecommendationRepository = productRecommendationRepository;
+        this.orderRedisCacheService = orderRedisCacheService;
     }
 
-    @Cacheable(
-            value = "order:recommendations",
-            key = "'product:' + #productId + ':limit:' + (#limit == null ? 5 : #limit)"
-    )
     public List<ProductRecommendationDTO> getRecommendations(Long productId, Integer limit) {
         int safeLimit = limit == null || limit <= 0 ? 5 : limit;
 
@@ -37,13 +39,30 @@ public class RecommendationService {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Product not found");
         }
 
+        String cacheKey = "order-service::S3-F12::productId=" + productId + ":limit=" + safeLimit;
+
+        if (orderRedisCacheService != null) {
+            try {
+                var cached = orderRedisCacheService.get(
+                        cacheKey,
+                        new TypeReference<List<ProductRecommendationDTO>>() {
+                }
+                );
+                if (cached.isPresent()) {
+                    return cached.get();
+                }
+            } catch (RuntimeException ignored) {
+                // Redis is a soft dependency
+            }
+        }
+
         List<Map<String, Object>> rows = neo4jClient.query("""
-                    MATCH (seed:ProductNode {productId: $productId})-[r:BOUGHT_TOGETHER]-(rec:ProductNode)
-                    WHERE rec.productId <> $productId
-                    RETURN rec.productId AS productId, r.coPurchaseCount AS score
-                    ORDER BY score DESC
-                    LIMIT $limit
-                """)
+                MATCH (seed:ProductNode {productId: $productId})-[r:BOUGHT_TOGETHER]-(rec:ProductNode)
+                WHERE rec.productId <> $productId
+                RETURN rec.productId AS productId, r.coPurchaseCount AS score
+                ORDER BY score DESC
+                LIMIT $limit
+            """)
                 .bind(productId).to("productId")
                 .bind(safeLimit).to("limit")
                 .fetch()
@@ -69,9 +88,19 @@ public class RecommendationService {
             }
         }
 
-        return productRecommendationRepository.enrichActiveProducts(scores)
+        List<ProductRecommendationDTO> result = productRecommendationRepository.enrichActiveProducts(scores)
                 .stream()
                 .limit(safeLimit)
                 .toList();
+
+        if (orderRedisCacheService != null) {
+            try {
+                orderRedisCacheService.set(cacheKey, result, Duration.ofMinutes(5));
+            } catch (RuntimeException ignored) {
+                // Redis is a soft dependency
+            }
+        }
+
+        return result;
     }
 }

@@ -1,33 +1,35 @@
 package com.team27.amazon.order.service;
 
+import java.time.Duration;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
-import java.time.Duration;
-import java.util.HashMap;
 import java.util.ArrayList;
 import java.util.Comparator;
-import java.util.List;
-import java.util.Optional;
-import java.util.Map;
-import org.springframework.data.neo4j.core.Neo4jClient;
+import java.util.HashMap;
 import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Optional;
 
-import com.team27.amazon.common.events.AbstractEventSubject;
-import com.team27.amazon.common.events.MongoEventLogger;
-import com.team27.amazon.order.cache.OrderRedisCacheService;
-import com.fasterxml.jackson.core.type.TypeReference;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.cache.CacheManager;
+import org.springframework.data.neo4j.core.Neo4jClient;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.cache.CacheManager;
+
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.team27.amazon.common.events.AbstractEventSubject;
+import com.team27.amazon.common.events.MongoEventLogger;
+import com.team27.amazon.order.cache.OrderRedisCacheService;
 import com.team27.amazon.order.dto.AddOrderItemRequest;
+import com.team27.amazon.order.dto.CoPurchaseRecordResponse;
 import com.team27.amazon.order.dto.OrderAnalyticsDTO;
 import com.team27.amazon.order.dto.OrderAnalyticsDashboardDTO;
 import com.team27.amazon.order.dto.OrderDetailsDTO;
@@ -37,22 +39,13 @@ import com.team27.amazon.order.dto.OrderItemDetailsDTO;
 import com.team27.amazon.order.model.Order;
 import com.team27.amazon.order.model.OrderItem;
 import com.team27.amazon.order.model.OrderStatus;
-import com.team27.amazon.order.repository.OrderRepository;
 import com.team27.amazon.order.repository.OrderItemRepository;
+import com.team27.amazon.order.repository.OrderRepository;
 import com.team27.amazon.order.repository.ProductJdbcRepository;
 import com.team27.amazon.order.repository.ShipmentJdbcRepository;
 import com.team27.amazon.order.repository.ShippingAddressJdbcRepository;
 import com.team27.amazon.order.repository.TransactionJdbcRepository;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Objects;
-import org.springframework.cache.CacheManager;
-import org.springframework.http.HttpStatus;
-import org.springframework.transaction.annotation.Transactional;
-import org.springframework.web.server.ResponseStatusException;
 
-import com.team27.amazon.order.dto.CoPurchaseRecordResponse;
 import jakarta.annotation.PostConstruct;
 
 @Service
@@ -80,20 +73,20 @@ public class OrderService extends AbstractEventSubject {
 
     @Autowired
     private ProductJdbcRepository productJdbcRepository;
-    
+
     private Order reloadOrderWithSortedItems(Long orderId) {
         Order updatedOrder = orderRepository.findById(orderId)
                 .orElseThrow(() -> new ResponseStatusException(
-                        HttpStatus.NOT_FOUND,
-                        "Order not found"
-                ));
+                HttpStatus.NOT_FOUND,
+                "Order not found"
+        ));
 
         if (updatedOrder.getOrderItems() != null) {
             updatedOrder.getOrderItems().sort(Comparator.comparing(OrderItem::getItemOrder));
         }
 
         return updatedOrder;
-}
+    }
     @Autowired
     private TransactionJdbcRepository transactionJdbcRepository;
 
@@ -120,16 +113,17 @@ public class OrderService extends AbstractEventSubject {
                 "status", savedOrder.getStatus() == null ? null : savedOrder.getStatus().name(),
                 "totalAmount", savedOrder.getTotalAmount()
         )));
-            invalidateOrderFeatureCaches();
+        invalidateOrderFeatureCaches();
         return savedOrder;
     }
+
     @Transactional
     public Order addItemsToExistingOrder(Long orderId, List<AddOrderItemRequest> requests) {
         Order order = orderRepository.findById(orderId)
                 .orElseThrow(() -> new ResponseStatusException(
-                        HttpStatus.NOT_FOUND,
-                        "Order not found"
-                ));
+                HttpStatus.NOT_FOUND,
+                "Order not found"
+        ));
 
         if (order.getStatus() != OrderStatus.PENDING) {
             throw new ResponseStatusException(
@@ -258,8 +252,6 @@ public class OrderService extends AbstractEventSubject {
         return 0.0;
     }
 
-
-
     public OrderDetailsDTO getOrderDetails(Long orderId) {
         String cacheKey = "order-service::S3-F9::" + orderId;
         Optional<OrderDetailsDTO> cached = cacheGet(cacheKey, OrderDetailsDTO.class);
@@ -269,9 +261,9 @@ public class OrderService extends AbstractEventSubject {
 
         Order order = orderRepository.findByIdWithItems(orderId)
                 .orElseThrow(() -> new ResponseStatusException(
-                        HttpStatus.NOT_FOUND,
-                        "Order not found with id: " + orderId
-                ));
+                HttpStatus.NOT_FOUND,
+                "Order not found with id: " + orderId
+        ));
 
         List<OrderItem> orderItems = order.getOrderItems() == null
                 ? new ArrayList<>()
@@ -307,9 +299,10 @@ public class OrderService extends AbstractEventSubject {
                 .totalQuantity(totalQuantity)
                 .build();
 
-            cacheSet(cacheKey, detailsDTO, TEN_MINUTES);
-            return detailsDTO;
+        cacheSet(cacheKey, detailsDTO, TEN_MINUTES);
+        return detailsDTO;
     }
+
     // READ - Get all orders
     public List<Order> getAllOrders() {
         return orderRepository.findAll();
@@ -349,6 +342,7 @@ public class OrderService extends AbstractEventSubject {
                 .sorted(Comparator.comparing(Order::getOrderedAt).reversed())
                 .toList();
     }
+
     public List<Order> searchOrders(OrderStatus status, LocalDate startDate, LocalDate endDate) {
         LocalDateTime rangeStart = startDate.atStartOfDay();
         LocalDateTime rangeEnd = endDate.atTime(LocalTime.MAX);
@@ -358,7 +352,8 @@ public class OrderService extends AbstractEventSubject {
                 "startDate", startDate,
                 "endDate", endDate
         ));
-        Optional<List<Order>> cached = cacheGet(cacheKey, new TypeReference<List<Order>>() {});
+        Optional<List<Order>> cached = cacheGet(cacheKey, new TypeReference<List<Order>>() {
+        });
         if (cached.isPresent()) {
             return cached.get();
         }
@@ -422,8 +417,8 @@ public class OrderService extends AbstractEventSubject {
         return orderRepository.findById(orderId).map(order -> {
             if (order.getOrderItems() != null && !order.getOrderItems().isEmpty()) {
                 return order.getOrderItems().stream()
-                    .mapToDouble(item -> item.getPriceAtPurchase() * item.getQuantity())
-                    .sum();
+                        .mapToDouble(item -> item.getPriceAtPurchase() * item.getQuantity())
+                        .sum();
             }
             return 0.0;
         }).orElse(0.0);
@@ -433,8 +428,8 @@ public class OrderService extends AbstractEventSubject {
     public Order deliverOrder(Long orderId) {
         Order order = orderRepository.findById(orderId)
                 .orElseThrow(() -> new ResponseStatusException(
-                        HttpStatus.NOT_FOUND, "Order not found"
-                ));
+                HttpStatus.NOT_FOUND, "Order not found"
+        ));
 
         if (order.getStatus() != OrderStatus.SHIPPED) {
             throw new ResponseStatusException(
@@ -471,9 +466,9 @@ public class OrderService extends AbstractEventSubject {
         );
 
         notifyObservers("ORDER_DELIVERED", orderEventPayload(savedOrder.getId(), Map.of(
-            "status", savedOrder.getStatus().name(),
-            "userId", savedOrder.getUserId(),
-            "totalAmount", savedOrder.getTotalAmount()
+                "status", savedOrder.getStatus().name(),
+                "userId", savedOrder.getUserId(),
+                "totalAmount", savedOrder.getTotalAmount()
         )));
 
         invalidateOrderCaches(savedOrder.getId());
@@ -481,6 +476,7 @@ public class OrderService extends AbstractEventSubject {
 
         return savedOrder;
     }
+
     public List<Order> searchOrdersByMetadata(String key, String value) {
         if (key == null || key.isBlank() || value == null || value.isBlank()) {
             throw new ResponseStatusException(
@@ -490,7 +486,8 @@ public class OrderService extends AbstractEventSubject {
         }
 
         String cacheKey = buildFeatureKey("S3-F5", cacheParams("key", key, "value", value));
-        Optional<List<Order>> cached = cacheGet(cacheKey, new TypeReference<List<Order>>() {});
+        Optional<List<Order>> cached = cacheGet(cacheKey, new TypeReference<List<Order>>() {
+        });
         if (cached.isPresent()) {
             return cached.get();
         }
@@ -499,6 +496,7 @@ public class OrderService extends AbstractEventSubject {
         cacheSet(cacheKey, result, FIVE_MINUTES);
         return result;
     }
+
     public OrderAnalyticsDTO getOrderAnalytics(LocalDateTime startDate, LocalDateTime endDate) {
         if (startDate == null || endDate == null || startDate.isAfter(endDate)) {
             throw new ResponseStatusException(
@@ -634,9 +632,9 @@ public class OrderService extends AbstractEventSubject {
     public Order confirmOrder(Long orderId, Long shippingAddressId) {
         Order order = orderRepository.findById(orderId)
                 .orElseThrow(() -> new ResponseStatusException(
-                        HttpStatus.NOT_FOUND,
-                        "Order not found"
-                ));
+                HttpStatus.NOT_FOUND,
+                "Order not found"
+        ));
 
         if (order.getStatus() != OrderStatus.PENDING) {
             throw new ResponseStatusException(
@@ -698,10 +696,10 @@ public class OrderService extends AbstractEventSubject {
         order.setTotalAmount(totalAmount);
         Order savedOrder = orderRepository.save(order);
         notifyObservers("ORDER_CONFIRMED", orderEventPayload(savedOrder.getId(), Map.of(
-            "status", savedOrder.getStatus().name(),
-            "userId", savedOrder.getUserId(),
-            "totalAmount", savedOrder.getTotalAmount(),
-            "shippingAddressId", savedOrder.getShippingAddressId()
+                "status", savedOrder.getStatus().name(),
+                "userId", savedOrder.getUserId(),
+                "totalAmount", savedOrder.getTotalAmount(),
+                "shippingAddressId", savedOrder.getShippingAddressId()
         )));
         invalidateOrderCaches(savedOrder.getId());
         invalidateProductDashboardCache();
@@ -712,9 +710,9 @@ public class OrderService extends AbstractEventSubject {
     public Order cancelOrder(Long orderId) {
         Order order = orderRepository.findById(orderId)
                 .orElseThrow(() -> new ResponseStatusException(
-                        HttpStatus.NOT_FOUND,
-                        "Order not found"
-                ));
+                HttpStatus.NOT_FOUND,
+                "Order not found"
+        ));
 
         if (order.getStatus() != OrderStatus.PENDING && order.getStatus() != OrderStatus.CONFIRMED) {
             throw new ResponseStatusException(
@@ -754,6 +752,7 @@ public class OrderService extends AbstractEventSubject {
         invalidateProductDashboardCache();
         return savedOrder;
     }
+
     @Transactional
     public CoPurchaseRecordResponse recordProductCoPurchase(Long orderId) {
         Order order = orderRepository.findByIdWithItems(orderId)
@@ -847,6 +846,15 @@ public class OrderService extends AbstractEventSubject {
                     """)
                 .bind(orderId).to("orderId")
                 .run();
+
+        if (orderRedisCacheService != null) {
+            try {
+                orderRedisCacheService.deleteByPattern("order-service::S3-F12::*");
+            } catch (RuntimeException ignored) {
+                // Redis is a soft dependency
+            }
+        }
+
         var cache = cacheManager.getCache("order:recommendations");
         if (cache != null) {
             cache.clear();
@@ -862,7 +870,6 @@ public class OrderService extends AbstractEventSubject {
 
         // Optional, if your project already has Redis wildcard invalidation:
         // cacheService.deleteByPattern("order-service::S3-F12::*");
-
         return new CoPurchaseRecordResponse(
                 orderId,
                 productIds,
@@ -871,6 +878,7 @@ public class OrderService extends AbstractEventSubject {
                 "Co-purchase relationships recorded successfully"
         );
     }
+
     private Map<Long, ProductSnapshot> loadProductSnapshots(List<Long> productIds) {
         Map<Long, ProductSnapshot> snapshots = new HashMap<>();
 
@@ -886,6 +894,7 @@ public class OrderService extends AbstractEventSubject {
 
         return snapshots;
     }
+
     private Map<String, Object> cacheParams(Object... keyValues) {
         if (orderRedisCacheService == null) {
             return new HashMap<>();
@@ -992,7 +1001,9 @@ public class OrderService extends AbstractEventSubject {
         payload.put("details", details == null ? new HashMap<>() : new HashMap<>(details));
         return payload;
     }
+
     private static class ProductSnapshot {
+
         private final Long productId;
         private final String name;
         private final String category;
@@ -1005,6 +1016,7 @@ public class OrderService extends AbstractEventSubject {
     }
 
     static final class OrderCacheSnapshot {
+
         private Long id;
         private Long userId;
         private Long shippingAddressId;
@@ -1115,4 +1127,3 @@ public class OrderService extends AbstractEventSubject {
     }
 
 }
-
