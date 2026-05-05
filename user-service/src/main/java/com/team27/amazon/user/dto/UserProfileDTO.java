@@ -11,4 +11,8 @@ public record UserProfileDTO(
         Map<String, Object> preferences,
         List<ShippingAddressDTO> shippingAddresses,
         int totalAddresses
-) {}
+) {
+    public static UserProfileDTOBuilder builder() {
+        return UserProfileDTOBuilder.builder();
+    }
+}

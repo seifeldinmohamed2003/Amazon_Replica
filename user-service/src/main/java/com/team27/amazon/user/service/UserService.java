@@ -24,7 +24,9 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 import org.springframework.web.server.ResponseStatusException;
-
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.dao.DataIntegrityViolationException;
 import com.team27.amazon.common.events.AbstractEventSubject;
 import com.team27.amazon.common.events.MongoEventLogger;
 import com.team27.amazon.user.adapter.ObjectArrayDtoAdapter;
@@ -140,6 +142,8 @@ public class UserService extends AbstractEventSubject {
     }
 
     public User getUserById(Long id) {
+        requireSelfOrAdmin(id);
+
         String cacheKey = CacheKeyBuilder.entityKey(CacheConstants.ENTITY_USER, id);
 
         return redisCacheService.getOrCompute(
@@ -160,36 +164,82 @@ public class UserService extends AbstractEventSubject {
     }
 
     public User updateUser(Long id, User updated) {
+        requireSelfOrAdmin(id);
+
+        if (updated == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Request body is required");
+        }
+
         User user = getUserByIdFromDatabase(id);
 
-        user.setName(updated.getName());
-        user.setEmail(updated.getEmail());
+        if (StringUtils.hasText(updated.getName())) {
+            user.setName(updated.getName().trim());
+        }
+
+        String newEmail = normalizeEmail(updated.getEmail());
+        if (newEmail != null && !newEmail.equalsIgnoreCase(user.getEmail())) {
+            if (userRepository.existsByEmail(newEmail)) {
+                throw new ResponseStatusException(HttpStatus.CONFLICT, "Email already exists");
+            }
+            user.setEmail(newEmail);
+        }
+
+        String newPhone = normalizePhone(updated.getPhone());
+        if (newPhone != null && !newPhone.equals(user.getPhone())) {
+            if (userRepository.existsByPhone(newPhone)) {
+                throw new ResponseStatusException(HttpStatus.CONFLICT, "Phone already exists");
+            }
+            user.setPhone(newPhone);
+        }
 
         if (StringUtils.hasText(updated.getPassword())) {
             user.setPassword(encodePassword(updated.getPassword()));
         }
 
-        user.setPhone(updated.getPhone());
-        user.setRole(updated.getRole());
-        user.setStatus(updated.getStatus());
-        user.setPreferences(updated.getPreferences());
+        if (updated.getPreferences() != null) {
+            Map<String, Object> mergedPreferences =
+                    user.getPreferences() == null
+                            ? new HashMap<>()
+                            : new HashMap<>(user.getPreferences());
 
-        User savedUser = userRepository.save(user);
+            mergedPreferences.putAll(updated.getPreferences());
+            user.setPreferences(mergedPreferences);
+        }
 
-        notifyObservers("USER_UPDATED", userEventPayload(savedUser.getId(), Map.of(
-                "email", savedUser.getEmail(),
-                "status", savedUser.getStatus() == null ? null : savedUser.getStatus().name()
-        )));
+        // Only ADMIN can change role/status from generic update.
+        // Normal role changes should still use PUT /api/users/{id}/role.
+        if (currentUserIsAdmin()) {
+            if (updated.getRole() != null) {
+                user.setRole(updated.getRole());
+            }
 
-        cacheInvalidationService.invalidateUserWriteCaches(savedUser.getId());
+            if (updated.getStatus() != null) {
+                user.setStatus(updated.getStatus());
+            }
+        }
 
-        return savedUser;
+        try {
+            User savedUser = userRepository.save(user);
+
+            notifyObservers("USER_UPDATED", userEventPayload(savedUser.getId(), Map.of(
+                    "email", savedUser.getEmail(),
+                    "status", savedUser.getStatus() == null ? null : savedUser.getStatus().name()
+            )));
+
+            cacheInvalidationService.invalidateUserWriteCaches(savedUser.getId());
+
+            return savedUser;
+        } catch (DataIntegrityViolationException ex) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "User email or phone already exists");
+        }
     }
 
     public void deleteUser(Long id) {
-        getUserByIdFromDatabase(id);
+        requireSelfOrAdmin(id);
 
-        userRepository.deleteById(id);
+        User user = getUserByIdFromDatabase(id);
+
+        userRepository.delete(user);
 
         notifyObservers("USER_DELETED", userEventPayload(id, Map.of()));
 
@@ -199,6 +249,7 @@ public class UserService extends AbstractEventSubject {
     // ─── ShippingAddress CRUD ─────────────────────────────────────
 
     public ShippingAddress createAddress(Long userId, ShippingAddress address) {
+        requireSelfOrAdmin(userId);
         User user = getUserByIdFromDatabase(userId);
 
         address.setUser(user);
@@ -217,6 +268,7 @@ public class UserService extends AbstractEventSubject {
     }
 
     public ShippingAddress getAddressById(Long userId, Long addressId) {
+        requireSelfOrAdmin(userId);
         getUserByIdFromDatabase(userId);
 
         String cacheKey = CacheKeyBuilder.entityKey(
@@ -244,11 +296,13 @@ public class UserService extends AbstractEventSubject {
     }
 
     public List<ShippingAddress> getAllAddresses(Long userId) {
+        requireSelfOrAdmin(userId);
         getUserByIdFromDatabase(userId);
         return shippingAddressRepository.findByUserId(userId);
     }
 
     private ShippingAddress getAddressByIdForWrite(Long userId, Long addressId) {
+        requireSelfOrAdmin(userId);
         getUserByIdFromDatabase(userId);
 
         ShippingAddress address = getAddressByIdFromDatabase(addressId);
@@ -318,6 +372,11 @@ public class UserService extends AbstractEventSubject {
 
     // S1-F2
     public User updateUserPreferences(Long id, Map<String, Object> incomingPreferences) {
+        requireSelfOrAdmin(id);
+
+        if (incomingPreferences == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Preferences are required");
+        }
         User user = getUserByIdFromDatabase(id);
 
         Map<String, Object> existing = user.getPreferences();
@@ -345,6 +404,7 @@ public class UserService extends AbstractEventSubject {
 
     // S1-F3
     public UserOrderSummaryDTO getUserOrderSummary(Long userId) {
+        requireSelfOrAdmin(userId);
         String cacheKey = CacheKeyBuilder.featureKeyDirect(
                 CacheConstants.S1_F3,
                 String.valueOf(userId)
@@ -383,6 +443,7 @@ public class UserService extends AbstractEventSubject {
     // S1-F4
     @Transactional
     public User deactivateUser(Long id) {
+        requireSelfOrAdmin(id);
         User user = getUserByIdFromDatabase(id);
 
         boolean hasActiveOrders = userRepository.existsActiveOrdersByUserId(id);
@@ -474,6 +535,7 @@ public class UserService extends AbstractEventSubject {
     // S1-F7
     @Transactional
     public User setDefaultAddress(Long userId, Long addressId) {
+        requireSelfOrAdmin(userId);
         User user = getUserByIdFromDatabase(userId);
 
         ShippingAddress target = getAddressByIdForWrite(userId, addressId);
@@ -511,6 +573,7 @@ public class UserService extends AbstractEventSubject {
     // S1-F8
     @Transactional(readOnly = true)
     public UserProfileDTO getUserProfile(Long userId) {
+        requireSelfOrAdmin(userId);
         String cacheKey = CacheKeyBuilder.featureKeyDirect(
                 CacheConstants.S1_F8,
                 String.valueOf(userId)
@@ -527,7 +590,9 @@ public class UserService extends AbstractEventSubject {
     private UserProfileDTO getUserProfileFromDatabase(Long userId) {
         User user = getUserByIdFromDatabase(userId);
 
-        List<ShippingAddressDTO> addresses = user.getShippingAddresses().stream()
+        List<ShippingAddress> userAddresses = shippingAddressRepository.findByUserId(userId);
+
+        List<ShippingAddressDTO> addresses = userAddresses.stream()
                 .map(addr -> new ShippingAddressDTO(
                         addr.getLabel(),
                         addr.getStreetAddress(),
@@ -538,7 +603,8 @@ public class UserService extends AbstractEventSubject {
                         addr.getMetadata()
                 ))
                 .toList();
-        return UserProfileDTOBuilder.builder()
+
+        return UserProfileDTO.builder()
                 .userId(user.getId())
                 .name(user.getName())
                 .email(user.getEmail())
@@ -552,7 +618,11 @@ public class UserService extends AbstractEventSubject {
     // S1-F9
     public List<User> findUsersByLanguage(String lang, long minOrders) {
         if (!StringUtils.hasText(lang)) {
-            throw new IllegalArgumentException("Language cannot be blank");
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Language cannot be blank");
+        }
+
+        if (minOrders < 0) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "minOrders must be zero or greater");
         }
 
         String langParam = lang.trim();
@@ -578,13 +648,17 @@ public class UserService extends AbstractEventSubject {
         if (role == null) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Role must be provided");
         }
-        User user = getUserById(id);
+
+        User user = getUserByIdFromDatabase(id);
+
+        Role oldRole = user.getRole();
         user.setRole(role);
 
         User savedUser = userRepository.save(user);
 
         notifyObservers("ROLE_CHANGED", userEventPayload(savedUser.getId(), Map.of(
-                "role", savedUser.getRole() == null ? null : savedUser.getRole().name()
+                "oldRole", oldRole == null ? null : oldRole.name(),
+                "newRole", savedUser.getRole() == null ? null : savedUser.getRole().name()
         )));
 
         cacheInvalidationService.invalidateUserWriteCaches(savedUser.getId());
@@ -599,7 +673,15 @@ public class UserService extends AbstractEventSubject {
         if (!jwtService.validateToken(token)) {
             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Invalid or missing token");
         }
+        if (page < 0) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Page must be zero or greater");
+        }
 
+        if (size <= 0) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Size must be greater than zero");
+        }
+
+        size = Math.min(size, 100);
         // 2. Ownership check
         Long callerUid = jwtService.extractUserId(token);
         String callerRole = jwtService.extractRole(token);
@@ -614,8 +696,14 @@ public class UserService extends AbstractEventSubject {
         size = Math.min(size, 100);
 
         // 5. Check Redis cache via adapter
-        String cacheKey = "activity_feed:" + userId + ":" + page + ":" + size;
-        Optional<String> cached = cacheAdapter.get(cacheKey);
+        String cacheKey = CacheKeyBuilder.featureKeyFromParams(
+                "S1-F12",
+                Map.of(
+                        "userId", userId,
+                        "page", page,
+                        "size", size
+                )
+        );        Optional<String> cached = cacheAdapter.get(cacheKey);
         if (cached.isPresent()) {
             try {
                 return objectMapper.readValue(cached.get(), ActivityFeedDTO.class);
@@ -684,5 +772,46 @@ public class UserService extends AbstractEventSubject {
     private boolean isBCryptHash(String value) {
         return value != null &&
                 (value.startsWith("$2a$") || value.startsWith("$2b$") || value.startsWith("$2y$"));
+    }
+
+    private User getAuthenticatedUserOrThrow() {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+
+        if (authentication == null || !authentication.isAuthenticated()) {
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Authentication required");
+        }
+
+        Object principal = authentication.getPrincipal();
+
+        if (principal instanceof User user) {
+            return user;
+        }
+
+        throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Invalid authenticated user");
+    }
+
+    private void requireSelfOrAdmin(Long targetUserId) {
+        User caller = getAuthenticatedUserOrThrow();
+
+        if (caller.getRole() == Role.ADMIN) {
+            return;
+        }
+
+        if (!caller.getId().equals(targetUserId)) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Access denied");
+        }
+    }
+
+    private boolean currentUserIsAdmin() {
+        User caller = getAuthenticatedUserOrThrow();
+        return caller.getRole() == Role.ADMIN;
+    }
+
+    private String normalizeEmail(String email) {
+        return StringUtils.hasText(email) ? email.trim().toLowerCase() : null;
+    }
+
+    private String normalizePhone(String phone) {
+        return StringUtils.hasText(phone) ? phone.trim() : null;
     }
 }
