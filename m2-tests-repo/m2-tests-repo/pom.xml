@@ -1,0 +1,105 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Compile-preflight pom for the Amazon M2 golden test suite.
+
+  Mirrors the grader's m1-test-runner pom.xml (projects/m1-test-runner/pom.xml)
+  dependency-by-dependency so a successful `mvn -q test-compile` here means
+  the goldens will compile cleanly at grading time. This is the foundation
+  for the L4 verifier, which will invoke the same compile step per emitted
+  test file.
+-->
+<project xmlns="http://maven.apache.org/POM/4.0.0">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-starter-parent</artifactId>
+        <version>4.0.3</version>
+        <relativePath/>
+    </parent>
+
+    <groupId>com.testgen.golden</groupId>
+    <artifactId>amazon-m2-golden</artifactId>
+    <version>0.1.0-SNAPSHOT</version>
+
+    <properties>
+        <java.version>25</java.version>
+        <maven.compiler.source>25</maven.compiler.source>
+        <maven.compiler.target>25</maven.compiler.target>
+        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+    </properties>
+
+    <dependencies>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-data-jpa</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-webmvc</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.postgresql</groupId>
+            <artifactId>postgresql</artifactId>
+            <scope>runtime</scope>
+        </dependency>
+        <dependency>
+            <groupId>com.fasterxml.jackson.core</groupId>
+            <artifactId>jackson-databind</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <!-- Direct DB access for tests: MongoDB sync driver. We talk to
+             Mongo from the test classpath to verify documents the
+             student's app wrote (e.g. activity events, dashboard logs).
+             Spring Boot 4.0.3 BOM pins a compatible 5.x version. -->
+        <dependency>
+            <groupId>org.mongodb</groupId>
+            <artifactId>mongodb-driver-sync</artifactId>
+        </dependency>
+
+        <!-- Direct Neo4j access for tests: bolt-protocol Java driver.
+             S3-F11/F12 verify graph state (Product ↔ Product BOUGHT_TOGETHER
+             nodes/edges, idempotency markers) the student's app writes.
+             Test scope only — never bundled into student's runtime jar.
+             Version pinned to Spring Boot 4.0.3 BOM-managed 5.x. At
+             grader-runtime, defer to student's pom version per
+             memory/feedback_grader_follows_student_versions.md. -->
+        <dependency>
+            <groupId>org.neo4j.driver</groupId>
+            <artifactId>neo4j-java-driver</artifactId>
+            <version>5.27.0</version>
+            <scope>test</scope>
+        </dependency>
+
+        <!-- Direct Redis access for tests: Jedis client. S3-F10 + S3-F12
+             verify cache key TTL after endpoint calls. Lettuce (Spring's
+             default) is already pulled transitively by spring-boot-starter-
+             data-redis on the student side, but Jedis provides a simpler
+             test-side API for KEYS/TTL/GET probes. Test scope only. -->
+        <dependency>
+            <groupId>redis.clients</groupId>
+            <artifactId>jedis</artifactId>
+            <version>5.2.0</version>
+            <scope>test</scope>
+        </dependency>
+
+        <!-- Direct Cassandra access for tests: DataStax Java driver. S4-F11
+             verifies that tracking events get written to the time-series
+             table; S4-F12 verifies the timeline read returns clustering-
+             ordered rows. Test scope only — never bundled into student's
+             runtime jar. Version pinned to Spring Boot 4.0.3 BOM-managed
+             4.x (Spring Data Cassandra is built on this driver). At
+             grader-runtime, defer to student's pom version per
+             memory/feedback_grader_follows_student_versions.md. -->
+        <dependency>
+            <groupId>com.datastax.oss</groupId>
+            <artifactId>java-driver-core</artifactId>
+            <version>4.17.0</version>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+</project>

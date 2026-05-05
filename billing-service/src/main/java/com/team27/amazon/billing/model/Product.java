@@ -1,60 +1,100 @@
 package com.team27.amazon.billing.model;
 
-import jakarta.persistence.*; 
+import java.time.LocalDateTime;
+import java.util.HashMap;
+import java.util.Map;
+
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
+
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
+import jakarta.persistence.Id;
+import jakarta.persistence.Table;
 
 @Entity
 @Table(name = "products")
 public class Product {
-    
+
     @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
-    
-    private String category;
+
     private String name;
 
-    public Product() {}
+    @Column(columnDefinition = "TEXT")
+    private String description;
 
-    private Product(Builder builder) {
-        this.id = builder.id;
-        this.category = builder.category;
-        this.name = builder.name;
+    private Double price;
+
+    private String category;
+
+    private String brand;
+
+    @Column(name = "stock_quantity")
+    private Integer stockQuantity;
+
+    @Enumerated(EnumType.STRING)
+    private ProductStatus status;
+
+    private Double rating;
+
+    @Column(name = "total_ratings")
+    private Integer totalRatings;
+
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(columnDefinition = "jsonb")
+    private Map<String, Object> specifications = new HashMap<>();
+
+    @Column(name = "created_at")
+    private LocalDateTime createdAt;
+
+    public Long getId() {
+        return id;
     }
 
-    public Long getId() { return id; }
-    public String getCategory() { return category; }
-    public String getName() { return name; }
-
-    public void setId(Long id) { this.id = id; }
-    public void setCategory(String category) { this.category = category; }
-    public void setName(String name) { this.name = name; }
-
-    public static Builder builder() {
-        return new Builder();
+    public String getName() {
+        return name;
     }
 
-    public static class Builder {
-        private Long id;
-        private String category;
-        private String name;
+    public String getDescription() {
+        return description;
+    }
 
-        public Builder id(Long id) {
-            this.id = id;
-            return this;
-        }
+    public Double getPrice() {
+        return price;
+    }
 
-        public Builder category(String category) {
-            this.category = category;
-            return this;
-        }
+    public String getCategory() {
+        return category;
+    }
 
-        public Builder name(String name) {
-            this.name = name;
-            return this;
-        }
+    public String getBrand() {
+        return brand;
+    }
 
-        public Product build() {
-            return new Product(this);
-        }
+    public Integer getStockQuantity() {
+        return stockQuantity;
+    }
+
+    public ProductStatus getStatus() {
+        return status;
+    }
+
+    public Double getRating() {
+        return rating;
+    }
+
+    public Integer getTotalRatings() {
+        return totalRatings;
+    }
+
+    public Map<String, Object> getSpecifications() {
+        return specifications;
+    }
+
+    public LocalDateTime getCreatedAt() {
+        return createdAt;
     }
 }

@@ -19,6 +19,7 @@ import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.OneToMany;
+import jakarta.persistence.PrePersist;
 import jakarta.persistence.Table;
 import jakarta.validation.constraints.NotNull;
 
@@ -46,7 +47,7 @@ public class Order {
     private Double totalAmount;
 
     @JdbcTypeCode(SqlTypes.JSON)
-    @Column(columnDefinition = "jsonb", nullable = false)
+    @Column(nullable = false, columnDefinition = "jsonb default '{}'::jsonb")
     private Map<String, Object> metadata = new HashMap<>();
 
     @CreationTimestamp
@@ -59,15 +60,25 @@ public class Order {
     @OneToMany(mappedBy = "order", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
     private List<OrderItem> orderItems;
 
-    public Order() {}
+    public Order() {
+    }
 
     public Order(Long userId, OrderStatus status, Map<String, Object> metadata) {
         this.userId = userId;
         this.status = status;
-        this.metadata = metadata;
+        this.metadata = metadata == null ? new HashMap<>() : metadata;
     }
 
-    // Getters and Setters
+    @PrePersist
+    protected void onCreate() {
+        if (metadata == null) {
+            metadata = new HashMap<>();
+        }
+        if (status == null) {
+            status = OrderStatus.PENDING;
+        }
+    }
+
     public Long getId() {
         return id;
     }
@@ -113,7 +124,7 @@ public class Order {
     }
 
     public void setMetadata(Map<String, Object> metadata) {
-        this.metadata = metadata;
+        this.metadata = metadata == null ? new HashMap<>() : metadata;
     }
 
     public LocalDateTime getOrderedAt() {
@@ -140,4 +151,3 @@ public class Order {
         this.orderItems = orderItems;
     }
 }
-
