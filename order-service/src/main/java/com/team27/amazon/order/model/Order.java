@@ -47,7 +47,7 @@ public class Order {
     private Double totalAmount;
 
     @JdbcTypeCode(SqlTypes.JSON)
-    @Column(columnDefinition = "jsonb default '{}'::jsonb", nullable = false)
+    @Column(nullable = false, columnDefinition = "jsonb default '{}'::jsonb")
     private Map<String, Object> metadata = new HashMap<>();
 
     @CreationTimestamp
@@ -60,7 +60,8 @@ public class Order {
     @OneToMany(mappedBy = "order", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
     private List<OrderItem> orderItems;
 
-    public Order() {}
+    public Order() {
+    }
 
     public Order(Long userId, OrderStatus status, Map<String, Object> metadata) {
         this.userId = userId;
@@ -68,7 +69,16 @@ public class Order {
         this.metadata = metadata == null ? new HashMap<>() : metadata;
     }
 
-    // Getters and Setters
+    @PrePersist
+    protected void onCreate() {
+        if (metadata == null) {
+            metadata = new HashMap<>();
+        }
+        if (status == null) {
+            status = OrderStatus.PENDING;
+        }
+    }
+
     public Long getId() {
         return id;
     }
@@ -140,14 +150,4 @@ public class Order {
     public void setOrderItems(List<OrderItem> orderItems) {
         this.orderItems = orderItems;
     }
-
-    @PrePersist
-    public void prePersist() {
-        if (this.metadata == null) {
-            this.metadata = new HashMap<>();
-        }
-    }
-
-
 }
-
