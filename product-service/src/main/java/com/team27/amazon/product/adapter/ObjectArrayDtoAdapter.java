@@ -8,25 +8,33 @@ import com.team27.amazon.product.dto.TopProductDTO;
 @Component
 public class ObjectArrayDtoAdapter {
 
-    public ProductSalesDTO toProductSalesDTO(Long productId, String productName, Object[] result) {
-        Long totalUnitsSold = 0L;
-        Double totalRevenue = 0.0;
+public ProductSalesDTO toProductSalesDTO(Long productId, String productName, Object[] result) {
+    Long totalUnitsSold = 0L;
+    Double totalRevenue = 0.0;
 
-        if (result != null && result.length >= 2) {
-            totalUnitsSold = result[0] == null ? 0L : ((Number) result[0]).longValue();
-            totalRevenue = result[1] == null ? 0.0 : ((Number) result[1]).doubleValue();
+    if (result != null) {
+        Object[] row = result;
+
+        if (result.length == 1 && result[0] instanceof Object[] nested) {
+            row = nested;
         }
 
-        Double averageSellingPrice = totalUnitsSold == 0 ? 0.0 : totalRevenue / totalUnitsSold;
-
-        return ProductSalesDTO.builder()
-                .productId(productId)
-                .name(productName)
-                .totalUnitsSold(totalUnitsSold)
-                .totalRevenue(totalRevenue)
-                .averageSellingPrice(averageSellingPrice)
-                .build();
+        if (row.length >= 2) {
+            totalUnitsSold = row[0] == null ? 0L : ((Number) row[0]).longValue();
+            totalRevenue = row[1] == null ? 0.0 : ((Number) row[1]).doubleValue();
+        }
     }
+
+    Double averageSellingPrice = totalUnitsSold == 0 ? 0.0 : totalRevenue / totalUnitsSold;
+
+    return ProductSalesDTO.builder()
+            .productId(productId)
+            .name(productName)
+            .totalUnitsSold(totalUnitsSold)
+            .totalRevenue(totalRevenue)
+            .averageSellingPrice(averageSellingPrice)
+            .build();
+}
 
     public TopProductDTO toTopProductDTO(Object[] row) {
         return TopProductDTO.builder()
