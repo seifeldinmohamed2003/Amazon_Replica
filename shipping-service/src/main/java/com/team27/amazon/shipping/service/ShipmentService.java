@@ -36,10 +36,8 @@ import com.team27.amazon.shipping.dto.TrackingEventRequest;
 import com.team27.amazon.shipping.model.Shipment;
 import com.team27.amazon.shipping.model.ShipmentStatus;
 import com.team27.amazon.shipping.model.cassandra.ShipmentTrackingEvent;
-import com.team27.amazon.shipping.model.cassandra.ShipmentTrackingEventKey;
 import com.team27.amazon.shipping.repository.ShipmentRepository;
 import com.team27.amazon.shipping.repository.ShipmentTrackingEventRepository;
-import com.team27.amazon.shipping.repository.TrackingEventRepository;
 
 import jakarta.annotation.PostConstruct;
 
@@ -51,7 +49,6 @@ public class ShipmentService extends AbstractEventSubject {
     private final JdbcTemplate jdbcTemplate;
     private final ObjectMapper objectMapper;
     private final ObjectArrayDtoAdapter objectArrayDtoAdapter;
-    private final TrackingEventRepository trackingEventRepository;
 
     @Autowired
     @Qualifier("shipmentEventLogger")
@@ -62,15 +59,13 @@ public class ShipmentService extends AbstractEventSubject {
             ShipmentTrackingEventRepository shipmentTrackingEventRepository,
             JdbcTemplate jdbcTemplate,
             ObjectMapper objectMapper,
-            ObjectArrayDtoAdapter objectArrayDtoAdapter,
-            TrackingEventRepository trackingEventRepository
+            ObjectArrayDtoAdapter objectArrayDtoAdapter
     ) {
         this.shipmentRepository = shipmentRepository;
         this.shipmentTrackingEventRepository = shipmentTrackingEventRepository;
         this.jdbcTemplate = jdbcTemplate;
         this.objectMapper = objectMapper;
         this.objectArrayDtoAdapter = objectArrayDtoAdapter;
-        this.trackingEventRepository = trackingEventRepository;
     }
 
     @PostConstruct
@@ -242,10 +237,9 @@ public class ShipmentService extends AbstractEventSubject {
 
         LocalDateTime now = LocalDateTime.now();
 
-        ShipmentTrackingEventKey key = new ShipmentTrackingEventKey(shipmentId, now);
-
         ShipmentTrackingEvent trackingEvent = new ShipmentTrackingEvent(
-                key,
+                shipmentId,
+                now,
                 request.getStatus(),
                 shipment.getCarrier(),
                 shipment.getTrackingNumber(),
@@ -582,24 +576,24 @@ public class ShipmentService extends AbstractEventSubject {
         List<ShipmentTrackingEvent> events;
 
         if (startTime != null && endTime != null) {
-            events = trackingEventRepository.findByShipmentIdAndTimestampBetweenOrderByTimestampDesc(
+            events = shipmentTrackingEventRepository.findByShipmentIdAndTimestampBetweenOrderByTimestampDesc(
                     shipmentId, startTime, endTime
             );
         } else if (startTime != null) {
-            events = trackingEventRepository.findByShipmentIdAndTimestampAfterOrderByTimestampDesc(
+            events = shipmentTrackingEventRepository.findByShipmentIdAndTimestampAfterOrderByTimestampDesc(
                     shipmentId, startTime
             );
         } else if (endTime != null) {
-            events = trackingEventRepository.findByShipmentIdAndTimestampBeforeOrderByTimestampDesc(
+            events = shipmentTrackingEventRepository.findByShipmentIdAndTimestampBeforeOrderByTimestampDesc(
                     shipmentId, endTime
             );
         } else {
-            events = trackingEventRepository.findByShipmentIdOrderByTimestampDesc(shipmentId);
+            events = shipmentTrackingEventRepository.findByShipmentIdOrderByTimestampDesc(shipmentId);
         }
 
         return events.stream()
                 .map(event -> ShipmentTrackingDTO.builder()
-                        .timestamp(event.getKey().getTimestamp())
+                        .timestamp(event.getTimestamp())
                         .status(event.getStatus())
                         .carrier(event.getCarrier())
                         .trackingNumber(event.getTrackingNumber())
@@ -618,7 +612,7 @@ public class ShipmentService extends AbstractEventSubject {
         @CacheEvict(cacheNames = RedisConfiguration.CACHE_S4_F12, allEntries = true)
     })
     public ShipmentTrackingEvent saveTrackingEvent(ShipmentTrackingEvent event) {
-        return trackingEventRepository.save(event);
+        return shipmentTrackingEventRepository.save(event);
     }
 
 
