@@ -4,7 +4,7 @@ import jakarta.persistence.*;
 
 @Entity
 @Table(name = "products")
-public class Product {
+public class BillingProduct {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -14,9 +14,9 @@ public class Product {
     private String category;
     private String name;
 
-    public Product() {}
+    public BillingProduct() {}
 
-    private Product(Builder builder) {
+    private BillingProduct(Builder builder) {
         this.id = builder.id;
         this.category = builder.category;
         this.name = builder.name;
@@ -54,8 +54,8 @@ public class Product {
             return this;
         }
 
-        public Product build() {
-            return new Product(this);
+        public BillingProduct build() {
+            return new BillingProduct(this);
         }
     }
 }

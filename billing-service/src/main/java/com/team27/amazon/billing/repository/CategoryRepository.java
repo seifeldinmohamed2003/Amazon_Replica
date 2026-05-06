@@ -1,13 +1,13 @@
 package com.team27.amazon.billing.repository;
 
-import com.team27.amazon.billing.model.Product  ;
+import com.team27.amazon.billing.model.BillingProduct;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.stereotype.Repository;
 import java.util.List;
 
 @Repository
-public interface CategoryRepository extends JpaRepository<Product, Long> {
+public interface CategoryRepository extends JpaRepository<BillingProduct, Long> {
 
     /**
      * S5-F10: Calculates net revenue per category.
