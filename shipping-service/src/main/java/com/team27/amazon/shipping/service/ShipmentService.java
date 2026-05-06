@@ -223,8 +223,8 @@ public class ShipmentService extends AbstractEventSubject {
     // Cassandra: shipment_tracking_events
     // MongoDB Observer event: TRACKING_RECORDED
     @Caching(evict = {
-        @CacheEvict(cacheNames = "shipping-service::S4-F10", allEntries = true),
-        @CacheEvict(cacheNames = "shipping-service::S4-F12", key = "#shipmentId")
+            @CacheEvict(cacheNames = RedisConfiguration.CACHE_S4_F10, allEntries = true),
+            @CacheEvict(cacheNames = RedisConfiguration.CACHE_S4_F12, allEntries = true)
     })
     public ShipmentTrackingEvent recordTrackingEvent(Long shipmentId, TrackingEventRequest request) {
         Shipment shipment = shipmentRepository.findById(shipmentId)

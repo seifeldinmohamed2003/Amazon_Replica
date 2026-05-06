@@ -8,7 +8,6 @@ import com.team27.amazon.user.dto.*;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.util.StringUtils;
 import org.springframework.web.bind.annotation.*;
 
 import com.team27.amazon.user.model.ShippingAddress;
@@ -157,15 +156,15 @@ public class UserController {
         return userService.getUserProfile(id);
     }
 
-    @GetMapping({"/preferences/language", "/language"})
+    @GetMapping("/language")
     public ResponseEntity<List<User>> getUsersByLanguage(
-            @RequestParam(name = "lang", required = false) String lang,
-            @RequestParam(name = "language", required = false) String language,
+            @RequestParam String lang,
             @RequestParam(name = "minOrders", defaultValue = "0") long minOrders
     ) {
-        String selectedLanguage = StringUtils.hasText(lang) ? lang : language;
-
-        List<User> users = userService.findUsersByLanguage(selectedLanguage, minOrders);
+        if (lang == null || lang.isBlank()) {
+            return ResponseEntity.badRequest().build();
+        }
+        List<User> users = userService.findUsersByLanguage(lang, minOrders);
         return ResponseEntity.ok(users);
     }
     // S1-F12
