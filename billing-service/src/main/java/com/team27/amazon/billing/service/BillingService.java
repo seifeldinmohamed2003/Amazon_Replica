@@ -389,7 +389,8 @@ public class BillingService {
         if (voucher.getExpiryDate().isBefore(LocalDateTime.now())) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Voucher has expired");
         }
-        if (voucher.getCurrentUses() >= voucher.getMaxUses()) {
+        int currentUses = voucher.getCurrentUses() == null ? 0 : voucher.getCurrentUses();
+        if (currentUses >= voucher.getMaxUses()) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Voucher usage limit reached");
         }
 
@@ -416,7 +417,7 @@ public class BillingService {
         tv.setAppliedAt(LocalDateTime.now());
         transactionVoucherRepository.save(tv);
 
-        voucher.setCurrentUses(voucher.getCurrentUses() + 1);
+        voucher.setCurrentUses(currentUses + 1);
         voucherRepository.save(voucher);
 
         invalidateTransactionCaches(transactionId);

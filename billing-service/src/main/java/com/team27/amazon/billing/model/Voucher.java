@@ -42,9 +42,8 @@ public class Voucher {
 
     @PrePersist
     public void setDefaults() {
-        if (active == null) {
-            active = true;
-        }
+        if (active == null) active = true;
+        if (currentUses == null) currentUses = 0;  // ADD THIS LINE
     }
 
     @JdbcTypeCode(SqlTypes.JSON)
