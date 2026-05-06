@@ -68,19 +68,21 @@ List<Object[]> findTopRatedProducts(@Param("limit") int limit);
             @Param("category") String category
     );
 
-    @Query(value = "SELECT COALESCE(SUM(oi.quantity), 0) AS total_units_sold, " +
-            "COALESCE(SUM(oi.quantity * oi.price_at_purchase), 0) AS total_revenue " +
-            "FROM order_items oi " +
-            "JOIN orders o ON oi.order_id = o.id " +
-            "WHERE oi.product_id = :productId " +
-            "AND o.status::text = 'DELIVERED' " +
-            "AND o.ordered_at BETWEEN :startDateTime AND :endDateTime",
-            nativeQuery = true)
-    Object[] getProductSalesSummary(
-            @Param("productId") Long productId,
-            @Param("startDateTime") LocalDateTime startDateTime,
-            @Param("endDateTime") LocalDateTime endDateTime
-    );
+    @Query(value = """
+        SELECT
+            COALESCE(SUM(oi.quantity), 0) AS total_units_sold,
+            COALESCE(SUM(oi.quantity * oi.price_at_purchase), 0) AS total_revenue
+        FROM order_items oi
+        JOIN orders o ON oi.order_id = o.id
+        WHERE oi.product_id = :productId
+          AND o.status::text = 'DELIVERED'
+          AND COALESCE(o.delivered_at, o.ordered_at) BETWEEN :startDateTime AND :endDateTime
+        """, nativeQuery = true)
+Object[] getProductSalesSummary(
+        @Param("productId") Long productId,
+        @Param("startDateTime") LocalDateTime startDateTime,
+        @Param("endDateTime") LocalDateTime endDateTime
+);
 
     @Query(value = """
             SELECT COUNT(*) > 0

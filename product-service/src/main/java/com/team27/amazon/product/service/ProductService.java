@@ -292,19 +292,28 @@ autoIndexProduct(savedProduct, "auto_crud_create");
         review.setVerified(false);
         review.setMetadata(new HashMap<>());
 
-        ProductReview savedReview = productReviewRepository.save(review);
-        product.addReview(savedReview);
+product.addReview(review);
 
-        int oldCount = product.getTotalRatings() == null ? 0 : product.getTotalRatings();
-        double oldAverage = product.getRating() == null ? 0.0 : product.getRating();
+int oldCount = product.getTotalRatings() == null ? 0 : product.getTotalRatings();
+double oldAverage = product.getRating() == null ? 0.0 : product.getRating();
 
-        int newCount = oldCount + 1;
-        double newAverage = ((oldAverage * oldCount) + request.getRating()) / newCount;
+int newCount = oldCount + 1;
+double newAverage = ((oldAverage * oldCount) + request.getRating()) / newCount;
 
-        product.setTotalRatings(newCount);
-        product.setRating(newAverage);
+product.setTotalRatings(newCount);
+product.setRating(newAverage);
 
-        productRepository.save(product);
+Product savedProduct = productRepository.save(product);
+
+ProductReview savedReview = savedProduct.getProductReviews()
+        .stream()
+        .filter(r -> r.getUserId().equals(request.getUserId())
+                && r.getRating().equals(request.getRating())
+                && r.getTitle().equals(request.getTitle())
+                && r.getComment().equals(request.getComment()))
+        .reduce((first, second) -> second)
+        .orElse(review);
+
         notifyObservers("REVIEW_ADDED", productReviewEventPayload(product.getId(), savedReview.getId(), Map.of(
             "userId", savedReview.getUserId(),
             "rating", savedReview.getRating(),
