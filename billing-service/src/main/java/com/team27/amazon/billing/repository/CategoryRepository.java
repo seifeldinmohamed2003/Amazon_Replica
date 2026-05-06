@@ -1,6 +1,6 @@
 package com.team27.amazon.billing.repository;
 
-import com.team27.amazon.billing.model.Product;
+import com.team27.amazon.product.model.Product ;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.stereotype.Repository;
