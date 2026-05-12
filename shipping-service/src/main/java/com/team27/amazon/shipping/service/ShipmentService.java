@@ -197,6 +197,23 @@ public class ShipmentService extends AbstractEventSubject {
         return savedShipment;
     }
 
+
+    public Shipment getActiveShipmentForOrder(Long orderId) {
+        ensureOrderExists(orderId);
+
+        return shipmentRepository.findActiveShipmentForOrder(orderId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "No active shipment found for this order"));
+    }
+
+    public List<Long> getShipmentIdsForOrder(Long orderId) {
+        ensureOrderExists(orderId);
+
+        return shipmentRepository.findByOrderId(orderId)
+                .stream()
+                .map(Shipment::getId)
+                .toList();
+    }
+
     // S4-F11: Record Shipment Tracking Event
     // Endpoint: POST /api/shipments/{id}/tracking
     // Cassandra: shipment_tracking_events

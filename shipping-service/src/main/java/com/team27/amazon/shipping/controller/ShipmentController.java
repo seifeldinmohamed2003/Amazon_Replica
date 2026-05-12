@@ -81,6 +81,17 @@ public class ShipmentController {
         return shipmentService.getLatestShipmentByOrderId(orderId);
     }
 
+
+    @GetMapping("/order/{orderId}/active")
+    public Shipment getActiveShipmentForOrder(@PathVariable Long orderId) {
+        return shipmentService.getActiveShipmentForOrder(orderId);
+    }
+
+    @GetMapping("/order/{orderId}/ids")
+    public List<Long> getShipmentIdsForOrder(@PathVariable Long orderId) {
+        return shipmentService.getShipmentIdsForOrder(orderId);
+    }
+
     @GetMapping("/nearby")
     public List<NearbyShipmentDTO> findNearbyShipments(
             @RequestParam Double lat,
