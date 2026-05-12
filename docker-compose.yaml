@@ -120,6 +120,22 @@ services:
       echo 'Keyspace amazonks created';
       "
 
+
+  rabbitmq:
+    image: rabbitmq:4-management
+    container_name: amazon-rabbitmq
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    environment:
+      RABBITMQ_DEFAULT_USER: admin
+      RABBITMQ_DEFAULT_PASS: adminpass
+    healthcheck:
+      test: [ "CMD", "rabbitmq-diagnostics", "ping" ]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
   user-service:
     build: ./user-service
     ports:
@@ -168,10 +184,16 @@ services:
       SPRING_DATA_REDIS_PASSWORD: redispass
       JWT_SECRET: MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=
       JWT_EXPIRATION_MS: 86400000
+      SPRING_RABBITMQ_HOST: rabbitmq
+      SPRING_RABBITMQ_PORT: 5672
+      SPRING_RABBITMQ_USERNAME: admin
+      SPRING_RABBITMQ_PASSWORD: adminpass
     depends_on:
       cassandra-init:
         condition: service_completed_successfully
       postgres:
+        condition: service_healthy
+      rabbitmq:
         condition: service_healthy
   billing-service:
     build: ./billing-service
