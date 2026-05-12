@@ -1,81 +1,79 @@
-# Shipping Service Module
+# Shipping Milestone 3 Integration Summary
 
-## Overview
+## Branch
 
-This branch contains the integrated Shipping Service module for Milestone 2.
+feat/shipping/M3-core/55-8447
 
-It combines the completed shipping feature work into one shared integration branch:
+## Completed Work
 
-`feat/shipping/milestone-2`
+### Shipping Service
 
-This branch includes the previously integrated shipping features and the Milestone 2 shipping features S4-F10, S4-F11, and S4-F12.
+- Added OpenFeign integration with order-service.
+- Removed direct shared database dependency for order validation.
+- Added OrderServiceClient.
+- Added OrderResponse DTO.
+- Added integration endpoints:
+  - GET /api/shipments/order/{orderId}/active
+  - GET /api/shipments/order/{orderId}/ids
+- Added RabbitMQ support.
+- Added RabbitMQ topology:
+  - shipping.events exchange
+  - order.events exchange
+  - order saga queue
+  - dead-letter queue
+- Added OrderEvent DTO.
+- Added ShipmentEvent DTO.
+- Added OrderEventConsumer.
+- Added ShipmentEventPublisher.
+- Added publishing for shipment.created.
+- Docker Compose now includes RabbitMQ.
+- Shipping service RabbitMQ environment variables added.
+- Shipping build passed.
 
-## Implemented Features
+### Order Service
 
-### Completed
+- Added RabbitMQ dependency.
+- Added RabbitMQ config.
+- Added OrderEvent DTO.
+- Added OrderEventPublisher.
+- deliverOrder() now publishes order.completed.
+- cancelOrder() now publishes order.cancelled.
+- Order service build passed.
 
-- S4-F1: Get latest shipment by order ID
-- S4-F2: Create shipment for an order
-- S4-F3: Find nearby shipments
-- S4-F7: Purge old shipments
-- S4-F8: Carrier performance summary
-- S4-F9: Delayed shipments
-- S4-F10: Shipping analytics dashboard
-- S4-F11: Record shipment tracking event
-- S4-F12: Get shipment tracking timeline
+## Git History
 
-## Verified Milestone 2 Features
+- b5f5473 feat(order): publish order saga events with rabbitmq (55-8447)
+- 8556353 chore(shipping): add rabbitmq docker infrastructure (55-8447)
+- 45f01d0 feat(shipping): add rabbitmq shipment saga integration (55-8447)
+- 7bb1982 feat(shipping): add shipment integration endpoints (55-8447)
+- e8916eb feat(shipping): replace order db checks with feign client (55-8447)
 
-The following Milestone 2 features were manually tested and verified.
+## Remaining Work
 
-### S4-F10: Shipping Analytics Dashboard
+- Run full Docker runtime verification.
+- Verify RabbitMQ management UI.
+- Test shipping health endpoint.
+- Test order deliver/cancel event flow.
+- Confirm shipment updates after order events.
+- Merge teammate work if needed.
+- Create final PR after all shipping tasks are complete.
 
-Verified behavior:
+## RabbitMQ
 
-- Requires JWT authentication
-- Returns `401 Unauthorized` when token is missing
-- Returns `400 Bad Request` for invalid date range
-- Calculates total shipments
-- Calculates average delivery time
-- Calculates on-time delivery rate
-- Groups shipments by status
-- Calculates average delivery attempts
-- Stores analytics result in Redis cache
-- Logs `ANALYTICS_VIEWED` event in MongoDB
+- Image: rabbitmq:4-management
+- AMQP Port: 5672
+- Management UI: 15672
+- Username: admin
+- Password: adminpass
 
-### S4-F11: Record Shipment Tracking Event
+## Validation
 
-Verified behavior:
+Passed successfully:
 
-- Requires JWT authentication
-- Returns `401 Unauthorized` when token is missing
-- Creates tracking event successfully
-- Returns `201 Created`
-- Returns `404 Not Found` for invalid shipment ID
-- Stores tracking event in Cassandra
+mvn -pl shipping-service -am clean package -DskipTests
 
-### S4-F12: Shipment Tracking Timeline
+mvn -pl order-service -am clean package -DskipTests
 
-Verified behavior:
+## Important Note
 
-- Requires JWT authentication
-- Returns shipment tracking timeline
-- Supports optional `startTime` and `endTime` filters
-- Returns `401 Unauthorized` when token is missing
-- Returns `404 Not Found` for invalid shipment ID
-- Stores timeline result in Redis cache
-
-## Technical Notes
-
-- PostgreSQL is used for shipment records.
-- Redis is used for caching.
-- MongoDB is used for event logging.
-- Cassandra is used for shipment tracking events.
-- The shipping service runs internally on port `8080`.
-- In Docker Compose, shipping is exposed locally on port `8084`.
-
-## Notes
-
-This is a shared Milestone 2 shipping integration branch.
-
-The branch should be used for the final Pull Request into `main` after all shipping Milestone 2 work is confirmed by the team.
+Order-service was intentionally updated because shipping requires order.completed and order.cancelled events for Milestone 3 saga/event-driven integration.
