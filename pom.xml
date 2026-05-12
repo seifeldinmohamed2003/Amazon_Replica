@@ -15,6 +15,7 @@
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     </properties>
     <modules>
+        <module>contracts</module>
         <module>common-events</module>
         <module>user-service</module>
         <module>product-service</module>
