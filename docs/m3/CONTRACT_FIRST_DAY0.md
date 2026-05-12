@@ -77,3 +77,9 @@ This branch includes placeholders for:
 - Grafana dashboard registration
 
 Each slice owner should only edit their assigned service block.
+
+## Endpoint Contract Reference
+
+Exact endpoint paths, path/query parameters, return DTOs, and response JSON shapes are documented in:
+
+docs/m3/ENDPOINT_CONTRACTS.md

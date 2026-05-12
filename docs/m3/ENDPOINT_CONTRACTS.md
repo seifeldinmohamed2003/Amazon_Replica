@@ -228,6 +228,9 @@ true
 
 ### GET /api/shipments/order/{orderId}/active
 
+Path params:
+- orderId: order id
+
 Returns: ShipmentDTO
 
 Response JSON:
@@ -248,6 +251,9 @@ Response JSON:
 
 ### GET /api/shipments/order/{orderId}/ids
 
+Path params:
+- orderId: order id
+
 Returns: List<Long>
 
 Response JSON:
@@ -258,6 +264,13 @@ Response JSON:
 
 ### GET /api/transactions/user/{userId}/total?startDate={date}&endDate={date}
 
+Path params:
+- userId: user id
+
+Query params:
+- startDate: start date
+- endDate: end date
+
 Returns: BigDecimal
 
 Response JSON:
@@ -265,6 +278,13 @@ Response JSON:
 15000.0
 
 ### GET /api/transactions/user/{userId}/order-count?startDate={date}&endDate={date}
+
+Path params:
+- userId: user id
+
+Query params:
+- startDate: start date
+- endDate: end date
 
 Returns: long
 
