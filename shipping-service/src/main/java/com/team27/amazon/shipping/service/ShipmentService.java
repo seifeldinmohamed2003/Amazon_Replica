@@ -15,7 +15,6 @@ import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.cache.annotation.Caching;
 import org.springframework.http.HttpStatus;
-import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
@@ -38,6 +37,7 @@ import com.team27.amazon.shipping.model.ShipmentStatus;
 import com.team27.amazon.shipping.model.cassandra.ShipmentTrackingEvent;
 import com.team27.amazon.shipping.repository.ShipmentRepository;
 import com.team27.amazon.shipping.repository.ShipmentTrackingEventRepository;
+import com.team27.amazon.shipping.client.OrderServiceClient;
 
 import jakarta.annotation.PostConstruct;
 
@@ -46,7 +46,7 @@ public class ShipmentService extends AbstractEventSubject {
 
     private final ShipmentRepository shipmentRepository;
     private final ShipmentTrackingEventRepository shipmentTrackingEventRepository;
-    private final JdbcTemplate jdbcTemplate;
+    private final OrderServiceClient orderServiceClient;
     private final ObjectMapper objectMapper;
     private final ObjectArrayDtoAdapter objectArrayDtoAdapter;
 
@@ -57,13 +57,13 @@ public class ShipmentService extends AbstractEventSubject {
     public ShipmentService(
             ShipmentRepository shipmentRepository,
             ShipmentTrackingEventRepository shipmentTrackingEventRepository,
-            JdbcTemplate jdbcTemplate,
+            OrderServiceClient orderServiceClient,
             ObjectMapper objectMapper,
             ObjectArrayDtoAdapter objectArrayDtoAdapter
     ) {
         this.shipmentRepository = shipmentRepository;
         this.shipmentTrackingEventRepository = shipmentTrackingEventRepository;
-        this.jdbcTemplate = jdbcTemplate;
+        this.orderServiceClient = orderServiceClient;
         this.objectMapper = objectMapper;
         this.objectArrayDtoAdapter = objectArrayDtoAdapter;
     }
@@ -158,15 +158,7 @@ public class ShipmentService extends AbstractEventSubject {
     // Cache key: shipping-service::S4-F1::{orderId}
     @Cacheable(cacheNames = RedisConfiguration.CACHE_S4_F1, key = "#orderId")
     public Shipment getLatestShipmentByOrderId(Long orderId) {
-        Integer orderCount = jdbcTemplate.queryForObject(
-                "SELECT COUNT(*) FROM orders WHERE id = ?",
-                Integer.class,
-                orderId
-        );
-
-        if (orderCount == null || orderCount == 0) {
-            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Order not found");
-        }
+        ensureOrderExists(orderId);
 
         return shipmentRepository.findFirstByOrderIdOrderByCreatedAtDesc(orderId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "No shipment found for this order"));
@@ -183,15 +175,7 @@ public class ShipmentService extends AbstractEventSubject {
         @CacheEvict(cacheNames = RedisConfiguration.CACHE_S4_F10, allEntries = true)
     })
     public Shipment createShipmentForOrder(Long orderId, CreateShipmentRequest request) {
-        Integer orderCount = jdbcTemplate.queryForObject(
-                "SELECT COUNT(*) FROM orders WHERE id = ?",
-                Integer.class,
-                orderId
-        );
-
-        if (orderCount == null || orderCount == 0) {
-            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Order not found");
-        }
+        ensureOrderExists(orderId);
 
         Shipment shipment = new Shipment();
         shipment.setOrderId(orderId);
@@ -634,6 +618,14 @@ public class ShipmentService extends AbstractEventSubject {
         }
 
         throw new IllegalArgumentException("Unsupported date value type: " + value.getClass().getName());
+    }
+
+    private void ensureOrderExists(Long orderId) {
+        try {
+            orderServiceClient.getOrderById(orderId);
+        } catch (Exception ex) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Order not found");
+        }
     }
 
     private Map<String, Object> shipmentEventPayload(Long shipmentId, Map<String, Object> details) {
