@@ -1,0 +1,43 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-dashboards
+  namespace: monitoring
+data:
+  dashboard-paths.yaml: |
+    dashboards:
+      user-service: /etc/grafana/provisioning/dashboards/user-dashboard.json
+      product-service: /etc/grafana/provisioning/dashboards/product-dashboard.json
+      order-service: /etc/grafana/provisioning/dashboards/order-dashboard.json
+      shipping-service: /etc/grafana/provisioning/dashboards/shipping-dashboard.json
+      billing-service: /etc/grafana/provisioning/dashboards/billing-dashboard.json
+
+  user-dashboard.json: |
+    {
+      "title": "User Service Dashboard",
+      "panels": []
+    }
+
+  product-dashboard.json: |
+    {
+      "title": "Product Service Dashboard",
+      "panels": []
+    }
+
+  order-dashboard.json: |
+    {
+      "title": "Order Service Dashboard",
+      "panels": []
+    }
+
+  shipping-dashboard.json: |
+    {
+      "title": "Shipping Service Dashboard",
+      "panels": []
+    }
+
+  billing-dashboard.json: |
+    {
+      "title": "Billing Service Dashboard",
+      "panels": []
+    }
