@@ -1,0 +1,13 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-dashboards
+  namespace: monitoring
+data:
+  README: |
+    Dashboard JSON files should be added by each service owner:
+    - user-dashboard.json
+    - product-dashboard.json
+    - order-dashboard.json
+    - shipping-dashboard.json
+    - billing-dashboard.json
