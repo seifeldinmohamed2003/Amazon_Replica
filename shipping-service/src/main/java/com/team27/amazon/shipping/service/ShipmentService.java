@@ -38,6 +38,8 @@ import com.team27.amazon.shipping.model.cassandra.ShipmentTrackingEvent;
 import com.team27.amazon.shipping.repository.ShipmentRepository;
 import com.team27.amazon.shipping.repository.ShipmentTrackingEventRepository;
 import com.team27.amazon.shipping.client.OrderServiceClient;
+import com.team27.amazon.shipping.dto.event.ShipmentEvent;
+import com.team27.amazon.shipping.messaging.ShipmentEventPublisher;
 
 import jakarta.annotation.PostConstruct;
 
@@ -47,6 +49,7 @@ public class ShipmentService extends AbstractEventSubject {
     private final ShipmentRepository shipmentRepository;
     private final ShipmentTrackingEventRepository shipmentTrackingEventRepository;
     private final OrderServiceClient orderServiceClient;
+    private final ShipmentEventPublisher shipmentEventPublisher;
     private final ObjectMapper objectMapper;
     private final ObjectArrayDtoAdapter objectArrayDtoAdapter;
 
@@ -58,12 +61,14 @@ public class ShipmentService extends AbstractEventSubject {
             ShipmentRepository shipmentRepository,
             ShipmentTrackingEventRepository shipmentTrackingEventRepository,
             OrderServiceClient orderServiceClient,
+            ShipmentEventPublisher shipmentEventPublisher,
             ObjectMapper objectMapper,
             ObjectArrayDtoAdapter objectArrayDtoAdapter
     ) {
         this.shipmentRepository = shipmentRepository;
         this.shipmentTrackingEventRepository = shipmentTrackingEventRepository;
         this.orderServiceClient = orderServiceClient;
+        this.shipmentEventPublisher = shipmentEventPublisher;
         this.objectMapper = objectMapper;
         this.objectArrayDtoAdapter = objectArrayDtoAdapter;
     }
@@ -89,6 +94,16 @@ public class ShipmentService extends AbstractEventSubject {
                 "orderId", savedShipment.getOrderId(),
                 "status", savedShipment.getStatus() == null ? null : savedShipment.getStatus().name()
         )));
+
+        shipmentEventPublisher.publishShipmentCreated(
+                new ShipmentEvent(
+                        savedShipment.getId(),
+                        savedShipment.getOrderId(),
+                        "shipment.created",
+                        savedShipment.getStatus().name()
+                )
+        );
+
         return savedShipment;
     }
 
@@ -194,6 +209,16 @@ public class ShipmentService extends AbstractEventSubject {
                 "orderId", savedShipment.getOrderId(),
                 "status", savedShipment.getStatus() == null ? null : savedShipment.getStatus().name()
         )));
+
+        shipmentEventPublisher.publishShipmentCreated(
+                new ShipmentEvent(
+                        savedShipment.getId(),
+                        savedShipment.getOrderId(),
+                        "shipment.created",
+                        savedShipment.getStatus().name()
+                )
+        );
+
         return savedShipment;
     }
 
