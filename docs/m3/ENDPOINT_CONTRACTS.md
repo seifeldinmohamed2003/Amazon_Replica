@@ -166,6 +166,9 @@ Response JSON:
 
 ### GET /api/orders/user/{userId}/active-count
 
+Path params:
+- userId: user id
+
 Returns: int
 
 Response JSON:
@@ -174,6 +177,9 @@ Response JSON:
 
 ### GET /api/orders/user/{userId}/count
 
+Path params:
+- userId: user id
+
 Returns: long
 
 Response JSON:
@@ -181,6 +187,13 @@ Response JSON:
 12
 
 ### GET /api/orders/product/{productId}/sales?startDate={date}&endDate={date}
+
+Path params:
+- productId: product id
+
+Query params:
+- startDate: start date
+- endDate: end date
 
 Returns: ProductSalesAggregateDTO
 
@@ -194,6 +207,9 @@ Response JSON:
 
 ### GET /api/orders/product/{productId}/pending-count
 
+Path params:
+- productId: product id
+
 Returns: int
 
 Response JSON:
@@ -201,6 +217,9 @@ Response JSON:
 5
 
 ### GET /api/orders/product/{productId}/units-sold
+
+Path params:
+- productId: product id
 
 Returns: long
 
@@ -210,6 +229,12 @@ Response JSON:
 
 ### GET /api/orders/product/{productId}/recent-sales-count?days={n}
 
+Path params:
+- productId: product id
+
+Query params:
+- days: number of recent days
+
 Returns: int
 
 Response JSON:
@@ -217,6 +242,10 @@ Response JSON:
 7
 
 ### GET /api/orders/user/{userId}/has-purchased/{productId}
+
+Path params:
+- userId: user id
+- productId: product id
 
 Returns: boolean
 
