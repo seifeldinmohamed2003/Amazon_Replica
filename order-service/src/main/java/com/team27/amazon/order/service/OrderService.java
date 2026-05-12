@@ -37,6 +37,7 @@ import com.team27.amazon.order.dto.OrderItemDetailsDTO;
 import com.team27.amazon.order.model.Order;
 import com.team27.amazon.order.model.OrderItem;
 import com.team27.amazon.order.model.OrderStatus;
+import com.team27.amazon.order.messaging.OrderEventPublisher;
 import com.team27.amazon.order.repository.OrderRepository;
 import com.team27.amazon.order.repository.OrderItemRepository;
 import com.team27.amazon.order.repository.ProductJdbcRepository;
@@ -80,6 +81,9 @@ public class OrderService extends AbstractEventSubject {
 
     @Autowired
     private ProductJdbcRepository productJdbcRepository;
+
+    @Autowired
+    private OrderEventPublisher orderEventPublisher;
     
     private Order reloadOrderWithSortedItems(Long orderId) {
         Order updatedOrder = orderRepository.findById(orderId)
@@ -479,6 +483,8 @@ public class OrderService extends AbstractEventSubject {
         invalidateOrderCaches(savedOrder.getId());
         invalidateProductDashboardCache();
 
+        orderEventPublisher.publishOrderCompleted(savedOrder.getId());
+
         return savedOrder;
     }
     public List<Order> searchOrdersByMetadata(String key, String value) {
@@ -705,6 +711,9 @@ public class OrderService extends AbstractEventSubject {
         )));
         invalidateOrderCaches(savedOrder.getId());
         invalidateProductDashboardCache();
+
+        orderEventPublisher.publishOrderCancelled(savedOrder.getId());
+
         return savedOrder;
     }
 
