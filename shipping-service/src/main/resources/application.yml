@@ -2,9 +2,9 @@ spring:
   application:
     name: shipping-service
   datasource:
-    url: jdbc:postgresql://postgres:5432/amazondb
-    username: postgres
-    password: postgres
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://shipping-postgres:5432/amazondb-shipments}
+    username: ${SPRING_DATASOURCE_USERNAME:postgres}
+    password: ${SPRING_DATASOURCE_PASSWORD:postgres}
   jpa:
     hibernate:
       ddl-auto: update
@@ -32,3 +32,9 @@ server:
 jwt:
   secret: ${JWT_SECRET:MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=}
   expiration: ${JWT_EXPIRATION_MS:86400000}
+
+feign:
+  order-service:
+    url: ${FEIGN_ORDER_SERVICE_URL:http://order-service:8080}
+  product-service:
+    url: ${FEIGN_PRODUCT_SERVICE_URL:http://product-service:8080}

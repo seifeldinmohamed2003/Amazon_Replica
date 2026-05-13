@@ -96,4 +96,19 @@ public interface ShipmentRepository extends JpaRepository<Shipment, Long> {
             @Param("key") String key,
             @Param("value") String value
     );
+    List<Shipment> findByOrderId(Long orderId);
+
+    @Query("""
+        SELECT s FROM Shipment s
+        WHERE s.orderId = :orderId
+        AND s.status IN (
+            com.team27.amazon.shipping.model.ShipmentStatus.PROCESSING,
+            com.team27.amazon.shipping.model.ShipmentStatus.SHIPPED,
+            com.team27.amazon.shipping.model.ShipmentStatus.IN_TRANSIT,
+            com.team27.amazon.shipping.model.ShipmentStatus.OUT_FOR_DELIVERY
+        )
+        ORDER BY s.createdAt DESC
+    """)
+    List<Shipment> findActiveShipmentsForOrder(@Param("orderId") Long orderId);
+
 }
