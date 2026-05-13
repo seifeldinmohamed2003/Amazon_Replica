@@ -15,7 +15,6 @@ import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.cache.annotation.Caching;
 import org.springframework.http.HttpStatus;
-import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
@@ -23,6 +22,8 @@ import org.springframework.web.server.ResponseStatusException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.team27.amazon.common.events.AbstractEventSubject;
 import com.team27.amazon.common.events.MongoEventLogger;
+import com.team27.amazon.contracts.dto.OrderDTO;
+import com.team27.amazon.contracts.feign.OrderServiceClient;
 import com.team27.amazon.shipping.adapter.ObjectArrayDtoAdapter;
 import com.team27.amazon.shipping.config.RedisConfiguration;
 import com.team27.amazon.shipping.dto.BatchStatusUpdateRequest;
@@ -33,12 +34,14 @@ import com.team27.amazon.shipping.dto.NearbyShipmentDTO;
 import com.team27.amazon.shipping.dto.ShipmentTrackingDTO;
 import com.team27.amazon.shipping.dto.ShippingAnalyticsDTO;
 import com.team27.amazon.shipping.dto.TrackingEventRequest;
+import com.team27.amazon.shipping.events.ShipmentEventPublisher;
 import com.team27.amazon.shipping.model.Shipment;
 import com.team27.amazon.shipping.model.ShipmentStatus;
 import com.team27.amazon.shipping.model.cassandra.ShipmentTrackingEvent;
 import com.team27.amazon.shipping.repository.ShipmentRepository;
 import com.team27.amazon.shipping.repository.ShipmentTrackingEventRepository;
 
+import feign.FeignException;
 import jakarta.annotation.PostConstruct;
 
 @Service
@@ -46,7 +49,8 @@ public class ShipmentService extends AbstractEventSubject {
 
     private final ShipmentRepository shipmentRepository;
     private final ShipmentTrackingEventRepository shipmentTrackingEventRepository;
-    private final JdbcTemplate jdbcTemplate;
+    private final OrderServiceClient orderServiceClient;
+    private final ShipmentEventPublisher shipmentEventPublisher;
     private final ObjectMapper objectMapper;
     private final ObjectArrayDtoAdapter objectArrayDtoAdapter;
 
@@ -57,13 +61,15 @@ public class ShipmentService extends AbstractEventSubject {
     public ShipmentService(
             ShipmentRepository shipmentRepository,
             ShipmentTrackingEventRepository shipmentTrackingEventRepository,
-            JdbcTemplate jdbcTemplate,
+            OrderServiceClient orderServiceClient,
+            ShipmentEventPublisher shipmentEventPublisher,
             ObjectMapper objectMapper,
             ObjectArrayDtoAdapter objectArrayDtoAdapter
     ) {
         this.shipmentRepository = shipmentRepository;
         this.shipmentTrackingEventRepository = shipmentTrackingEventRepository;
-        this.jdbcTemplate = jdbcTemplate;
+        this.orderServiceClient = orderServiceClient;
+        this.shipmentEventPublisher = shipmentEventPublisher;
         this.objectMapper = objectMapper;
         this.objectArrayDtoAdapter = objectArrayDtoAdapter;
     }
@@ -74,21 +80,25 @@ public class ShipmentService extends AbstractEventSubject {
     }
 
     @Caching(evict = {
-        @CacheEvict(cacheNames = RedisConfiguration.CACHE_SHIPMENT_DETAIL, allEntries = true),
-        @CacheEvict(cacheNames = RedisConfiguration.CACHE_S4_F1, allEntries = true),
-        @CacheEvict(cacheNames = RedisConfiguration.CACHE_S4_F3, allEntries = true),
-        @CacheEvict(cacheNames = RedisConfiguration.CACHE_S4_F5, allEntries = true),
-        @CacheEvict(cacheNames = RedisConfiguration.CACHE_S4_F6, allEntries = true),
-        @CacheEvict(cacheNames = RedisConfiguration.CACHE_S4_F8, allEntries = true),
-        @CacheEvict(cacheNames = RedisConfiguration.CACHE_S4_F9, allEntries = true),
-        @CacheEvict(cacheNames = RedisConfiguration.CACHE_S4_F10, allEntries = true)
+            @CacheEvict(cacheNames = RedisConfiguration.CACHE_SHIPMENT_DETAIL, allEntries = true),
+            @CacheEvict(cacheNames = RedisConfiguration.CACHE_S4_F1, allEntries = true),
+            @CacheEvict(cacheNames = RedisConfiguration.CACHE_S4_F3, allEntries = true),
+            @CacheEvict(cacheNames = RedisConfiguration.CACHE_S4_F5, allEntries = true),
+            @CacheEvict(cacheNames = RedisConfiguration.CACHE_S4_F6, allEntries = true),
+            @CacheEvict(cacheNames = RedisConfiguration.CACHE_S4_F8, allEntries = true),
+            @CacheEvict(cacheNames = RedisConfiguration.CACHE_S4_F9, allEntries = true),
+            @CacheEvict(cacheNames = RedisConfiguration.CACHE_S4_F10, allEntries = true)
     })
     public Shipment createShipment(Shipment shipment) {
         Shipment savedShipment = shipmentRepository.save(shipment);
+
+        shipmentEventPublisher.publishShipmentCreated(savedShipment);
+
         notifyObservers("SHIPMENT_CREATED", shipmentEventPayload(savedShipment.getId(), Map.of(
                 "orderId", savedShipment.getOrderId(),
                 "status", savedShipment.getStatus() == null ? null : savedShipment.getStatus().name()
         )));
+
         return savedShipment;
     }
 
@@ -96,8 +106,6 @@ public class ShipmentService extends AbstractEventSubject {
         return shipmentRepository.findAll();
     }
 
-    // GET /{id} - CRUD baseline endpoint - TTL 15 min
-    // Cache key: shipping-service::shipment::{id}
     @Cacheable(cacheNames = RedisConfiguration.CACHE_SHIPMENT_DETAIL, key = "#id")
     public Shipment getShipmentById(Long id) {
         return shipmentRepository.findById(id)
@@ -105,14 +113,14 @@ public class ShipmentService extends AbstractEventSubject {
     }
 
     @Caching(evict = {
-        @CacheEvict(cacheNames = RedisConfiguration.CACHE_SHIPMENT_DETAIL, key = "#id"),
-        @CacheEvict(cacheNames = RedisConfiguration.CACHE_S4_F1, allEntries = true),
-        @CacheEvict(cacheNames = RedisConfiguration.CACHE_S4_F3, allEntries = true),
-        @CacheEvict(cacheNames = RedisConfiguration.CACHE_S4_F5, allEntries = true),
-        @CacheEvict(cacheNames = RedisConfiguration.CACHE_S4_F6, allEntries = true),
-        @CacheEvict(cacheNames = RedisConfiguration.CACHE_S4_F8, allEntries = true),
-        @CacheEvict(cacheNames = RedisConfiguration.CACHE_S4_F9, allEntries = true),
-        @CacheEvict(cacheNames = RedisConfiguration.CACHE_S4_F10, allEntries = true)
+            @CacheEvict(cacheNames = RedisConfiguration.CACHE_SHIPMENT_DETAIL, key = "#id"),
+            @CacheEvict(cacheNames = RedisConfiguration.CACHE_S4_F1, allEntries = true),
+            @CacheEvict(cacheNames = RedisConfiguration.CACHE_S4_F3, allEntries = true),
+            @CacheEvict(cacheNames = RedisConfiguration.CACHE_S4_F5, allEntries = true),
+            @CacheEvict(cacheNames = RedisConfiguration.CACHE_S4_F6, allEntries = true),
+            @CacheEvict(cacheNames = RedisConfiguration.CACHE_S4_F8, allEntries = true),
+            @CacheEvict(cacheNames = RedisConfiguration.CACHE_S4_F9, allEntries = true),
+            @CacheEvict(cacheNames = RedisConfiguration.CACHE_S4_F10, allEntries = true)
     })
     public Shipment updateShipment(Long id, Shipment updatedShipment) {
         Shipment existing = shipmentRepository.findById(id)
@@ -129,69 +137,63 @@ public class ShipmentService extends AbstractEventSubject {
         existing.setMetadata(updatedShipment.getMetadata());
 
         Shipment savedShipment = shipmentRepository.save(existing);
+
+        if (savedShipment.getStatus() != null) {
+            shipmentEventPublisher.publishShipmentStatusChanged(savedShipment);
+        }
+
         notifyObservers("SHIPMENT_UPDATED", shipmentEventPayload(savedShipment.getId(), Map.of(
-            "orderId", savedShipment.getOrderId(),
-            "status", savedShipment.getStatus() == null ? null : savedShipment.getStatus().name()
+                "orderId", savedShipment.getOrderId(),
+                "status", savedShipment.getStatus() == null ? null : savedShipment.getStatus().name()
         )));
+
         return savedShipment;
     }
 
     @Caching(evict = {
-        @CacheEvict(cacheNames = RedisConfiguration.CACHE_SHIPMENT_DETAIL, key = "#id"),
-        @CacheEvict(cacheNames = RedisConfiguration.CACHE_S4_F1, allEntries = true),
-        @CacheEvict(cacheNames = RedisConfiguration.CACHE_S4_F3, allEntries = true),
-        @CacheEvict(cacheNames = RedisConfiguration.CACHE_S4_F5, allEntries = true),
-        @CacheEvict(cacheNames = RedisConfiguration.CACHE_S4_F6, allEntries = true),
-        @CacheEvict(cacheNames = RedisConfiguration.CACHE_S4_F8, allEntries = true),
-        @CacheEvict(cacheNames = RedisConfiguration.CACHE_S4_F9, allEntries = true),
-        @CacheEvict(cacheNames = RedisConfiguration.CACHE_S4_F10, allEntries = true)
+            @CacheEvict(cacheNames = RedisConfiguration.CACHE_SHIPMENT_DETAIL, key = "#id"),
+            @CacheEvict(cacheNames = RedisConfiguration.CACHE_S4_F1, allEntries = true),
+            @CacheEvict(cacheNames = RedisConfiguration.CACHE_S4_F3, allEntries = true),
+            @CacheEvict(cacheNames = RedisConfiguration.CACHE_S4_F5, allEntries = true),
+            @CacheEvict(cacheNames = RedisConfiguration.CACHE_S4_F6, allEntries = true),
+            @CacheEvict(cacheNames = RedisConfiguration.CACHE_S4_F8, allEntries = true),
+            @CacheEvict(cacheNames = RedisConfiguration.CACHE_S4_F9, allEntries = true),
+            @CacheEvict(cacheNames = RedisConfiguration.CACHE_S4_F10, allEntries = true)
     })
     public void deleteShipment(Long id) {
         if (!shipmentRepository.existsById(id)) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Shipment not found");
         }
+
         shipmentRepository.deleteById(id);
         notifyObservers("SHIPMENT_DELETED", shipmentEventPayload(id, Map.of()));
     }
 
-    // F1: Get Latest Shipment for an Order - TTL 5 min
-    // Cache key: shipping-service::S4-F1::{orderId}
+    // S4-F1: Get Latest Shipment for an Order
     @Cacheable(cacheNames = RedisConfiguration.CACHE_S4_F1, key = "#orderId")
     public Shipment getLatestShipmentByOrderId(Long orderId) {
-        Integer orderCount = jdbcTemplate.queryForObject(
-                "SELECT COUNT(*) FROM orders WHERE id = ?",
-                Integer.class,
-                orderId
-        );
+        verifyOrderExists(orderId);
 
-        if (orderCount == null || orderCount == 0) {
-            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Order not found");
-        }
-
-        return shipmentRepository.findFirstByOrderIdOrderByCreatedAtDesc(orderId)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "No shipment found for this order"));
+        return shipmentRepository.findFirstByOrderIdOrderByLastUpdateDesc(orderId)
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND,
+                        "No shipment found for this order"
+                ));
     }
 
+    // S4-F2: Create Shipment with Tracking Metadata
     @Caching(evict = {
-        @CacheEvict(cacheNames = RedisConfiguration.CACHE_SHIPMENT_DETAIL, allEntries = true),
-        @CacheEvict(cacheNames = RedisConfiguration.CACHE_S4_F1, allEntries = true),
-        @CacheEvict(cacheNames = RedisConfiguration.CACHE_S4_F3, allEntries = true),
-        @CacheEvict(cacheNames = RedisConfiguration.CACHE_S4_F5, allEntries = true),
-        @CacheEvict(cacheNames = RedisConfiguration.CACHE_S4_F6, allEntries = true),
-        @CacheEvict(cacheNames = RedisConfiguration.CACHE_S4_F8, allEntries = true),
-        @CacheEvict(cacheNames = RedisConfiguration.CACHE_S4_F9, allEntries = true),
-        @CacheEvict(cacheNames = RedisConfiguration.CACHE_S4_F10, allEntries = true)
+            @CacheEvict(cacheNames = RedisConfiguration.CACHE_SHIPMENT_DETAIL, allEntries = true),
+            @CacheEvict(cacheNames = RedisConfiguration.CACHE_S4_F1, allEntries = true),
+            @CacheEvict(cacheNames = RedisConfiguration.CACHE_S4_F3, allEntries = true),
+            @CacheEvict(cacheNames = RedisConfiguration.CACHE_S4_F5, allEntries = true),
+            @CacheEvict(cacheNames = RedisConfiguration.CACHE_S4_F6, allEntries = true),
+            @CacheEvict(cacheNames = RedisConfiguration.CACHE_S4_F8, allEntries = true),
+            @CacheEvict(cacheNames = RedisConfiguration.CACHE_S4_F9, allEntries = true),
+            @CacheEvict(cacheNames = RedisConfiguration.CACHE_S4_F10, allEntries = true)
     })
     public Shipment createShipmentForOrder(Long orderId, CreateShipmentRequest request) {
-        Integer orderCount = jdbcTemplate.queryForObject(
-                "SELECT COUNT(*) FROM orders WHERE id = ?",
-                Integer.class,
-                orderId
-        );
-
-        if (orderCount == null || orderCount == 0) {
-            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Order not found");
-        }
+        verifyOrderExists(orderId);
 
         Shipment shipment = new Shipment();
         shipment.setOrderId(orderId);
@@ -206,17 +208,18 @@ public class ShipmentService extends AbstractEventSubject {
         }
 
         Shipment savedShipment = shipmentRepository.save(shipment);
+
+        shipmentEventPublisher.publishShipmentCreated(savedShipment);
+
         notifyObservers("SHIPMENT_CREATED", shipmentEventPayload(savedShipment.getId(), Map.of(
                 "orderId", savedShipment.getOrderId(),
                 "status", savedShipment.getStatus() == null ? null : savedShipment.getStatus().name()
         )));
+
         return savedShipment;
     }
 
     // S4-F11: Record Shipment Tracking Event
-    // Endpoint: POST /api/shipments/{id}/tracking
-    // Cassandra: shipment_tracking_events
-    // MongoDB Observer event: TRACKING_RECORDED
     @Caching(evict = {
             @CacheEvict(cacheNames = RedisConfiguration.CACHE_S4_F10, allEntries = true),
             @CacheEvict(cacheNames = RedisConfiguration.CACHE_S4_F12, allEntries = true)
@@ -250,6 +253,22 @@ public class ShipmentService extends AbstractEventSubject {
 
         ShipmentTrackingEvent savedEvent = shipmentTrackingEventRepository.save(trackingEvent);
 
+        try {
+            ShipmentStatus newStatus = ShipmentStatus.valueOf(request.getStatus().trim().toUpperCase());
+            shipment.setStatus(newStatus);
+            shipment.setLatitude(request.getLatitude());
+            shipment.setLongitude(request.getLongitude());
+            shipment.setLastUpdate(now);
+
+            Shipment savedShipment = shipmentRepository.save(shipment);
+            shipmentEventPublisher.publishShipmentStatusChanged(savedShipment);
+        } catch (IllegalArgumentException exception) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Invalid shipment status: " + request.getStatus()
+            );
+        }
+
         Map<String, Object> details = new HashMap<>();
         details.put("shipmentId", shipmentId);
         details.put("status", request.getStatus());
@@ -265,10 +284,8 @@ public class ShipmentService extends AbstractEventSubject {
         return savedEvent;
     }
 
-    // F3: Find Nearby Shipments Out for Delivery - TTL 10 min
-    // Cache key: shipping-service::S4-F3::{lat}:{lon}:{radiusKm}
     @Cacheable(cacheNames = RedisConfiguration.CACHE_S4_F3,
-               key = "#lat + ':' + #lon + ':' + #radiusKm")
+            key = "#lat + ':' + #lon + ':' + #radiusKm")
     public List<NearbyShipmentDTO> findNearbyOutForDelivery(Double lat, Double lon, Double radiusKm) {
         if (lat == null || lon == null || radiusKm == null) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "lat, lon and radiusKm are required");
@@ -324,14 +341,14 @@ public class ShipmentService extends AbstractEventSubject {
     }
 
     @Caching(evict = {
-        @CacheEvict(cacheNames = RedisConfiguration.CACHE_SHIPMENT_DETAIL, allEntries = true),
-        @CacheEvict(cacheNames = RedisConfiguration.CACHE_S4_F1, allEntries = true),
-        @CacheEvict(cacheNames = RedisConfiguration.CACHE_S4_F3, allEntries = true),
-        @CacheEvict(cacheNames = RedisConfiguration.CACHE_S4_F5, allEntries = true),
-        @CacheEvict(cacheNames = RedisConfiguration.CACHE_S4_F6, allEntries = true),
-        @CacheEvict(cacheNames = RedisConfiguration.CACHE_S4_F8, allEntries = true),
-        @CacheEvict(cacheNames = RedisConfiguration.CACHE_S4_F9, allEntries = true),
-        @CacheEvict(cacheNames = RedisConfiguration.CACHE_S4_F10, allEntries = true)
+            @CacheEvict(cacheNames = RedisConfiguration.CACHE_SHIPMENT_DETAIL, allEntries = true),
+            @CacheEvict(cacheNames = RedisConfiguration.CACHE_S4_F1, allEntries = true),
+            @CacheEvict(cacheNames = RedisConfiguration.CACHE_S4_F3, allEntries = true),
+            @CacheEvict(cacheNames = RedisConfiguration.CACHE_S4_F5, allEntries = true),
+            @CacheEvict(cacheNames = RedisConfiguration.CACHE_S4_F6, allEntries = true),
+            @CacheEvict(cacheNames = RedisConfiguration.CACHE_S4_F8, allEntries = true),
+            @CacheEvict(cacheNames = RedisConfiguration.CACHE_S4_F9, allEntries = true),
+            @CacheEvict(cacheNames = RedisConfiguration.CACHE_S4_F10, allEntries = true)
     })
     @Transactional
     public int purgeOldShipments(int olderThanDays) {
@@ -345,21 +362,20 @@ public class ShipmentService extends AbstractEventSubject {
         LocalDateTime cutoff = LocalDateTime.now().minusDays(olderThanDays);
         int count = shipmentRepository.countOlderThan(cutoff);
         shipmentRepository.deleteOlderThan(cutoff);
+
         notifyObservers("OLD_DATA_PURGED", shipmentEventPayload(null, Map.of(
-            "olderThanDays", olderThanDays,
-            "deletedCount", count
+                "olderThanDays", olderThanDays,
+                "deletedCount", count
         )));
+
         return count;
     }
 
-    // F8: Carrier Performance Summary - TTL 15 min
-    // Cache key: shipping-service::S4-F8::{carrier}:{start}:{end}
     @Cacheable(cacheNames = RedisConfiguration.CACHE_S4_F8,
-               key = "#carrier + ':' + #start + ':' + #end")
+            key = "#carrier + ':' + #start + ':' + #end")
     public CarrierSummaryDTO getCarrierSummary(String carrier,
                                                LocalDateTime start,
                                                LocalDateTime end) {
-
         if (start.isAfter(end)) {
             throw new ResponseStatusException(
                     HttpStatus.BAD_REQUEST,
@@ -414,10 +430,8 @@ public class ShipmentService extends AbstractEventSubject {
                 .build();
     }
 
-    // F9: Find Delayed Shipments - TTL 10 min
-    // Cache key: shipping-service::S4-F9::{maxDeliveryAttempts}
     @Cacheable(cacheNames = RedisConfiguration.CACHE_S4_F9,
-               key = "#maxDeliveryAttempts != null ? #maxDeliveryAttempts : 'all'")
+            key = "#maxDeliveryAttempts != null ? #maxDeliveryAttempts : 'all'")
     public List<DelayedShipmentDTO> getDelayedShipments(Integer maxDeliveryAttempts) {
         if (maxDeliveryAttempts != null && maxDeliveryAttempts < 0) {
             throw new ResponseStatusException(
@@ -428,14 +442,12 @@ public class ShipmentService extends AbstractEventSubject {
 
         List<Object[]> rows = shipmentRepository.findDelayedShipments(maxDeliveryAttempts);
         return rows.stream()
-            .map(objectArrayDtoAdapter::toDelayedShipmentDTO)
-            .toList();
+                .map(objectArrayDtoAdapter::toDelayedShipmentDTO)
+                .toList();
     }
 
-    // F6: Get Shipments in Date Range - TTL 10 min
-    // Cache key: shipping-service::S4-F6::{startDate}:{endDate}:{status}
     @Cacheable(cacheNames = RedisConfiguration.CACHE_S4_F6,
-               key = "#startDate + ':' + #endDate + ':' + (#status != null ? #status.name() : 'all')")
+            key = "#startDate + ':' + #endDate + ':' + (#status != null ? #status.name() : 'all')")
     public List<Shipment> getShipmentsInDateRange(LocalDateTime startDate, LocalDateTime endDate, ShipmentStatus status) {
         if (startDate == null || endDate == null) {
             throw new ResponseStatusException(
@@ -454,10 +466,8 @@ public class ShipmentService extends AbstractEventSubject {
         return shipmentRepository.findShipmentsByDateRangeAndStatus(startDate, endDate, status);
     }
 
-    // F5: Filter Shipments by Metadata (JSONB Query) - TTL 5 min
-    // Cache key: shipping-service::S4-F5::{key}:{operator}:{value}
     @Cacheable(cacheNames = RedisConfiguration.CACHE_S4_F5,
-               key = "#key + ':' + #operator + ':' + #value")
+            key = "#key + ':' + #operator + ':' + #value")
     public List<Shipment> searchShipmentsByMetadata(String key, String operator, String value) {
         if (key == null || key.trim().isEmpty()) {
             throw new ResponseStatusException(
@@ -498,14 +508,14 @@ public class ShipmentService extends AbstractEventSubject {
     }
 
     @Caching(evict = {
-        @CacheEvict(cacheNames = RedisConfiguration.CACHE_SHIPMENT_DETAIL, allEntries = true),
-        @CacheEvict(cacheNames = RedisConfiguration.CACHE_S4_F1, allEntries = true),
-        @CacheEvict(cacheNames = RedisConfiguration.CACHE_S4_F3, allEntries = true),
-        @CacheEvict(cacheNames = RedisConfiguration.CACHE_S4_F5, allEntries = true),
-        @CacheEvict(cacheNames = RedisConfiguration.CACHE_S4_F6, allEntries = true),
-        @CacheEvict(cacheNames = RedisConfiguration.CACHE_S4_F8, allEntries = true),
-        @CacheEvict(cacheNames = RedisConfiguration.CACHE_S4_F9, allEntries = true),
-        @CacheEvict(cacheNames = RedisConfiguration.CACHE_S4_F10, allEntries = true)
+            @CacheEvict(cacheNames = RedisConfiguration.CACHE_SHIPMENT_DETAIL, allEntries = true),
+            @CacheEvict(cacheNames = RedisConfiguration.CACHE_S4_F1, allEntries = true),
+            @CacheEvict(cacheNames = RedisConfiguration.CACHE_S4_F3, allEntries = true),
+            @CacheEvict(cacheNames = RedisConfiguration.CACHE_S4_F5, allEntries = true),
+            @CacheEvict(cacheNames = RedisConfiguration.CACHE_S4_F6, allEntries = true),
+            @CacheEvict(cacheNames = RedisConfiguration.CACHE_S4_F8, allEntries = true),
+            @CacheEvict(cacheNames = RedisConfiguration.CACHE_S4_F9, allEntries = true),
+            @CacheEvict(cacheNames = RedisConfiguration.CACHE_S4_F10, allEntries = true)
     })
     @Transactional
     public int batchUpdateStatus(List<BatchStatusUpdateRequest> requests) {
@@ -518,13 +528,16 @@ public class ShipmentService extends AbstractEventSubject {
                 .toList();
 
         List<Shipment> existingShipments = shipmentRepository.findAllById(shipmentIds);
+
         if (existingShipments.size() != shipmentIds.size()) {
             List<Long> existingIds = existingShipments.stream()
                     .map(Shipment::getId)
                     .toList();
+
             List<Long> missingIds = shipmentIds.stream()
                     .filter(id -> !existingIds.contains(id))
                     .toList();
+
             throw new ResponseStatusException(
                     HttpStatus.NOT_FOUND,
                     "Shipments not found with ids: " + missingIds
@@ -547,28 +560,28 @@ public class ShipmentService extends AbstractEventSubject {
             shipment.setStatus(request.getStatus());
             shipment.setLatitude(request.getLatitude());
             shipment.setLongitude(request.getLongitude());
+            shipment.setLastUpdate(LocalDateTime.now());
         }
 
-        shipmentRepository.saveAll(existingShipments);
+        List<Shipment> savedShipments = shipmentRepository.saveAll(existingShipments);
+
+        savedShipments.forEach(shipmentEventPublisher::publishShipmentStatusChanged);
 
         notifyObservers("BATCH_STATUS_UPDATED", shipmentEventPayload(null, Map.of(
-                "count", existingShipments.size(),
+                "count", savedShipments.size(),
                 "shipmentIds", shipmentIds
         )));
 
-        return existingShipments.size();
+        return savedShipments.size();
     }
 
-    // F12: Get Shipment Tracking Timeline - TTL 5 min
-    // Cache key: shipping-service::S4-F12::{shipmentId}:{startTime}:{endTime}
     @Cacheable(cacheNames = RedisConfiguration.CACHE_S4_F12,
-               key = "#shipmentId + ':' + (#startTime != null ? #startTime.toString() : 'all') + ':' + (#endTime != null ? #endTime.toString() : 'all')")
+            key = "#shipmentId + ':' + (#startTime != null ? #startTime.toString() : 'all') + ':' + (#endTime != null ? #endTime.toString() : 'all')")
     public List<ShipmentTrackingDTO> getShipmentTrackingTimeline(
             Long shipmentId,
             LocalDateTime startTime,
             LocalDateTime endTime
     ) {
-        // Verify shipment exists in PostgreSQL
         if (!shipmentRepository.existsById(shipmentId)) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Shipment not found");
         }
@@ -604,68 +617,11 @@ public class ShipmentService extends AbstractEventSubject {
                 .collect(Collectors.toList());
     }
 
-    /**
-     * Save a tracking event for a shipment (used by S4-F11).
-     * This method also invalidates the S4-F12 cache for this shipment.
-     */
     @Caching(evict = {
-        @CacheEvict(cacheNames = RedisConfiguration.CACHE_S4_F12, allEntries = true)
+            @CacheEvict(cacheNames = RedisConfiguration.CACHE_S4_F12, allEntries = true)
     })
     public ShipmentTrackingEvent saveTrackingEvent(ShipmentTrackingEvent event) {
         return shipmentTrackingEventRepository.save(event);
-    }
-
-
-    private LocalDate toLocalDate(Object value) {
-        if (value == null) {
-            return null;
-        }
-
-        if (value instanceof LocalDate localDate) {
-            return localDate;
-        }
-
-        if (value instanceof java.sql.Date sqlDate) {
-            return sqlDate.toLocalDate();
-        }
-
-        if (value instanceof java.sql.Timestamp timestamp) {
-            return timestamp.toLocalDateTime().toLocalDate();
-        }
-
-        throw new IllegalArgumentException("Unsupported date value type: " + value.getClass().getName());
-    }
-
-    private Map<String, Object> shipmentEventPayload(Long shipmentId, Map<String, Object> details) {
-        Map<String, Object> payload = new HashMap<>();
-        if (shipmentId != null) {
-            payload.put("shipmentId", shipmentId);
-        }
-        payload.put("details", details == null ? new HashMap<>() : new HashMap<>(details));
-        return payload;
-    }
-
-    private void validateCoordinates(Double latitude, Double longitude) {
-        if (latitude == null || longitude == null) {
-            throw new ResponseStatusException(
-                    HttpStatus.BAD_REQUEST,
-                    "Latitude and longitude are required"
-            );
-        }
-
-        if (latitude < -90 || latitude > 90) {
-            throw new ResponseStatusException(
-                    HttpStatus.BAD_REQUEST,
-                    "Latitude must be between -90 and 90"
-            );
-        }
-
-        if (longitude < -180 || longitude > 180) {
-            throw new ResponseStatusException(
-                    HttpStatus.BAD_REQUEST,
-                    "Longitude must be between -180 and 180"
-            );
-        }
     }
 
     public void logShippingAnalyticsViewed(LocalDate startDate, LocalDate endDate) {
@@ -676,10 +632,8 @@ public class ShipmentService extends AbstractEventSubject {
         )));
     }
 
-    // S4-F10: Get Shipping Analytics Dashboard - TTL 10 min
-    // Cache key: shipping-service::S4-F10::{startDate}:{endDate}
     @Cacheable(cacheNames = RedisConfiguration.CACHE_S4_F10,
-               key = "#startDate.toString() + ':' + #endDate.toString()")
+            key = "#startDate.toString() + ':' + #endDate.toString()")
     public ShippingAnalyticsDTO getShippingAnalytics(LocalDate startDate, LocalDate endDate) {
         if (startDate == null || endDate == null) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "startDate and endDate are required");
@@ -739,12 +693,61 @@ public class ShipmentService extends AbstractEventSubject {
                 .build();
     }
 
+    private OrderDTO verifyOrderExists(Long orderId) {
+        try {
+            return orderServiceClient.getOrder(orderId);
+        } catch (FeignException.NotFound exception) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Order not found");
+        } catch (FeignException exception) {
+            throw new ResponseStatusException(
+                    HttpStatus.SERVICE_UNAVAILABLE,
+                    "Order service temporarily unavailable"
+            );
+        }
+    }
+
+    private Map<String, Object> shipmentEventPayload(Long shipmentId, Map<String, Object> details) {
+        Map<String, Object> payload = new HashMap<>();
+
+        if (shipmentId != null) {
+            payload.put("shipmentId", shipmentId);
+        }
+
+        payload.put("details", details == null ? new HashMap<>() : new HashMap<>(details));
+
+        return payload;
+    }
+
+    private void validateCoordinates(Double latitude, Double longitude) {
+        if (latitude == null || longitude == null) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Latitude and longitude are required"
+            );
+        }
+
+        if (latitude < -90 || latitude > 90) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Latitude must be between -90 and 90"
+            );
+        }
+
+        if (longitude < -180 || longitude > 180) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Longitude must be between -180 and 180"
+            );
+        }
+    }
+
     private double extractDeliveryAttempts(Shipment shipment) {
         if (shipment == null || shipment.getMetadata() == null) {
             return 0.0;
         }
 
         Object attempts = shipment.getMetadata().get("deliveryAttempts");
+
         if (attempts == null) {
             return 0.0;
         }
@@ -759,6 +762,4 @@ public class ShipmentService extends AbstractEventSubject {
             return 0.0;
         }
     }
-
-
 }

@@ -8,6 +8,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 import java.time.LocalDateTime;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 
@@ -15,6 +16,17 @@ public interface ShipmentRepository extends JpaRepository<Shipment, Long> {
 
     Optional<Shipment> findFirstByOrderIdOrderByCreatedAtDesc(Long orderId);
 
+    // M3: Used by S4-F1 to get the latest shipment by last update
+    Optional<Shipment> findFirstByOrderIdOrderByLastUpdateDesc(Long orderId);
+
+    // M3: Used by saga consumer to find active shipment for order.completed / order.cancelled
+    Optional<Shipment> findFirstByOrderIdAndStatusInOrderByLastUpdateDesc(
+            Long orderId,
+            Collection<ShipmentStatus> statuses
+    );
+
+    // M3: Useful for GET /api/shipments/order/{orderId}/ids
+    List<Shipment> findByOrderId(Long orderId);
 
     List<Shipment> findByCreatedAtBetween(LocalDateTime startDate, LocalDateTime endDate);
 
@@ -49,7 +61,7 @@ public interface ShipmentRepository extends JpaRepository<Shipment, Long> {
             COALESCE(CAST(s.metadata ->> 'deliveryAttempts' AS INTEGER), 0) AS delivery_attempts
         FROM shipments s
         WHERE s.estimated_delivery < CURRENT_DATE
-          AND s.status NOT IN ('DELIVERED', 'RETURNED')
+          AND s.status NOT IN ('DELIVERED', 'RETURNED', 'CANCELLED')
           AND (
                 :maxDeliveryAttempts IS NULL
                 OR COALESCE(CAST(s.metadata ->> 'deliveryAttempts' AS INTEGER), 0) <= :maxDeliveryAttempts
