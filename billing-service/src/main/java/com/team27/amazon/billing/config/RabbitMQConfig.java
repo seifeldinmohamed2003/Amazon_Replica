@@ -17,7 +17,7 @@ public class RabbitMQConfig {
         return new TopicExchange("payment.events");
     }
 
-    // Billing consumes from order.events — declare the exchange reference
+    // Reference to order.events exchange (consumer side)
     @Bean
     public TopicExchange orderEventsExchange() {
         return new TopicExchange("order.events");
@@ -43,7 +43,7 @@ public class RabbitMQConfig {
         return QueueBuilder.durable("payment.saga-listener.dlq").build();
     }
 
-    // Bind queue to order.events for order.completed and order.cancelled
+    // Bindings
     @Bean
     public Binding orderCompletedBinding() {
         return BindingBuilder
