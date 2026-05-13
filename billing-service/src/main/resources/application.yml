@@ -2,7 +2,7 @@ spring:
   application:
     name: billing-service
   datasource:
-    url: jdbc:postgresql://postgres:5432/amazondb
+    url: jdbc:postgresql://billing-postgres:5432/amazondb-billing
     username: postgres
     password: postgres
   data:
@@ -10,7 +10,19 @@ spring:
       host: amazon-redis
       port: 6379
       password: redispass
-
+  rabbitmq:
+    host: rabbitmq
+    port: 5672
+    username: guest
+    password: guest
+    listener:
+      simple:
+        acknowledge-mode: auto
+        default-requeue-rejected: false
+        retry:
+          enabled: true
+          initial-interval: 1000
+          max-attempts: 3
   jpa:
     hibernate:
       ddl-auto: update
@@ -20,6 +32,16 @@ spring:
         dialect: org.hibernate.dialect.PostgreSQLDialect
   mongodb:
     uri: mongodb://root:rootpass@mongo:27017/amazonmongo?authSource=admin
+
+feign:
+  user-service:
+    url: http://user-service:8080
+  order-service:
+    url: http://order-service:8080
+  product-service:
+    url: http://product-service:8080
+  shipping-service:
+    url: http://shipping-service:8080
 
 server:
   port: 8080

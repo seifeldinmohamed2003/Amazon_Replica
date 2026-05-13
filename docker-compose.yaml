@@ -11,7 +11,39 @@ services:
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
-      test: [ "CMD-SHELL", "pg_isready -U postgres -d amazondb" ]
+      test: ["CMD-SHELL", "pg_isready -U postgres -d amazondb"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  billing-postgres:
+    image: postgres:17
+    container_name: billing-postgres
+    ports:
+      - "5435:5432"
+    environment:
+      POSTGRES_DB: amazondb-billing
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    volumes:
+      - billing-pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d amazondb-billing"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  rabbitmq:
+    image: rabbitmq:3-management
+    container_name: amazon-rabbitmq
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    environment:
+      RABBITMQ_DEFAULT_USER: guest
+      RABBITMQ_DEFAULT_PASS: guest
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "ping"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -28,7 +60,7 @@ services:
     volumes:
       - mongo-data:/data/db
     healthcheck:
-      test: [ "CMD", "mongosh", "--eval", "db.adminCommand('ping')" ]
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -40,7 +72,7 @@ services:
       - "6379:6379"
     command: redis-server --requirepass redispass --maxmemory 256mb --maxmemory-policy allkeys-lru
     healthcheck:
-      test: [ "CMD", "redis-cli", "-a", "redispass", "ping" ]
+      test: ["CMD", "redis-cli", "-a", "redispass", "ping"]
       interval: 5s
       timeout: 5s
       retries: 5
@@ -55,9 +87,9 @@ services:
       - xpack.security.enabled=false
       - ES_JAVA_OPTS=-Xms512m -Xmx512m
     volumes:
-       - es-data:/usr/share/elasticsearch/data
+      - es-data:/usr/share/elasticsearch/data
     healthcheck:
-      test: [ "CMD-SHELL", "curl -f http://localhost:9200/_cluster/health || exit 1" ]
+      test: ["CMD-SHELL", "curl -f http://localhost:9200/_cluster/health || exit 1"]
       interval: 10s
       timeout: 5s
       retries: 10
@@ -76,7 +108,7 @@ services:
     volumes:
       - neo4j-data:/data
     healthcheck:
-      test: [ "CMD", "neo4j", "status" ]
+      test: ["CMD", "neo4j", "status"]
       interval: 10s
       timeout: 5s
       retries: 10
@@ -96,11 +128,12 @@ services:
     volumes:
       - cassandra-data:/var/lib/cassandra
     healthcheck:
-      test: [ "CMD-SHELL", "cqlsh -e 'DESCRIBE KEYSPACES'" ]
+      test: ["CMD-SHELL", "cqlsh -e 'DESCRIBE KEYSPACES'"]
       interval: 15s
       timeout: 10s
       retries: 10
       start_period: 60s
+
   cassandra-init:
     image: cassandra:latest
     container_name: amazon-cassandra-init
@@ -134,24 +167,24 @@ services:
   product-service:
     build: ./product-service
     ports:
-        - "8082:8080"
+      - "8082:8080"
     environment:
-        SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/amazondb
-        SPRING_DATASOURCE_USERNAME: postgres
-        SPRING_DATASOURCE_PASSWORD: postgres
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/amazondb
+      SPRING_DATASOURCE_USERNAME: postgres
+      SPRING_DATASOURCE_PASSWORD: postgres
     depends_on:
-        - postgres
+      - postgres
 
   order-service:
     build: ./order-service
     ports:
-        - "8083:8080"
+      - "8083:8080"
     environment:
-        SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/amazondb
-        SPRING_DATASOURCE_USERNAME: postgres
-        SPRING_DATASOURCE_PASSWORD: postgres
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/amazondb
+      SPRING_DATASOURCE_USERNAME: postgres
+      SPRING_DATASOURCE_PASSWORD: postgres
     depends_on:
-        - postgres
+      - postgres
 
   shipping-service:
     build: ./shipping-service
@@ -173,19 +206,30 @@ services:
         condition: service_completed_successfully
       postgres:
         condition: service_healthy
+
   billing-service:
     build: ./billing-service
     ports:
       - "8085:8080"
     environment:
-      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/amazondb
+      SPRING_DATASOURCE_URL: jdbc:postgresql://billing-postgres:5432/amazondb-billing
       SPRING_DATASOURCE_USERNAME: postgres
       SPRING_DATASOURCE_PASSWORD: postgres
+      SPRING_RABBITMQ_HOST: rabbitmq
+      SPRING_RABBITMQ_PORT: 5672
+      SPRING_RABBITMQ_USERNAME: guest
+      SPRING_RABBITMQ_PASSWORD: guest
+      JWT_SECRET: MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=
+      JWT_EXPIRATION_MS: 86400000
     depends_on:
-      - postgres
+      billing-postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
 
 volumes:
   pgdata:
+  billing-pgdata:
   mongo-data:
   es-data:
   neo4j-data:
