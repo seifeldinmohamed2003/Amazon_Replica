@@ -770,6 +770,9 @@ public class BillingService {
         auditDetails.put("refundAmount", result.getAmount());
         auditDetails.put("refundedItemIds", result.getRefundedItemIds());
 
+
+
+
         writeAuditEvent(tx.getId(), "REFUNDED",
                 tx.getMethod().name(), result.getAmount(), auditDetails);
 
