@@ -9,6 +9,7 @@ import com.team27.amazon.billing.dto.RevenueReportDTO;
 import com.team27.amazon.billing.dto.TransactionDetailsDTO;
 import com.team27.amazon.billing.dto.UserTransactionSummaryDTO;
 import com.team27.amazon.billing.dto.VoucherUsageDTO;
+import com.team27.amazon.billing.messaging.PaymentEventPublisher;
 import com.team27.amazon.billing.model.AuditLogDocument;
 import com.team27.amazon.billing.model.DiscountType;
 import com.team27.amazon.billing.model.Transaction;
@@ -81,6 +82,8 @@ public class BillingService {
     private ProductServiceClient productServiceClient;
     @Autowired
     private ShippingServiceClient shippingServiceClient;
+    @Autowired
+    private PaymentEventPublisher publisher;
 
     // ── Cache key constants ───────────────────────────────────────────────────
     private static final String SVC = "billing-service";
@@ -704,11 +707,19 @@ public class BillingService {
                 throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
                         "orderItemIds must not be empty when refundAll is false");
             }
-            int validCount = transactionRepository.countItemsBelongingToOrder(
-                    request.getOrderItemIds(), tx.getOrderId());
-            if (validCount != request.getOrderItemIds().size()) {
-                throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                        "Some orderItemIds do not belong to this transaction's order");
+            try {
+                List<com.team27.amazon.contracts.dto.OrderItemDTO> items =
+                        orderServiceClient.getOrderItems(tx.getOrderId());
+                java.util.Set<Long> validIds = items.stream()
+                        .map(com.team27.amazon.contracts.dto.OrderItemDTO::id)
+                        .collect(Collectors.toSet());
+                if (!validIds.containsAll(request.getOrderItemIds())) {
+                    throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                            "orderItemIds contain ids not in this order");
+                }
+            } catch (feign.FeignException e) {
+                throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE,
+                        "Order service temporarily unavailable");
             }
         }
 
@@ -767,6 +778,15 @@ public class BillingService {
         cacheService.deleteByPattern(SVC + "::S5-F10::*");
         cacheService.deleteByPattern(SVC + "::S5-F11::*");
 
+        publisher.publishPaymentRefunded(
+                new com.team27.amazon.contracts.events.PaymentRefundedEvent(
+                        saved.getId(),
+                        saved.getOrderId(),
+                        result.getAmount()
+                )
+        );
+
         return saved;
     }
 }
+
