@@ -20,6 +20,8 @@ import com.team27.amazon.billing.repository.TransactionAuditRepository;
 import com.team27.amazon.billing.repository.TransactionRepository;
 import com.team27.amazon.billing.repository.TransactionVoucherRepository;
 import com.team27.amazon.billing.repository.VoucherRepository;
+import com.team27.amazon.contracts.feign.OrderServiceClient;
+import com.team27.amazon.contracts.feign.UserServiceClient;
 import jakarta.transaction.Transactional;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
@@ -36,7 +38,6 @@ import com.team27.amazon.billing.strategy.RefundStrategy;
 import com.team27.amazon.billing.strategy.RefundStrategySelector;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -52,7 +53,8 @@ public class BillingService {
 
     @Autowired
     private TransactionAuditEventRepository auditRepository;
-
+    @Autowired
+    private OrderServiceClient orderServiceClient;
     @Autowired
     private RefundStrategySelector refundStrategySelector;
     @Autowired
@@ -71,6 +73,8 @@ public class BillingService {
     private MongoEventLogger mongoEventLogger;
     @Autowired
     private MongoDocumentAdapter mongoDocumentAdapter;
+    @Autowired
+    private UserServiceClient userServiceClient;
 
     // ── Cache key constants ───────────────────────────────────────────────────
     private static final String SVC = "billing-service";
@@ -289,8 +293,9 @@ public class BillingService {
         UserTransactionSummaryDTO cached = cacheService.get(key, UserTransactionSummaryDTO.class);
         if (cached != null) return cached;
 
-        int userExists = transactionRepository.countUserById(userId);
-        if (userExists == 0) {
+        try {
+            userServiceClient.getUser(userId);
+        } catch (feign.FeignException.NotFound e) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "User not found");
         }
 
@@ -320,23 +325,25 @@ public class BillingService {
     @Transactional
     public Transaction processTransactionForOrder(Long orderId, String method,
                                                   String cardLastFour, boolean simulateFailure) {
-        String orderStatus = transactionRepository.findOrderStatusById(orderId);
-        if (orderStatus == null) {
+        com.team27.amazon.contracts.dto.OrderDTO order;
+        try {
+            order = orderServiceClient.getOrder(orderId);
+        } catch (feign.FeignException.NotFound e) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Order not found");
         }
-        if (!orderStatus.equals("DELIVERED")) {
+
+        if (!java.util.Set.of("DELIVERED", "PAYMENT_PENDING").contains(order.status())) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                    "Order must be DELIVERED to process payment");
+                    "Order is not in a payable state");
         }
 
-        int completedCount = transactionRepository.countCompletedTransactionsByOrderId(orderId);
-        if (completedCount > 0) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "already paid");
-        }
+        Transaction pendingTxn = transactionRepository
+                .findPendingTransactionByOrderId(orderId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
+                        "Transaction not initialized for this order — saga state may be corrupt"));
 
-        Double amount = transactionRepository.findOrderTotalAmountById(orderId);
-        Long userId = transactionRepository.findUserIdByOrderId(orderId);
-
+        Double amount = pendingTxn.getAmount();
+        Long userId = pendingTxn.getUserId();
         Map<String, Object> details = new HashMap<>();
         if (cardLastFour != null) details.put("cardLastFour", cardLastFour);
 
