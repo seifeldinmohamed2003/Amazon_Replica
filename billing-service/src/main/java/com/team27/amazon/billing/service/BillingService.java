@@ -22,6 +22,7 @@ import com.team27.amazon.billing.repository.TransactionVoucherRepository;
 import com.team27.amazon.billing.repository.VoucherRepository;
 import com.team27.amazon.contracts.feign.OrderServiceClient;
 import com.team27.amazon.contracts.feign.ProductServiceClient;
+import com.team27.amazon.contracts.feign.ShippingServiceClient;
 import com.team27.amazon.contracts.feign.UserServiceClient;
 import jakarta.transaction.Transactional;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -78,6 +79,8 @@ public class BillingService {
     private UserServiceClient userServiceClient;
     @Autowired
     private ProductServiceClient productServiceClient;
+    @Autowired
+    private ShippingServiceClient shippingServiceClient;
 
     // ── Cache key constants ───────────────────────────────────────────────────
     private static final String SVC = "billing-service";
@@ -655,6 +658,21 @@ public class BillingService {
         String key = f11Key(transactionId);
         List<AuditLogDTO> cached = cacheService.get(key, new TypeReference<List<AuditLogDTO>>() {});
         if (cached != null) return cached;
+
+        // Feign → shipping-service for shipment IDs
+        Long txnIdLong = Long.parseLong(transactionId);
+        Transaction txn = transactionRepository.findById(txnIdLong)
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND, "Transaction not found"));
+
+        List<Long> shipmentIds;
+        try {
+            shipmentIds = shippingServiceClient.getShipmentIdsForOrder(txn.getOrderId());
+        } catch (feign.FeignException e) {
+            log.warn("Could not fetch shipment IDs for order {}: {}", txn.getOrderId(), e.getMessage());
+            shipmentIds = java.util.Collections.emptyList();
+        }
+
         List<AuditLogDocument> logs = transactionAuditRepository.findAllByTransactionId(transactionId);
         List<AuditLogDTO> dtos = logs.stream()
                 .map(mongoDocumentAdapter::toDTO)
