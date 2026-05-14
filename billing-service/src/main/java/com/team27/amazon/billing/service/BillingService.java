@@ -21,6 +21,7 @@ import com.team27.amazon.billing.repository.TransactionRepository;
 import com.team27.amazon.billing.repository.TransactionVoucherRepository;
 import com.team27.amazon.billing.repository.VoucherRepository;
 import com.team27.amazon.contracts.feign.OrderServiceClient;
+import com.team27.amazon.contracts.feign.ProductServiceClient;
 import com.team27.amazon.contracts.feign.UserServiceClient;
 import jakarta.transaction.Transactional;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -75,6 +76,8 @@ public class BillingService {
     private MongoDocumentAdapter mongoDocumentAdapter;
     @Autowired
     private UserServiceClient userServiceClient;
+    @Autowired
+    private ProductServiceClient productServiceClient;
 
     // ── Cache key constants ───────────────────────────────────────────────────
     private static final String SVC = "billing-service";
@@ -574,16 +577,70 @@ public class BillingService {
     public List<CategoryRevenueDTO> getCategoryRevenueReport() {
         String key = f10Key();
         List<CategoryRevenueDTO> cached = cacheService.get(key, new TypeReference<List<CategoryRevenueDTO>>() {});
-        if (cached != null) return cached;
-        List<Object[]> results = categoryRepository.getCategoryRevenueData();
-        List<CategoryRevenueDTO> report = results.stream()
-                .<CategoryRevenueDTO>map(row -> {
-                    String category = (row[0] != null) ? row[0].toString() : "Unknown";
-                    Double revenue = (row[1] != null) ? ((Number) row[1]).doubleValue() : 0.0;
+        // 1. Local query for COMPLETED/REFUNDED transactions
+        List<Transaction> transactions = transactionRepository
+                .searchTransactions(null, LocalDateTime.of(2000,1,1,0,0), LocalDateTime.now());
 
+        // 2. Per-request cache: productId → category
+        Map<Long, String> productCategoryCache = new HashMap<>();
+        Map<String, Double> grossRevenueMap = new HashMap<>();
+        Map<String, Double> refundedRevenueMap = new HashMap<>();
+        Map<String, Long> txCountMap = new HashMap<>();
+        Map<String, Long> refundCountMap = new HashMap<>();
+
+        for (Transaction txn : transactions) {
+            if (txn.getStatus() != TransactionStatus.COMPLETED &&
+                    txn.getStatus() != TransactionStatus.REFUNDED) continue;
+
+            try {
+                List<com.team27.amazon.contracts.dto.OrderItemDTO> items =
+                        orderServiceClient.getOrderItems(txn.getOrderId());
+
+                // Collect uncached productIds
+                List<Long> uncachedIds = items.stream()
+                        .map(com.team27.amazon.contracts.dto.OrderItemDTO::productId)
+                        .filter(pid -> !productCategoryCache.containsKey(pid))
+                        .collect(Collectors.toList());
+
+                // Batch fetch from product-service
+                if (!uncachedIds.isEmpty()) {
+                    List<com.team27.amazon.contracts.dto.ProductDTO> products =
+                            productServiceClient.getProductsBatch(uncachedIds);
+                    products.forEach(p -> productCategoryCache.put(p.id(), p.category()));
+                }
+
+                // Aggregate by category
+                for (com.team27.amazon.contracts.dto.OrderItemDTO item : items) {
+                    String category = productCategoryCache.getOrDefault(
+                            item.productId(), "Unknown");
+                    double lineTotal = item.priceAtPurchase() * item.quantity();
+
+                    if (txn.getStatus() == TransactionStatus.COMPLETED) {
+                        grossRevenueMap.merge(category, lineTotal, Double::sum);
+                        txCountMap.merge(category, 1L, Long::sum);
+                    } else {
+                        refundedRevenueMap.merge(category, lineTotal, Double::sum);
+                        refundCountMap.merge(category, 1L, Long::sum);
+                    }
+                }
+            } catch (feign.FeignException e) {
+                log.warn("Feign call failed for orderId {}: {}", txn.getOrderId(), e.getMessage());
+            }
+        }
+
+        // Build result
+        List<CategoryRevenueDTO> report = grossRevenueMap.entrySet().stream()
+                .map(entry -> {
+                    String cat = entry.getKey();
+                    double gross = entry.getValue();
+                    double refunded = refundedRevenueMap.getOrDefault(cat, 0.0);
                     return CategoryRevenueDTO.builder()
-                            .categoryName(category)
-                            .netRevenue(revenue)
+                            .categoryName(cat)
+                            .grossRevenue(gross)
+                            .refundedRevenue(refunded)
+                            .netRevenue(gross - refunded)
+                            .transactionCount(txCountMap.getOrDefault(cat, 0L))
+                            .refundCount(refundCountMap.getOrDefault(cat, 0L))
                             .build();
                 })
                 .collect(Collectors.toList());
