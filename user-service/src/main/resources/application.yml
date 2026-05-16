@@ -42,3 +42,5 @@ jwt:
 feign:
   order-service:
     url: http://order-service:8080
+  billing-service:
+    url: http://billing-service:8080

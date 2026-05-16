@@ -139,6 +139,19 @@ public class BillingService {
         return transactionRepository.findAll();
     }
 
+    // S1-F6
+    public java.math.BigDecimal getUserTransactionTotal(Long userId, String startDate, String endDate) {
+        java.time.LocalDateTime start = java.time.LocalDate.parse(startDate).atStartOfDay();
+        java.time.LocalDateTime end = java.time.LocalDate.parse(endDate).atTime(23, 59, 59);
+        return transactionRepository.sumCompletedAmountByUserId(userId, start, end);
+    }
+
+    public long getUserOrderCount(Long userId, String startDate, String endDate) {
+        java.time.LocalDateTime start = java.time.LocalDate.parse(startDate).atStartOfDay();
+        java.time.LocalDateTime end = java.time.LocalDate.parse(endDate).atTime(23, 59, 59);
+        return transactionRepository.countCompletedByUserId(userId, start, end);
+    }
+
     public Transaction getTransactionById(Long id) {
         String key = txKey(id);
         Transaction cached = cacheService.get(key, Transaction.class);

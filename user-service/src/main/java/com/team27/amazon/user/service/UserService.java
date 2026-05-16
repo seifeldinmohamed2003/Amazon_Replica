@@ -30,6 +30,7 @@ import com.team27.amazon.common.events.MongoEventLogger;
 import com.team27.amazon.contracts.dto.OrderSummaryDTO;
 import com.team27.amazon.contracts.dto.UserDTO;
 import com.team27.amazon.user.adapter.ObjectArrayDtoAdapter;
+import com.team27.amazon.user.client.BillingServiceGateway;
 import com.team27.amazon.user.client.OrderServiceGateway;
 import com.team27.amazon.user.cache.CacheConstants;
 import com.team27.amazon.user.cache.CacheInvalidationService;
@@ -59,6 +60,7 @@ public class UserService extends AbstractEventSubject {
     private final CacheInvalidationService cacheInvalidationService;
 
     private final OrderServiceGateway orderServiceGateway;
+    private final BillingServiceGateway billingServiceGateway;
     private final org.springframework.amqp.rabbit.core.RabbitTemplate rabbitTemplate;
 
     // S1-F12 dependencies
@@ -81,6 +83,7 @@ public class UserService extends AbstractEventSubject {
                        ObjectMapper objectMapper,
                        JwtService jwtService,
                        OrderServiceGateway orderServiceGateway,
+                       BillingServiceGateway billingServiceGateway,
                        org.springframework.amqp.rabbit.core.RabbitTemplate rabbitTemplate) {
         this.userRepository = userRepository;
         this.shippingAddressRepository = shippingAddressRepository;
@@ -94,6 +97,7 @@ public class UserService extends AbstractEventSubject {
         this.objectMapper = objectMapper;
         this.jwtService = jwtService;
         this.orderServiceGateway = orderServiceGateway;
+        this.billingServiceGateway = billingServiceGateway;
         this.rabbitTemplate = rabbitTemplate;
 
         register(mongoEventLogger);
@@ -114,6 +118,7 @@ public class UserService extends AbstractEventSubject {
                 objectArrayDtoAdapter,
                 redisCacheService,
                 cacheInvalidationService,
+                null,
                 null,
                 null,
                 null,
@@ -486,20 +491,31 @@ public class UserService extends AbstractEventSubject {
                 cacheKey,
                 new TypeReference<List<TopBuyerDTO>>() {},
                 CacheConstants.TTL_F6_REPORT,
-                () -> getTopBuyersFromDatabase(startDate, endDate, limit)
+                () -> getTopBuyersFromBillingService(startDate, endDate, limit)
         );
     }
 
-    private List<TopBuyerDTO> getTopBuyersFromDatabase(LocalDate startDate, LocalDate endDate, int limit) {
-        LocalDateTime startDateTime = startDate.atStartOfDay();
-        LocalDateTime endDateExclusive = endDate.plusDays(1).atStartOfDay();
-        List<Object[]> rows = userRepository.findTopBuyersByDateRange(startDateTime, endDateExclusive, limit);
-        List<TopBuyerDTO> result = new ArrayList<>();
-        for (Object[] row : rows) {
-            result.add(objectArrayDtoAdapter.toTopBuyerDTO(row));
-        }
+    private List<TopBuyerDTO> getTopBuyersFromBillingService(LocalDate startDate, LocalDate endDate, int limit) {
+        String start = startDate.toString();
+        String end = endDate.toString();
 
-        return result;
+        List<User> users = userRepository.findAll();
+
+        return users.stream()
+                .map(user -> {
+                    java.math.BigDecimal total = billingServiceGateway.getUserTransactionTotal(user.getId(), start, end);
+                    long count = billingServiceGateway.getUserOrderCount(user.getId(), start, end);
+                    return TopBuyerDTO.builder()
+                            .userId(user.getId())
+                            .name(user.getName())
+                            .totalSpent(total.doubleValue())
+                            .orderCount(count)
+                            .build();
+                })
+                .filter(dto -> dto.getTotalSpent() > 0)
+                .sorted((a, b) -> Double.compare(b.getTotalSpent(), a.getTotalSpent()))
+                .limit(limit)
+                .collect(java.util.stream.Collectors.toList());
     }
 
     // S1-F7

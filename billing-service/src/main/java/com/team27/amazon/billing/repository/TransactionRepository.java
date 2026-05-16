@@ -11,6 +11,23 @@ import java.util.List;
 
 public interface TransactionRepository extends JpaRepository<Transaction, Long> {
 
+    // S1-F6
+    @Query("SELECT COALESCE(SUM(t.amount), 0.0) FROM Transaction t " +
+            "WHERE t.userId = :userId AND t.status = com.team27.amazon.billing.model.TransactionStatus.COMPLETED " +
+            "AND t.createdAt BETWEEN :start AND :end")
+    java.math.BigDecimal sumCompletedAmountByUserId(
+            @Param("userId") Long userId,
+            @Param("start") LocalDateTime start,
+            @Param("end") LocalDateTime end);
+
+    @Query("SELECT COUNT(t) FROM Transaction t " +
+            "WHERE t.userId = :userId AND t.status = com.team27.amazon.billing.model.TransactionStatus.COMPLETED " +
+            "AND t.createdAt BETWEEN :start AND :end")
+    long countCompletedByUserId(
+            @Param("userId") Long userId,
+            @Param("start") LocalDateTime start,
+            @Param("end") LocalDateTime end);
+
     @Query(value = """
         SELECT * FROM transactions
         WHERE (:status IS NULL OR status::text = :status)

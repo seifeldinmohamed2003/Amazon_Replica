@@ -44,7 +44,9 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         }
         return "/api/transactions/health".equals(path)
                 || "/api/auth/register".equals(path)
-                || "/api/auth/login".equals(path);
+                || "/api/auth/login".equals(path)
+                || path.matches("/api/transactions/user/\\d+/total")
+                || path.matches("/api/transactions/user/\\d+/order-count");
     }
 
     @Override

@@ -27,6 +27,7 @@ public class SecurityConfiguration {
                 )
                 .authorizeHttpRequests(authorize -> authorize
                         .requestMatchers("/api/transactions/health", "/api/auth/register", "/api/auth/login").permitAll()
+                        .requestMatchers("/api/transactions/user/*/total", "/api/transactions/user/*/order-count").permitAll()
                         .anyRequest().authenticated())
                 .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
 
