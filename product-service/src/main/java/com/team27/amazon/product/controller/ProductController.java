@@ -95,6 +95,19 @@ public class ProductController {
         return ProductResponse.from(productService.getProductById(id));
     }
 
+    @GetMapping("/{id}/exists")
+    public Map<String, Boolean> productExists(@PathVariable Long id) {
+        boolean exists = productService.productExists(id);
+        return Map.of("exists", exists);
+    }
+
+    @GetMapping("/batch")
+    public List<ProductResponse> getProductsBatch(@RequestParam List<Long> ids) {
+        return productService.getProductsBatch(ids).stream()
+                .map(ProductResponse::from)
+                .toList();
+    }
+
     @GetMapping("/{id}/sales")
     public ProductSalesDTO getProductSalesSummary(
             @PathVariable Long id,

@@ -2,7 +2,7 @@ spring:
   application:
     name: product-service
   datasource:
-    url: jdbc:postgresql://postgres:5432/amazondb
+    url: jdbc:postgresql://product-postgres:5432/amazondb-products
     username: postgres
     password: postgres
   jpa:
@@ -26,3 +26,19 @@ server:
 jwt:
   secret: ${JWT_SECRET:MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=}
   expiration: ${JWT_EXPIRATION_MS:86400000}
+
+feign:
+  order-service:
+    url: ${FEIGN_ORDER_SERVICE_URL:http://order-service:8080}
+  user-service:
+    url: ${FEIGN_USER_SERVICE_URL:http://user-service:8080}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: prometheus,health,info
+  metrics:
+    distribution:
+      percentiles-histogram:
+        http.server.requests: true
