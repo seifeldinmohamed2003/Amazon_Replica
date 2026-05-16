@@ -1,0 +1,56 @@
+spring:
+  application:
+    name: billing-service-test
+
+  datasource:
+    url: jdbc:postgresql://localhost:5435/amazondb-billing
+    username: postgres
+    password: postgres
+
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+    show-sql: true
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+
+  rabbitmq:
+    host: localhost
+    port: 5672
+    username: guest
+    password: guest
+    listener:
+      simple:
+        acknowledge-mode: auto
+        default-requeue-rejected: false
+        retry:
+          enabled: true
+          initial-interval: 1000
+          max-attempts: 3
+
+  data:
+    redis:
+      host: localhost
+      port: 6379
+      password: redispass
+
+  mongodb:
+    uri: mongodb://root:rootpass@localhost:27017/amazonmongo?authSource=admin
+
+feign:
+  user-service:
+    url: http://localhost:8081
+  order-service:
+    url: http://localhost:8083
+  product-service:
+    url: http://localhost:8082
+  shipping-service:
+    url: http://localhost:8084
+
+server:
+  port: 0
+
+jwt:
+  secret: MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=
+  expiration: 86400000
