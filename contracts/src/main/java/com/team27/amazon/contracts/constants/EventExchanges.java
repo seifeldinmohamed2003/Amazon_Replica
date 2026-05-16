@@ -8,4 +8,8 @@ public final class EventExchanges {
     public static final String ORDER_EVENTS = "order.events";
     public static final String SHIPMENT_EVENTS = "shipment.events";
     public static final String PAYMENT_EVENTS = "payment.events";
+
+    public static String deadLetterExchange(String sourceExchange) {
+        return sourceExchange + ".dlx";
+    }
 }

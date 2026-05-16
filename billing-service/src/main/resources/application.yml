@@ -21,6 +21,19 @@ spring:
   mongodb:
     uri: mongodb://root:rootpass@mongo:27017/amazonmongo?authSource=admin
 
+  rabbitmq:
+    host: rabbitmq
+    port: 5672
+    username: guest
+    password: guest
+    listener:
+      simple:
+        acknowledge-mode: auto
+        default-requeue-rejected: false
+        retry:
+          enabled: true
+          initial-interval: 1000
+          max-attempts: 3
 server:
   port: 8080
 jwt:

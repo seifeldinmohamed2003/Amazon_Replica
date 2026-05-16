@@ -25,6 +25,19 @@ spring:
     uri: bolt://neo4j:7687
     username: neo4j
     password: neo4jpass
+  rabbitmq:
+    host: rabbitmq
+    port: 5672
+    username: guest
+    password: guest
+    listener:
+      simple:
+        acknowledge-mode: auto
+        default-requeue-rejected: false
+        retry:
+          enabled: true
+          initial-interval: 1000
+          max-attempts: 3
 server:
   port: 8080
 jwt:
@@ -34,13 +47,3 @@ cache:
     type: redis
     redis:
       time-to-live: 300000
-
-feign:
-  user-service:
-    url: http://user-service:8080
-  product-service:
-    url: http://product-service:8080
-  shipping-service:
-    url: http://shipping-service:8080
-  billing-service:
-    url: http://billing-service:8080

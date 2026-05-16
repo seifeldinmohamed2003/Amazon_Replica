@@ -120,6 +120,24 @@ services:
       echo 'Keyspace amazonks created';
       "
 
+  rabbitmq:
+    image: rabbitmq:3-management
+    container_name: amazon-rabbitmq
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    environment:
+      RABBITMQ_DEFAULT_USER: guest
+      RABBITMQ_DEFAULT_PASS: guest
+      RABBITMQ_ERLANG_COOKIE: amazon-secret-cookie
+    volumes:
+      - rabbitmq-data:/var/lib/rabbitmq
+    healthcheck:
+      test: [ "CMD", "rabbitmq-diagnostics", "ping" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
   user-service:
     build: ./user-service
     ports:
@@ -129,7 +147,10 @@ services:
       SPRING_DATASOURCE_USERNAME: postgres
       SPRING_DATASOURCE_PASSWORD: postgres
     depends_on:
-      - postgres
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
 
   product-service:
     build: ./product-service
@@ -140,7 +161,10 @@ services:
         SPRING_DATASOURCE_USERNAME: postgres
         SPRING_DATASOURCE_PASSWORD: postgres
     depends_on:
-        - postgres
+        postgres:
+          condition: service_healthy
+        rabbitmq:
+          condition: service_healthy
 
   order-service:
     build: ./order-service
@@ -151,7 +175,10 @@ services:
         SPRING_DATASOURCE_USERNAME: postgres
         SPRING_DATASOURCE_PASSWORD: postgres
     depends_on:
-        - postgres
+        postgres:
+          condition: service_healthy
+        rabbitmq:
+          condition: service_healthy
 
   shipping-service:
     build: ./shipping-service
@@ -169,10 +196,13 @@ services:
       JWT_SECRET: MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=
       JWT_EXPIRATION_MS: 86400000
     depends_on:
-      cassandra-init:
-        condition: service_completed_successfully
+      cassandra:
+        condition: service_healthy
       postgres:
         condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+
   billing-service:
     build: ./billing-service
     ports:
@@ -182,7 +212,10 @@ services:
       SPRING_DATASOURCE_USERNAME: postgres
       SPRING_DATASOURCE_PASSWORD: postgres
     depends_on:
-      - postgres
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
 
 volumes:
   pgdata:
@@ -190,3 +223,4 @@ volumes:
   es-data:
   neo4j-data:
   cassandra-data:
+  rabbitmq-data:
