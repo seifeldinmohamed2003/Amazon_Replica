@@ -28,6 +28,7 @@ import org.springframework.web.server.ResponseStatusException;
 import com.team27.amazon.common.events.AbstractEventSubject;
 import com.team27.amazon.common.events.MongoEventLogger;
 import com.team27.amazon.contracts.dto.OrderSummaryDTO;
+import com.team27.amazon.contracts.dto.UserDTO;
 import com.team27.amazon.user.adapter.ObjectArrayDtoAdapter;
 import com.team27.amazon.user.client.OrderServiceGateway;
 import com.team27.amazon.user.cache.CacheConstants;
@@ -43,6 +44,7 @@ import com.team27.amazon.user.model.Role;
 import com.team27.amazon.user.model.ShippingAddress;
 import com.team27.amazon.user.model.Status;
 import com.team27.amazon.user.model.User;
+import com.team27.amazon.user.client.OrderServiceGateway;
 import com.team27.amazon.user.repository.ShippingAddressRepository;
 import com.team27.amazon.user.repository.UserRepository;
 import org.springframework.http.HttpStatus;
@@ -69,6 +71,8 @@ public class UserService extends AbstractEventSubject {
     private final ObjectArrayDtoAdapter objectArrayDtoAdapter;
     private final RedisCacheService redisCacheService;
     private final CacheInvalidationService cacheInvalidationService;
+
+    private final OrderServiceGateway orderServiceGateway;
 
     // S1-F12 dependencies
     private final AuthEventRepository authEventRepository;
@@ -153,6 +157,19 @@ public class UserService extends AbstractEventSubject {
                 User.class,
                 CacheConstants.TTL_ENTITY_DETAIL,
                 () -> getUserByIdFromDatabase(id)
+        );
+    }
+
+    public UserDTO getUserAsDTO(Long id) {
+        User user = getUserById(id);
+        return new UserDTO(
+                user.getId(),
+                user.getName(),
+                user.getEmail(),
+                user.getPhone(),
+                user.getRole() == null ? null : user.getRole().name(),
+                user.getStatus() == null ? null : user.getStatus().name(),
+                user.getPreferences()
         );
     }
 
@@ -242,6 +259,23 @@ public class UserService extends AbstractEventSubject {
         }
 
         return address;
+    }
+
+    public com.team27.amazon.contracts.dto.ShippingAddressDTO getShippingAddressAsDTO(Long userId, Long addressId) {
+        getUserByIdFromDatabase(userId);
+        ShippingAddress address = getAddressByIdFromDatabase(addressId);
+        if (!address.getUser().getId().equals(userId)) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Address not found");
+        }
+        return new com.team27.amazon.contracts.dto.ShippingAddressDTO(
+                address.getId(),
+                userId,
+                address.getStreetAddress(),
+                address.getCity(),
+                address.getLabel(),
+                address.getZipCode(),
+                address.getCountry()
+        );
     }
 
     private ShippingAddress getAddressByIdFromDatabase(Long addressId) {
@@ -360,6 +394,7 @@ public class UserService extends AbstractEventSubject {
                 cacheKey,
                 UserOrderSummaryDTO.class,
                 CacheConstants.TTL_F3_DTO,
+                () -> getUserOrderSummaryFromOrderService(userId)
                 () -> getUserOrderSummaryFromOrderService(userId)
         );
     }

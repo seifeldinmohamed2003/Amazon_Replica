@@ -4,6 +4,7 @@ import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
 
+import com.team27.amazon.contracts.dto.UserDTO;
 import com.team27.amazon.user.dto.*;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
@@ -32,8 +33,8 @@ public class UserController {
     }
 
     @GetMapping("/{id}")
-    public ResponseEntity<User> getUserById(@PathVariable Long id) {
-        return ResponseEntity.ok(userService.getUserById(id));
+    public ResponseEntity<UserDTO> getUserById(@PathVariable Long id) {
+        return ResponseEntity.ok(userService.getUserAsDTO(id));
     }
 
     @GetMapping
@@ -67,9 +68,9 @@ public class UserController {
     }
 
     @GetMapping("/{userId}/addresses/{addressId}")
-    public ResponseEntity<ShippingAddress> getAddressById(@PathVariable Long userId,
-                                                           @PathVariable Long addressId) {
-        return ResponseEntity.ok(userService.getAddressById(userId, addressId));
+    public ResponseEntity<com.team27.amazon.contracts.dto.ShippingAddressDTO> getAddressById(
+            @PathVariable Long userId, @PathVariable Long addressId) {
+        return ResponseEntity.ok(userService.getShippingAddressAsDTO(userId, addressId));
     }
 
     @GetMapping("/{userId}/addresses")
