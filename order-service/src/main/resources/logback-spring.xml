@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<configuration>
+    <springProperty scope="context" name="APP_NAME" source="spring.application.name" defaultValue="order-service"/>
+    <springProperty scope="context" name="LOKI_URL" source="loki.url" defaultValue="http://loki.monitoring.svc.cluster.local:3100/loki/api/v1/push"/>
+
+    <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
+        <encoder>
+            <pattern>%d{yyyy-MM-dd HH:mm:ss.SSS} %-5level [%thread] [%X{correlationId}] %logger{36} - %msg%n</pattern>
+        </encoder>
+    </appender>
+
+    <appender name="LOKI" class="com.github.loki4j.logback.Loki4jAppender">
+        <http>
+            <url>${LOKI_URL}</url>
+        </http>
+        <format>
+            <label>
+                <pattern>app=amazon,service=${APP_NAME},level=%level</pattern>
+            </label>
+            <message>
+                <pattern>{"timestamp":"%date{ISO8601}","level":"%level","service":"${APP_NAME}","logger":"%logger","thread":"%thread","message":"%replace(%msg){'&quot;','\\&quot;'}","correlationId":"%X{correlationId}","orderId":"%X{orderId}","userId":"%X{userId}","productId":"%X{productId}","shippingAddressId":"%X{shippingAddressId}","shipmentId":"%X{shipmentId}","transactionId":"%X{transactionId}","routingKey":"%X{routingKey}"}</pattern>
+            </message>
+        </format>
+    </appender>
+
+    <root level="INFO">
+        <appender-ref ref="CONSOLE"/>
+        <appender-ref ref="LOKI"/>
+    </root>
+</configuration>

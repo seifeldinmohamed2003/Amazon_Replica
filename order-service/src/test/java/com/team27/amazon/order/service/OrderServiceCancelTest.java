@@ -17,14 +17,13 @@ import static org.mockito.Mockito.when;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.web.server.ResponseStatusException;
 
+import com.team27.amazon.contracts.feign.ProductServiceClient;
+import com.team27.amazon.contracts.feign.ShippingServiceClient;
+import com.team27.amazon.contracts.feign.UserServiceClient;
 import com.team27.amazon.order.model.Order;
 import com.team27.amazon.order.model.OrderItem;
 import com.team27.amazon.order.model.OrderStatus;
 import com.team27.amazon.order.repository.OrderRepository;
-import com.team27.amazon.order.repository.ProductJdbcRepository;
-import com.team27.amazon.order.repository.ShipmentJdbcRepository;
-import com.team27.amazon.order.repository.ShippingAddressJdbcRepository;
-import com.team27.amazon.order.repository.TransactionJdbcRepository;
 
 @ExtendWith(MockitoExtension.class)
 class OrderServiceCancelTest {
@@ -33,16 +32,13 @@ class OrderServiceCancelTest {
     private OrderRepository orderRepository;
 
     @Mock
-    private ShipmentJdbcRepository shipmentJdbcRepository;
+    private UserServiceClient userServiceClient;
 
     @Mock
-    private ShippingAddressJdbcRepository shippingAddressJdbcRepository;
+    private ProductServiceClient productServiceClient;
 
     @Mock
-    private ProductJdbcRepository productJdbcRepository;
-
-    @Mock
-    private TransactionJdbcRepository transactionJdbcRepository;
+    private ShippingServiceClient shippingServiceClient;
 
     @InjectMocks
     private OrderService orderService;
@@ -81,7 +77,7 @@ class OrderServiceCancelTest {
 
         assertEquals(OrderStatus.CANCELLED, result.getStatus());
         verify(orderRepository).save(pendingOrder);
-        verifyNoInteractions(productJdbcRepository);
+        verifyNoInteractions(productServiceClient);
     }
 
     @Test
@@ -92,8 +88,6 @@ class OrderServiceCancelTest {
         Order result = orderService.cancelOrder(12L);
 
         assertEquals(OrderStatus.CANCELLED, result.getStatus());
-        verify(productJdbcRepository).restoreStockQuantity(201L, 2);
-        verify(productJdbcRepository).restoreStockQuantity(202L, 1);
         verify(orderRepository).save(confirmedOrder);
     }
 
@@ -107,7 +101,7 @@ class OrderServiceCancelTest {
         );
 
         assertEquals(404, exception.getStatusCode().value());
-        verifyNoInteractions(productJdbcRepository, shipmentJdbcRepository, shippingAddressJdbcRepository, transactionJdbcRepository);
+        verifyNoInteractions(userServiceClient, productServiceClient, shippingServiceClient);
     }
 
     @Test
@@ -121,7 +115,7 @@ class OrderServiceCancelTest {
         );
 
         assertEquals(400, exception.getStatusCode().value());
-        verifyNoInteractions(productJdbcRepository, shipmentJdbcRepository, shippingAddressJdbcRepository, transactionJdbcRepository);
+        verifyNoInteractions(userServiceClient, productServiceClient, shippingServiceClient);
     }
 
     @Test
@@ -135,7 +129,7 @@ class OrderServiceCancelTest {
         );
 
         assertEquals(400, exception.getStatusCode().value());
-        verifyNoInteractions(productJdbcRepository, shipmentJdbcRepository, shippingAddressJdbcRepository, transactionJdbcRepository);
+        verifyNoInteractions(userServiceClient, productServiceClient, shippingServiceClient);
     }
 
     @Test
@@ -149,7 +143,7 @@ class OrderServiceCancelTest {
         );
 
         assertEquals(400, exception.getStatusCode().value());
-        verifyNoInteractions(productJdbcRepository, shipmentJdbcRepository, shippingAddressJdbcRepository, transactionJdbcRepository);
+        verifyNoInteractions(userServiceClient, productServiceClient, shippingServiceClient);
     }
 
     @Test
@@ -162,7 +156,7 @@ class OrderServiceCancelTest {
 
         assertEquals(OrderStatus.CANCELLED, result.getStatus());
         verify(orderRepository).save(confirmedOrder);
-        verifyNoInteractions(productJdbcRepository);
+        verifyNoInteractions(productServiceClient);
     }
 
     @Test
@@ -175,7 +169,7 @@ class OrderServiceCancelTest {
 
         assertEquals(OrderStatus.CANCELLED, result.getStatus());
         verify(orderRepository).save(confirmedOrder);
-        verifyNoInteractions(productJdbcRepository);
+        verifyNoInteractions(productServiceClient);
     }
 
     private OrderItem firstItem() {

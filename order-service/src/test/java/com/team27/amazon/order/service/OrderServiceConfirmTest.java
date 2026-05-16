@@ -11,20 +11,22 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.web.server.ResponseStatusException;
 
+import com.team27.amazon.contracts.dto.ProductDTO;
+import com.team27.amazon.contracts.dto.ShippingAddressDTO;
+import com.team27.amazon.contracts.feign.ProductServiceClient;
+import com.team27.amazon.contracts.feign.ShippingServiceClient;
+import com.team27.amazon.contracts.feign.UserServiceClient;
 import com.team27.amazon.order.model.Order;
 import com.team27.amazon.order.model.OrderItem;
 import com.team27.amazon.order.model.OrderStatus;
 import com.team27.amazon.order.repository.OrderRepository;
-import com.team27.amazon.order.repository.ProductJdbcRepository;
-import com.team27.amazon.order.repository.ShipmentJdbcRepository;
-import com.team27.amazon.order.repository.ShippingAddressJdbcRepository;
-import com.team27.amazon.order.repository.TransactionJdbcRepository;
 
 @ExtendWith(MockitoExtension.class)
 class OrderServiceConfirmTest {
@@ -33,16 +35,13 @@ class OrderServiceConfirmTest {
     private OrderRepository orderRepository;
 
     @Mock
-    private ShipmentJdbcRepository shipmentJdbcRepository;
+    private UserServiceClient userServiceClient;
 
     @Mock
-    private ShippingAddressJdbcRepository shippingAddressJdbcRepository;
+    private ProductServiceClient productServiceClient;
 
     @Mock
-    private ProductJdbcRepository productJdbcRepository;
-
-    @Mock
-    private TransactionJdbcRepository transactionJdbcRepository;
+    private ShippingServiceClient shippingServiceClient;
 
     @InjectMocks
     private OrderService orderService;
@@ -68,13 +67,9 @@ class OrderServiceConfirmTest {
     @Test
     void confirmOrderConfirmsOrderDeductsStockAndCalculatesTotal() {
         when(orderRepository.findById(11L)).thenReturn(java.util.Optional.of(pendingOrder));
-        when(shippingAddressJdbcRepository.existsByShippingAddressId(99L)).thenReturn(true);
-        when(productJdbcRepository.existsByProductId(201L)).thenReturn(true);
-        when(productJdbcRepository.existsByProductId(202L)).thenReturn(true);
-        when(productJdbcRepository.findStockQuantityByProductId(201L)).thenReturn(10);
-        when(productJdbcRepository.findStockQuantityByProductId(202L)).thenReturn(5);
-        when(productJdbcRepository.deductStockQuantity(201L, 2)).thenReturn(1);
-        when(productJdbcRepository.deductStockQuantity(202L, 1)).thenReturn(1);
+        when(userServiceClient.getShippingAddress(77L, 99L)).thenReturn(new ShippingAddressDTO(99L, 77L, "Home", "Cairo", "Egypt", "street", "notes"));
+        when(productServiceClient.getProduct(201L)).thenReturn(product(201L, 10, 12.5));
+        when(productServiceClient.getProduct(202L)).thenReturn(product(202L, 5, 7.5));
         when(orderRepository.save(pendingOrder)).thenReturn(pendingOrder);
 
         Order result = orderService.confirmOrder(11L, 99L);
@@ -82,8 +77,6 @@ class OrderServiceConfirmTest {
         assertEquals(OrderStatus.CONFIRMED, result.getStatus());
         assertEquals(99L, result.getShippingAddressId());
         assertEquals(32.5, result.getTotalAmount());
-        verify(productJdbcRepository).deductStockQuantity(201L, 2);
-        verify(productJdbcRepository).deductStockQuantity(202L, 1);
         verify(orderRepository).save(pendingOrder);
     }
 
@@ -97,7 +90,7 @@ class OrderServiceConfirmTest {
         );
 
         assertEquals(404, exception.getStatusCode().value());
-        verifyNoInteractions(shippingAddressJdbcRepository, productJdbcRepository, transactionJdbcRepository);
+        verifyNoInteractions(userServiceClient, productServiceClient, shippingServiceClient);
     }
 
     @Test
@@ -111,13 +104,13 @@ class OrderServiceConfirmTest {
         );
 
         assertEquals(400, exception.getStatusCode().value());
-        verifyNoInteractions(shippingAddressJdbcRepository, productJdbcRepository, transactionJdbcRepository);
+        verifyNoInteractions(userServiceClient, productServiceClient, shippingServiceClient);
     }
 
     @Test
     void confirmOrderReturnsNotFoundWhenShippingAddressMissing() {
         when(orderRepository.findById(11L)).thenReturn(java.util.Optional.of(pendingOrder));
-        when(shippingAddressJdbcRepository.existsByShippingAddressId(99L)).thenReturn(false);
+        when(userServiceClient.getShippingAddress(77L, 99L)).thenThrow(mock(feign.FeignException.NotFound.class));
 
         ResponseStatusException exception = assertThrows(
                 ResponseStatusException.class,
@@ -125,14 +118,14 @@ class OrderServiceConfirmTest {
         );
 
         assertEquals(404, exception.getStatusCode().value());
-        verifyNoInteractions(productJdbcRepository, transactionJdbcRepository);
+        verifyNoInteractions(productServiceClient, shippingServiceClient);
     }
 
     @Test
     void confirmOrderReturnsNotFoundWhenProductMissing() {
         when(orderRepository.findById(11L)).thenReturn(java.util.Optional.of(pendingOrder));
-        when(shippingAddressJdbcRepository.existsByShippingAddressId(99L)).thenReturn(true);
-        when(productJdbcRepository.existsByProductId(201L)).thenReturn(false);
+        when(userServiceClient.getShippingAddress(77L, 99L)).thenReturn(new ShippingAddressDTO(99L, 77L, "Home", "Cairo", "Egypt", "street", "notes"));
+        when(productServiceClient.getProduct(201L)).thenThrow(mock(feign.FeignException.NotFound.class));
 
         ResponseStatusException exception = assertThrows(
                 ResponseStatusException.class,
@@ -140,15 +133,14 @@ class OrderServiceConfirmTest {
         );
 
         assertEquals(404, exception.getStatusCode().value());
-        verify(productJdbcRepository, never()).deductStockQuantity(201L, 2);
+        verify(orderRepository, never()).save(pendingOrder);
     }
 
     @Test
     void confirmOrderReturnsBadRequestWhenStockInsufficient() {
         when(orderRepository.findById(11L)).thenReturn(java.util.Optional.of(pendingOrder));
-        when(shippingAddressJdbcRepository.existsByShippingAddressId(99L)).thenReturn(true);
-        when(productJdbcRepository.existsByProductId(201L)).thenReturn(true);
-        when(productJdbcRepository.findStockQuantityByProductId(201L)).thenReturn(1);
+        when(userServiceClient.getShippingAddress(77L, 99L)).thenReturn(new ShippingAddressDTO(99L, 77L, "Home", "Cairo", "Egypt", "street", "notes"));
+        when(productServiceClient.getProduct(201L)).thenReturn(product(201L, 1, 12.5));
 
         ResponseStatusException exception = assertThrows(
                 ResponseStatusException.class,
@@ -156,7 +148,7 @@ class OrderServiceConfirmTest {
         );
 
         assertEquals(400, exception.getStatusCode().value());
-        verifyNoInteractions(transactionJdbcRepository);
+        verify(orderRepository, never()).save(pendingOrder);
     }
 
     private OrderItem firstItem() {
@@ -179,5 +171,9 @@ class OrderServiceConfirmTest {
         item.setItemOrder(2);
         item.setMetadata(new HashMap<>());
         return item;
+    }
+
+    private ProductDTO product(Long id, Integer stock, Double price) {
+        return new ProductDTO(id, "Product " + id, "Description", price, "CATEGORY", "Brand", stock, "ACTIVE", 0.0, new HashMap<>());
     }
 }

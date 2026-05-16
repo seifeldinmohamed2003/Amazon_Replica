@@ -22,6 +22,23 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
 
     List<Order> findByShippingAddressId(Long shippingAddressId);
 
+    long countByUserId(Long userId);
+
+    long countByUserIdAndStatus(Long userId, OrderStatus status);
+
+    long countByUserIdAndStatusIn(Long userId, List<OrderStatus> statuses);
+
+    @Query("""
+        SELECT COALESCE(SUM(o.totalAmount), 0)
+        FROM Order o
+        WHERE o.userId = :userId
+          AND o.status IN :statuses
+        """)
+    double sumTotalAmountByUserIdAndStatusIn(
+            @Param("userId") Long userId,
+            @Param("statuses") List<OrderStatus> statuses
+    );
+
     @Query(value = """
         SELECT *
         FROM orders
@@ -38,11 +55,4 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
         """)
     Optional<Order> findByIdWithItems(@Param("orderId") Long orderId);
 
-    // Used by S3-F11 to create ProductNode snapshots in Neo4j
-    @Query(value = """
-        SELECT id, name, category
-        FROM products
-        WHERE id IN (:productIds)
-        """, nativeQuery = true)
-    List<Object[]> findProductSnapshotsByIds(@Param("productIds") List<Long> productIds);
 }

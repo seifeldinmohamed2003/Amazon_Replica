@@ -1,14 +1,13 @@
 package com.team27.amazon.order.service;
 
+import com.team27.amazon.contracts.feign.ProductServiceClient;
+import com.team27.amazon.contracts.feign.ShippingServiceClient;
+import com.team27.amazon.contracts.feign.UserServiceClient;
 import com.team27.amazon.order.dto.OrderDetailsDTO;
 import com.team27.amazon.order.model.Order;
 import com.team27.amazon.order.model.OrderItem;
 import com.team27.amazon.order.model.OrderStatus;
 import com.team27.amazon.order.repository.OrderRepository;
-import com.team27.amazon.order.repository.ProductJdbcRepository;
-import com.team27.amazon.order.repository.ShipmentJdbcRepository;
-import com.team27.amazon.order.repository.ShippingAddressJdbcRepository;
-import com.team27.amazon.order.repository.TransactionJdbcRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -33,16 +32,13 @@ class OrderServiceDetailsTest {
     private OrderRepository orderRepository;
 
     @Mock
-    private ShipmentJdbcRepository shipmentJdbcRepository;
+    private UserServiceClient userServiceClient;
 
     @Mock
-    private ShippingAddressJdbcRepository shippingAddressJdbcRepository;
+    private ProductServiceClient productServiceClient;
 
     @Mock
-    private ProductJdbcRepository productJdbcRepository;
-
-    @Mock
-    private TransactionJdbcRepository transactionJdbcRepository;
+    private ShippingServiceClient shippingServiceClient;
 
     @InjectMocks
     private OrderService orderService;

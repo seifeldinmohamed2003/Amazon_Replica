@@ -1,15 +1,15 @@
 package com.team27.amazon.order.service;
 
+import com.team27.amazon.contracts.dto.ProductDTO;
+import com.team27.amazon.contracts.feign.ProductServiceClient;
+import com.team27.amazon.contracts.feign.ShippingServiceClient;
+import com.team27.amazon.contracts.feign.UserServiceClient;
 import com.team27.amazon.order.dto.AddOrderItemRequest;
 import com.team27.amazon.order.model.Order;
 import com.team27.amazon.order.model.OrderItem;
 import com.team27.amazon.order.model.OrderStatus;
 import com.team27.amazon.order.repository.OrderItemRepository;
 import com.team27.amazon.order.repository.OrderRepository;
-import com.team27.amazon.order.repository.ProductJdbcRepository;
-import com.team27.amazon.order.repository.ShipmentJdbcRepository;
-import com.team27.amazon.order.repository.ShippingAddressJdbcRepository;
-import com.team27.amazon.order.repository.TransactionJdbcRepository;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -24,6 +24,7 @@ import org.springframework.web.server.ResponseStatusException;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -39,16 +40,13 @@ class OrderServiceS3F8Test {
     private OrderItemRepository orderItemRepository;
 
     @Mock
-    private ProductJdbcRepository productJdbcRepository;
+    private ProductServiceClient productServiceClient;
 
     @Mock
-    private ShipmentJdbcRepository shipmentJdbcRepository;
+    private UserServiceClient userServiceClient;
 
     @Mock
-    private ShippingAddressJdbcRepository shippingAddressJdbcRepository;
-
-    @Mock
-    private TransactionJdbcRepository transactionJdbcRepository;
+    private ShippingServiceClient shippingServiceClient;
 
     @InjectMocks
     private OrderService orderService;
@@ -85,11 +83,8 @@ class OrderServiceS3F8Test {
                 .thenReturn(Optional.of(pendingOrder))
                 .thenReturn(Optional.of(pendingOrder));
 
-        when(productJdbcRepository.existsByProductId(100L)).thenReturn(true);
-        when(productJdbcRepository.existsByProductId(200L)).thenReturn(true);
-
-        when(productJdbcRepository.findCurrentPriceByProductId(100L)).thenReturn(50.0);
-        when(productJdbcRepository.findCurrentPriceByProductId(200L)).thenReturn(75.0);
+        when(productServiceClient.getProduct(100L)).thenReturn(product(100L, 50.0));
+        when(productServiceClient.getProduct(200L)).thenReturn(product(200L, 75.0));
 
         when(orderRepository.save(any(Order.class))).thenAnswer(inv -> inv.getArgument(0));
 
@@ -119,8 +114,7 @@ class OrderServiceS3F8Test {
                 .thenReturn(Optional.of(pendingOrder))
                 .thenReturn(Optional.of(pendingOrder));
 
-        when(productJdbcRepository.existsByProductId(300L)).thenReturn(true);
-        when(productJdbcRepository.findCurrentPriceByProductId(300L)).thenReturn(90.0);
+        when(productServiceClient.getProduct(300L)).thenReturn(product(300L, 90.0));
 
         when(orderRepository.save(any(Order.class))).thenAnswer(inv -> inv.getArgument(0));
 
@@ -153,7 +147,7 @@ class OrderServiceS3F8Test {
         req.setQuantity(1);
 
         when(orderRepository.findById(1L)).thenReturn(Optional.of(pendingOrder));
-        when(productJdbcRepository.existsByProductId(999L)).thenReturn(false);
+        when(productServiceClient.getProduct(999L)).thenThrow(mock(feign.FeignException.NotFound.class));
 
         ResponseStatusException ex = assertThrows(
                 ResponseStatusException.class,
@@ -161,5 +155,9 @@ class OrderServiceS3F8Test {
         );
 
         assertEquals(HttpStatus.NOT_FOUND, ex.getStatusCode());
+    }
+
+    private ProductDTO product(Long id, Double price) {
+        return new ProductDTO(id, "Product " + id, "Description", price, "CATEGORY", "Brand", 10, "ACTIVE", 0.0, Map.of());
     }
 }

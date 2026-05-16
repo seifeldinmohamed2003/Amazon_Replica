@@ -1,7 +1,9 @@
 package com.team27.amazon.order.service;
 
+import com.team27.amazon.contracts.dto.ProductDTO;
+import com.team27.amazon.contracts.dto.ProductExistsDTO;
+import com.team27.amazon.contracts.feign.ProductServiceClient;
 import com.team27.amazon.order.dto.ProductRecommendationDTO;
-import com.team27.amazon.order.repository.ProductRecommendationRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -13,8 +15,8 @@ import org.springframework.data.neo4j.core.Neo4jClient;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.server.ResponseStatusException;
 
-import java.math.BigDecimal;
 import java.util.Collection;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -31,7 +33,7 @@ class RecommendationServiceS3F12Test {
     private Neo4jClient neo4jClient;
 
     @Mock
-    private ProductRecommendationRepository productRecommendationRepository;
+    private ProductServiceClient productServiceClient;
 
     private RecommendationService recommendationService;
 
@@ -39,13 +41,13 @@ class RecommendationServiceS3F12Test {
     void setUp() {
         recommendationService = new RecommendationService(
                 neo4jClient,
-                productRecommendationRepository
+                productServiceClient
         );
     }
 
     @Test
     void getRecommendations_shouldThrow404_whenSeedProductDoesNotExist() {
-        when(productRecommendationRepository.productExists(999L)).thenReturn(false);
+        when(productServiceClient.productExists(999L)).thenReturn(new ProductExistsDTO(false));
 
         ResponseStatusException exception = assertThrows(
                 ResponseStatusException.class,
@@ -53,17 +55,15 @@ class RecommendationServiceS3F12Test {
         );
 
         assertEquals(HttpStatus.NOT_FOUND, exception.getStatusCode());
-        verify(productRecommendationRepository).productExists(999L);
+        verify(productServiceClient).productExists(999L);
         verifyNoInteractions(neo4jClient);
     }
 
     @Test
     void getRecommendations_shouldReturnEmptyList_whenNoGraphRecommendationsExist() {
-        when(productRecommendationRepository.productExists(5L)).thenReturn(true);
+        when(productServiceClient.productExists(5L)).thenReturn(new ProductExistsDTO(true));
         mockNeo4jRows(List.of());
-
-        when(productRecommendationRepository.enrichActiveProducts(anyMap()))
-                .thenReturn(List.of());
+        when(productServiceClient.getProductsBatch(anyList())).thenReturn(List.of());
 
         List<ProductRecommendationDTO> result =
                 recommendationService.getRecommendations(5L, 5);
@@ -71,38 +71,21 @@ class RecommendationServiceS3F12Test {
         assertNotNull(result);
         assertTrue(result.isEmpty());
 
-        verify(productRecommendationRepository).productExists(5L);
-        verify(productRecommendationRepository).enrichActiveProducts(anyMap());
+        verify(productServiceClient).productExists(5L);
+        verify(productServiceClient).getProductsBatch(anyList());
     }
 
     @Test
     void getRecommendations_shouldReturnDirectRecommendationsSortedByScore() {
-        when(productRecommendationRepository.productExists(1L)).thenReturn(true);
+        when(productServiceClient.productExists(1L)).thenReturn(new ProductExistsDTO(true));
 
         mockNeo4jRows(List.of(
                 mapRow(2L, 3L),
                 mapRow(3L, 1L)
         ));
 
-        when(productRecommendationRepository.enrichActiveProducts(anyMap()))
-                .thenReturn(List.of(
-                        new ProductRecommendationDTO(
-                                2L,
-                                "P2 Headphones",
-                                "ELECTRONICS",
-                                "Sony",
-                                BigDecimal.valueOf(300),
-                                3L
-                        ),
-                        new ProductRecommendationDTO(
-                                3L,
-                                "P3 Charger",
-                                "ELECTRONICS",
-                                "Anker",
-                                BigDecimal.valueOf(150),
-                                1L
-                        )
-                ));
+        when(productServiceClient.getProductsBatch(anyList()))
+                .thenReturn(List.of(product(2L, "P2 Headphones", "Sony", 300.0), product(3L, "P3 Charger", "Anker", 150.0)));
 
         List<ProductRecommendationDTO> result =
                 recommendationService.getRecommendations(1L, 5);
@@ -118,32 +101,15 @@ class RecommendationServiceS3F12Test {
 
     @Test
     void getRecommendations_shouldRespectLimitAfterEnrichment() {
-        when(productRecommendationRepository.productExists(1L)).thenReturn(true);
+        when(productServiceClient.productExists(1L)).thenReturn(new ProductExistsDTO(true));
 
         mockNeo4jRows(List.of(
                 mapRow(2L, 3L),
                 mapRow(3L, 1L)
         ));
 
-        when(productRecommendationRepository.enrichActiveProducts(anyMap()))
-                .thenReturn(List.of(
-                        new ProductRecommendationDTO(
-                                2L,
-                                "P2 Headphones",
-                                "ELECTRONICS",
-                                "Sony",
-                                BigDecimal.valueOf(300),
-                                3L
-                        ),
-                        new ProductRecommendationDTO(
-                                3L,
-                                "P3 Charger",
-                                "ELECTRONICS",
-                                "Anker",
-                                BigDecimal.valueOf(150),
-                                1L
-                        )
-                ));
+        when(productServiceClient.getProductsBatch(anyList()))
+                .thenReturn(List.of(product(2L, "P2 Headphones", "Sony", 300.0), product(3L, "P3 Charger", "Anker", 150.0)));
 
         List<ProductRecommendationDTO> result =
                 recommendationService.getRecommendations(1L, 1);
@@ -155,38 +121,25 @@ class RecommendationServiceS3F12Test {
 
     @Test
     void getRecommendations_shouldExcludeSeedProductFromCandidates() {
-        when(productRecommendationRepository.productExists(1L)).thenReturn(true);
+        when(productServiceClient.productExists(1L)).thenReturn(new ProductExistsDTO(true));
 
         mockNeo4jRows(List.of(
                 mapRow(1L, 99L),
                 mapRow(2L, 3L)
         ));
 
-        when(productRecommendationRepository.enrichActiveProducts(anyMap()))
-                .thenReturn(List.of(
-                        new ProductRecommendationDTO(
-                                2L,
-                                "P2 Headphones",
-                                "ELECTRONICS",
-                                "Sony",
-                                BigDecimal.valueOf(300),
-                                3L
-                        )
-                ));
+        when(productServiceClient.getProductsBatch(anyList()))
+                .thenReturn(List.of(product(2L, "P2 Headphones", "Sony", 300.0)));
 
         recommendationService.getRecommendations(1L, 5);
 
         @SuppressWarnings("unchecked")
-        ArgumentCaptor<Map<Long, Long>> scoresCaptor =
-                ArgumentCaptor.forClass(Map.class);
+        ArgumentCaptor<List<Long>> idsCaptor = ArgumentCaptor.forClass((Class) List.class);
+        verify(productServiceClient).getProductsBatch(idsCaptor.capture());
 
-        verify(productRecommendationRepository).enrichActiveProducts(scoresCaptor.capture());
-
-        Map<Long, Long> scores = scoresCaptor.getValue();
-
-        assertFalse(scores.containsKey(1L));
-        assertTrue(scores.containsKey(2L));
-        assertEquals(3L, scores.get(2L));
+        List<Long> ids = idsCaptor.getValue();
+        assertFalse(ids.contains(1L));
+        assertTrue(ids.contains(2L));
     }
 
     private void mockNeo4jRows(Collection<Map<String, Object>> rows) {
@@ -208,23 +161,14 @@ class RecommendationServiceS3F12Test {
     }
     @Test
 void getRecommendations_forP4_shouldReturnP2WithScore2() {
-    when(productRecommendationRepository.productExists(4L)).thenReturn(true);
+    when(productServiceClient.productExists(4L)).thenReturn(new ProductExistsDTO(true));
 
     mockNeo4jRows(List.of(
             mapRow(2L, 2L)
     ));
 
-    when(productRecommendationRepository.enrichActiveProducts(anyMap()))
-            .thenReturn(List.of(
-                    new ProductRecommendationDTO(
-                            2L,
-                            "P2 Headphones",
-                            "ELECTRONICS",
-                            "Sony",
-                            BigDecimal.valueOf(300),
-                            2L
-                    )
-            ));
+    when(productServiceClient.getProductsBatch(anyList()))
+            .thenReturn(List.of(product(2L, "P2 Headphones", "Sony", 300.0)));
 
     List<ProductRecommendationDTO> result =
             recommendationService.getRecommendations(4L, 5);
@@ -236,32 +180,15 @@ void getRecommendations_forP4_shouldReturnP2WithScore2() {
 
 @Test
 void getRecommendations_forP1_shouldNotReturnP4BecauseNoDirectEdgeExists() {
-    when(productRecommendationRepository.productExists(1L)).thenReturn(true);
+    when(productServiceClient.productExists(1L)).thenReturn(new ProductExistsDTO(true));
 
     mockNeo4jRows(List.of(
             mapRow(2L, 3L),
             mapRow(3L, 1L)
     ));
 
-    when(productRecommendationRepository.enrichActiveProducts(anyMap()))
-            .thenReturn(List.of(
-                    new ProductRecommendationDTO(
-                            2L,
-                            "P2 Headphones",
-                            "ELECTRONICS",
-                            "Sony",
-                            BigDecimal.valueOf(300),
-                            3L
-                    ),
-                    new ProductRecommendationDTO(
-                            3L,
-                            "P3 Charger",
-                            "ELECTRONICS",
-                            "Anker",
-                            BigDecimal.valueOf(150),
-                            1L
-                    )
-            ));
+    when(productServiceClient.getProductsBatch(anyList()))
+            .thenReturn(List.of(product(2L, "P2 Headphones", "Sony", 300.0), product(3L, "P3 Charger", "Anker", 150.0)));
 
     List<ProductRecommendationDTO> result =
             recommendationService.getRecommendations(1L, 5);
@@ -276,4 +203,8 @@ void getRecommendations_forP1_shouldNotReturnP4BecauseNoDirectEdgeExists() {
     assertTrue(productIds.contains(3L));
     assertFalse(productIds.contains(4L));
 }
+
+    private ProductDTO product(Long id, String name, String brand, Double price) {
+        return new ProductDTO(id, name, "Description", price, "ELECTRONICS", brand, 10, "ACTIVE", 0.0, Map.of());
+    }
 }

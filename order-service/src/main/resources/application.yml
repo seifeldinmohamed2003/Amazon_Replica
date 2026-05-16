@@ -2,7 +2,7 @@ spring:
   application:
     name: order-service
   datasource:
-    url: jdbc:postgresql://postgres:5432/amazondb
+    url: jdbc:postgresql://order-postgres:5432/amazondb-orders
     username: postgres
     password: postgres
   jpa:
@@ -25,8 +25,30 @@ spring:
     uri: bolt://neo4j:7687
     username: neo4j
     password: neo4jpass
+  rabbitmq:
+    host: rabbitmq
+    port: 5672
+    username: guest
+    password: guest
+    listener:
+      simple:
+        acknowledge-mode: auto
+        default-requeue-rejected: false
+        retry:
+          enabled: true
+          initial-interval: 1000
+          max-attempts: 3
 server:
   port: 8080
+feign:
+  user-service:
+    url: http://user-service:8080
+  product-service:
+    url: http://product-service:8080
+  shipping-service:
+    url: http://shipping-service:8080
+  billing-service:
+    url: http://billing-service:8080
 jwt:
   secret: ${JWT_SECRET:MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=}
   expiration: ${JWT_EXPIRATION_MS:86400000}
@@ -34,3 +56,12 @@ cache:
     type: redis
     redis:
       time-to-live: 300000   
+management:
+  endpoints:
+    web:
+      exposure:
+        include: "prometheus,health,info"
+  metrics:
+    distribution:
+      percentiles-histogram:
+        http.server.requests: true
