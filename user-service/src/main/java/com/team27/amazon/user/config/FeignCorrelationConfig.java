@@ -15,7 +15,7 @@ public class FeignCorrelationConfig {
     public RequestInterceptor correlationIdInterceptor() {
         return template -> {
             String correlationId = MDC.get("correlationId");
-            if (correlationId != null) {
+            if (correlationId != null && !correlationId.isBlank()) {
                 template.header("X-Correlation-ID", correlationId);
             }
         };
@@ -26,12 +26,16 @@ public class FeignCorrelationConfig {
         return template -> {
             ServletRequestAttributes attrs =
                     (ServletRequestAttributes) RequestContextHolder.getRequestAttributes();
-            if (attrs != null) {
-                HttpServletRequest request = attrs.getRequest();
-                String auth = request.getHeader("Authorization");
-                if (auth != null) {
-                    template.header("Authorization", auth);
-                }
+
+            if (attrs == null) {
+                return;
+            }
+
+            HttpServletRequest request = attrs.getRequest();
+            String auth = request.getHeader("Authorization");
+
+            if (auth != null && !auth.isBlank()) {
+                template.header("Authorization", auth);
             }
         };
     }
