@@ -329,6 +329,18 @@ public class BillingService {
         return dto;
     }
 
+    public Map<String, Object> getUserTransactionTotal(Long userId, LocalDateTime start, LocalDateTime end) {
+        Double total = transactionRepository.sumTotalByUserAndDateRange(userId, start, end);
+        if (total == null) total = 0.0;
+        return Map.of("userId", userId, "total", total, "startDate", start, "endDate", end);
+    }
+
+    public Map<String, Object> getUserOrderCount(Long userId) {
+        Long count = transactionRepository.countOrdersByUser(userId);
+        if (count == null) count = 0L;
+        return Map.of("userId", userId, "orderCount", count);
+    }
+
 
 
     // ── S5-F4 ── Process Transaction for Order ────────────────────────────────
