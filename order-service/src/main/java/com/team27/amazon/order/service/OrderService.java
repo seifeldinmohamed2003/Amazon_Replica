@@ -334,6 +334,12 @@ public class OrderService extends AbstractEventSubject {
         return orderRepository.findByUserId(userId);
     }
 
+    // S1-F4 - Count active orders for user
+    public int getActiveOrderCount(Long userId) {
+        return orderRepository.countByUserIdAndStatusIn(userId,
+                List.of(OrderStatus.PENDING, OrderStatus.CONFIRMED, OrderStatus.SHIPPED));
+    }
+
     // READ - Get orders by status
     public List<Order> getOrdersByStatus(OrderStatus status) {
         return orderRepository.findByStatus(status);

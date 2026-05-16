@@ -44,22 +44,8 @@ import com.team27.amazon.user.model.Role;
 import com.team27.amazon.user.model.ShippingAddress;
 import com.team27.amazon.user.model.Status;
 import com.team27.amazon.user.model.User;
-import com.team27.amazon.user.client.OrderServiceGateway;
 import com.team27.amazon.user.repository.ShippingAddressRepository;
 import com.team27.amazon.user.repository.UserRepository;
-import org.springframework.http.HttpStatus;
-import org.springframework.security.crypto.password.PasswordEncoder;
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
-import org.springframework.util.StringUtils;
-import org.springframework.web.server.ResponseStatusException;
-
-import java.time.LocalDate;
-import java.time.LocalDateTime;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
 
 @Service
 public class UserService extends AbstractEventSubject {
@@ -73,13 +59,13 @@ public class UserService extends AbstractEventSubject {
     private final CacheInvalidationService cacheInvalidationService;
 
     private final OrderServiceGateway orderServiceGateway;
+    private final org.springframework.amqp.rabbit.core.RabbitTemplate rabbitTemplate;
 
     // S1-F12 dependencies
     private final AuthEventRepository authEventRepository;
     private final ActivityCacheAdapter cacheAdapter;
     private final ObjectMapper objectMapper;
     private final JwtService jwtService;
-    private final OrderServiceGateway orderServiceGateway;
 
     // ─── Main constructor (used by Spring) ───────────────────────
     @Autowired
@@ -94,7 +80,8 @@ public class UserService extends AbstractEventSubject {
                        ActivityCacheAdapter cacheAdapter,
                        ObjectMapper objectMapper,
                        JwtService jwtService,
-                       OrderServiceGateway orderServiceGateway) {
+                       OrderServiceGateway orderServiceGateway,
+                       org.springframework.amqp.rabbit.core.RabbitTemplate rabbitTemplate) {
         this.userRepository = userRepository;
         this.shippingAddressRepository = shippingAddressRepository;
         this.passwordEncoder = passwordEncoder;
@@ -107,6 +94,7 @@ public class UserService extends AbstractEventSubject {
         this.objectMapper = objectMapper;
         this.jwtService = jwtService;
         this.orderServiceGateway = orderServiceGateway;
+        this.rabbitTemplate = rabbitTemplate;
 
         register(mongoEventLogger);
     }
@@ -126,6 +114,7 @@ public class UserService extends AbstractEventSubject {
                 objectArrayDtoAdapter,
                 redisCacheService,
                 cacheInvalidationService,
+                null,
                 null,
                 null,
                 null,
@@ -395,7 +384,6 @@ public class UserService extends AbstractEventSubject {
                 UserOrderSummaryDTO.class,
                 CacheConstants.TTL_F3_DTO,
                 () -> getUserOrderSummaryFromOrderService(userId)
-                () -> getUserOrderSummaryFromOrderService(userId)
         );
     }
 
@@ -422,11 +410,11 @@ public class UserService extends AbstractEventSubject {
     public User deactivateUser(Long id) {
         User user = getUserByIdFromDatabase(id);
 
-        boolean hasActiveOrders = userRepository.existsActiveOrdersByUserId(id);
-        if (hasActiveOrders) {
+        int activeOrderCount = orderServiceGateway.getActiveOrderCount(id);
+        if (activeOrderCount > 0) {
             throw new ResponseStatusException(
                     HttpStatus.BAD_REQUEST,
-                    "User has active orders and cannot be deactivated"
+                    "User has active orders"
             );
         }
         user.setStatus(Status.DEACTIVATED);
@@ -436,6 +424,12 @@ public class UserService extends AbstractEventSubject {
         notifyObservers("USER_DEACTIVATED", userEventPayload(savedUser.getId(), Map.of(
                 "status", savedUser.getStatus().name()
         )));
+
+        rabbitTemplate.convertAndSend(
+                com.team27.amazon.contracts.constants.EventExchanges.USER_EVENTS,
+                com.team27.amazon.contracts.constants.EventRoutingKeys.USER_DEACTIVATED,
+                Map.of("userId", savedUser.getId())
+        );
 
         cacheInvalidationService.invalidateUserWriteCaches(savedUser.getId());
 

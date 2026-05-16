@@ -1,4 +1,3 @@
-@ -0,0 +1,38 @@
 package com.team27.amazon.user.config;
 
 import feign.RequestInterceptor;

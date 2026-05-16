@@ -29,4 +29,13 @@ public class OrderServiceGateway {
             throw new ServiceUnavailableException("Order service temporarily unavailable");
         }
     }
+
+    public int getActiveOrderCount(Long userId) {
+        try {
+            return orderServiceClient.getActiveOrderCount(userId);
+        } catch (FeignException e) {
+            log.warn("order-service unavailable fetching active count for user {}: {}", userId, e.getMessage());
+            throw new ServiceUnavailableException("Order service temporarily unavailable");
+        }
+    }
 }
