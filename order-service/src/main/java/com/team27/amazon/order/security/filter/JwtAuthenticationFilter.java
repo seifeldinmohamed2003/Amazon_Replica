@@ -46,7 +46,8 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                 || "/api/auth/register".equals(path)
                 || "/api/auth/login".equals(path)
                 || path.matches("/api/orders/user/\\d+/summary")
-                || path.matches("/api/orders/user/\\d+/active-count");
+                || path.matches("/api/orders/user/\\d+/active-count")
+                || path.matches("/api/orders/user/\\d+/count");
     }
 
     @Override

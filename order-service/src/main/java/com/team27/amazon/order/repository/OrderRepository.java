@@ -20,6 +20,8 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
 
     int countByUserIdAndStatusIn(Long userId, List<OrderStatus> statuses);
 
+    long countByUserIdAndStatus(Long userId, OrderStatus status);
+
     List<Order> findByOrderedAtBetween(LocalDateTime startDate, LocalDateTime endDate);
 
     List<Order> findByShippingAddressId(Long shippingAddressId);

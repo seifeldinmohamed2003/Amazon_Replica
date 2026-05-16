@@ -157,7 +157,7 @@ public class UserController {
         return userService.getUserProfile(id);
     }
 
-    @GetMapping("/language")
+    @GetMapping("/preferences/language")
     public ResponseEntity<List<User>> getUsersByLanguage(
             @RequestParam String lang,
             @RequestParam(name = "minOrders", defaultValue = "0") long minOrders

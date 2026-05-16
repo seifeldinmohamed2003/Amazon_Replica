@@ -119,6 +119,12 @@ public class OrderController {
         return ResponseEntity.ok(orderService.getActiveOrderCount(userId));
     }
 
+    // S1-F9
+    @GetMapping("/user/{userId}/count")
+    public ResponseEntity<Long> getTotalOrderCount(@PathVariable Long userId) {
+        return ResponseEntity.ok(orderService.getTotalOrderCount(userId));
+    }
+
     // READ - GET /api/orders/date-range?startDate=...&endDate=...
     @GetMapping("/date-range")
     public ResponseEntity<List<Order>> getOrdersByDateRange(

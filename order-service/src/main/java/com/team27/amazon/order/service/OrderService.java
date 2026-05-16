@@ -340,6 +340,11 @@ public class OrderService extends AbstractEventSubject {
                 List.of(OrderStatus.PENDING, OrderStatus.CONFIRMED, OrderStatus.SHIPPED));
     }
 
+    // S1-F9 - Count delivered orders for user
+    public long getTotalOrderCount(Long userId) {
+        return orderRepository.countByUserIdAndStatus(userId, OrderStatus.DELIVERED);
+    }
+
     // READ - Get orders by status
     public List<Order> getOrdersByStatus(OrderStatus status) {
         return orderRepository.findByStatus(status);

@@ -616,8 +616,15 @@ public class UserService extends AbstractEventSubject {
                 cacheKey,
                 new TypeReference<List<User>>() {},
                 CacheConstants.TTL_F9_COMBINED,
-                () -> userRepository.findByLanguageAndMinOrders(langParam, minOrders)
+                () -> findUsersByLanguageFromOrderService(langParam, minOrders)
         );
+    }
+
+    private List<User> findUsersByLanguageFromOrderService(String lang, long minOrders) {
+        List<User> candidates = userRepository.findUsersByPreference("language", lang);
+        return candidates.stream()
+                .filter(user -> orderServiceGateway.getTotalOrderCount(user.getId()) >= minOrders)
+                .collect(java.util.stream.Collectors.toList());
     }
 
     // CC-2

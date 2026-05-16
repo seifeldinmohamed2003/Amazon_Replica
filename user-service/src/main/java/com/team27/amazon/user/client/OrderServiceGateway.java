@@ -38,4 +38,13 @@ public class OrderServiceGateway {
             throw new ServiceUnavailableException("Order service temporarily unavailable");
         }
     }
+
+    public long getTotalOrderCount(Long userId) {
+        try {
+            return orderServiceClient.getTotalOrderCount(userId);
+        } catch (FeignException e) {
+            log.warn("order-service unavailable fetching total count for user {}: {}", userId, e.getMessage());
+            return 0L;
+        }
+    }
 }
