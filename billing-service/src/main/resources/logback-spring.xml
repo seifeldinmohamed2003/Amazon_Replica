@@ -1,0 +1,6 @@
+<configuration>
+  <appender name="LOKI" class="ch.qos.logback.core.ConsoleAppender">
+    <encoder class="net.logstash.logback.encoder.LogstashEncoder"/>
+  </appender>
+  <root level="INFO"><appender-ref ref="LOKI"/></root>
+</configuration>
