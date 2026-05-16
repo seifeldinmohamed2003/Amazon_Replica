@@ -27,7 +27,9 @@ import org.springframework.web.server.ResponseStatusException;
 
 import com.team27.amazon.common.events.AbstractEventSubject;
 import com.team27.amazon.common.events.MongoEventLogger;
+import com.team27.amazon.contracts.dto.OrderSummaryDTO;
 import com.team27.amazon.user.adapter.ObjectArrayDtoAdapter;
+import com.team27.amazon.user.client.OrderServiceGateway;
 import com.team27.amazon.user.cache.CacheConstants;
 import com.team27.amazon.user.cache.CacheInvalidationService;
 import com.team27.amazon.user.cache.CacheKeyBuilder;
@@ -73,6 +75,7 @@ public class UserService extends AbstractEventSubject {
     private final ActivityCacheAdapter cacheAdapter;
     private final ObjectMapper objectMapper;
     private final JwtService jwtService;
+    private final OrderServiceGateway orderServiceGateway;
 
     // ─── Main constructor (used by Spring) ───────────────────────
     @Autowired
@@ -86,7 +89,8 @@ public class UserService extends AbstractEventSubject {
                        AuthEventRepository authEventRepository,
                        ActivityCacheAdapter cacheAdapter,
                        ObjectMapper objectMapper,
-                       JwtService jwtService) {
+                       JwtService jwtService,
+                       OrderServiceGateway orderServiceGateway) {
         this.userRepository = userRepository;
         this.shippingAddressRepository = shippingAddressRepository;
         this.passwordEncoder = passwordEncoder;
@@ -98,6 +102,7 @@ public class UserService extends AbstractEventSubject {
         this.cacheAdapter = cacheAdapter;
         this.objectMapper = objectMapper;
         this.jwtService = jwtService;
+        this.orderServiceGateway = orderServiceGateway;
 
         register(mongoEventLogger);
     }
@@ -117,6 +122,7 @@ public class UserService extends AbstractEventSubject {
                 objectArrayDtoAdapter,
                 redisCacheService,
                 cacheInvalidationService,
+                null,
                 null,
                 null,
                 null,
@@ -354,30 +360,26 @@ public class UserService extends AbstractEventSubject {
                 cacheKey,
                 UserOrderSummaryDTO.class,
                 CacheConstants.TTL_F3_DTO,
-                () -> getUserOrderSummaryFromDatabase(userId)
+                () -> getUserOrderSummaryFromOrderService(userId)
         );
     }
 
-    private UserOrderSummaryDTO getUserOrderSummaryFromDatabase(Long userId) {
-        getUserByIdFromDatabase(userId);
+    private UserOrderSummaryDTO getUserOrderSummaryFromOrderService(Long userId) {
+        User user = getUserByIdFromDatabase(userId);
+        OrderSummaryDTO summary = orderServiceGateway.getUserOrderSummary(userId);
+        return buildUserOrderSummaryDTO(user, summary);
+    }
 
-        Object[] row = userRepository.getUserOrderSummary(userId);
-
-        if (row == null || row.length == 0) {
-            User user = getUserByIdFromDatabase(userId);
-
-            return UserOrderSummaryDTO.builder()
-                    .userId(userId)
-                    .name(user.getName())
-                    .totalOrders(0L)
-                    .completedOrders(0L)
-                    .cancelledOrders(0L)
-                    .totalSpent(0.0)
-                    .averageOrderValue(0.0)
-                    .build();
-        }
-
-        return objectArrayDtoAdapter.adapt(row);
+    private UserOrderSummaryDTO buildUserOrderSummaryDTO(User user, OrderSummaryDTO summary) {
+        return UserOrderSummaryDTO.builder()
+                .userId(user.getId())
+                .name(user.getName())
+                .totalOrders(summary.totalOrders())
+                .completedOrders(summary.completedOrders())
+                .cancelledOrders(summary.cancelledOrders())
+                .totalSpent(summary.totalSpent())
+                .averageOrderValue(summary.averageOrderValue())
+                .build();
     }
 
     // S1-F4
