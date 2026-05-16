@@ -15,7 +15,91 @@ data:
   user-dashboard.json: |
     {
       "title": "User Service Dashboard",
-      "panels": []
+      "uid": "user-service-dashboard",
+      "schemaVersion": 36,
+      "version": 1,
+      "panels": [
+        {
+          "id": 1,
+          "title": "Error Rate (LogQL)",
+          "type": "timeseries",
+          "gridPos": { "x": 0, "y": 0, "w": 12, "h": 8 },
+          "datasource": "Loki",
+          "targets": [
+            {
+              "expr": "sum(count_over_time({app=\"amazon\", service=\"user-service\", level=\"ERROR\"}[1m]))",
+              "legendFormat": "Errors/min"
+            }
+          ]
+        },
+        {
+          "id": 2,
+          "title": "Correlation ID Trace (LogQL)",
+          "type": "logs",
+          "gridPos": { "x": 12, "y": 0, "w": 12, "h": 8 },
+          "datasource": "Loki",
+          "targets": [
+            {
+              "expr": "{app=\"amazon\", service=\"user-service\"} | json | correlationId=~\".+\"",
+              "legendFormat": "Trace"
+            }
+          ]
+        },
+        {
+          "id": 3,
+          "title": "Feign Call Outcomes (LogQL)",
+          "type": "timeseries",
+          "gridPos": { "x": 0, "y": 8, "w": 12, "h": 8 },
+          "datasource": "Loki",
+          "targets": [
+            {
+              "expr": "sum by (level) (count_over_time({app=\"amazon\", service=\"user-service\"} | json | message=~\".*Feign.*\"[5m]))",
+              "legendFormat": "{{level}}"
+            }
+          ]
+        },
+        {
+          "id": 4,
+          "title": "HTTP Request Rate (PromQL)",
+          "type": "timeseries",
+          "gridPos": { "x": 12, "y": 8, "w": 12, "h": 8 },
+          "datasource": "Prometheus",
+          "targets": [
+            {
+              "expr": "sum by (uri) (rate(http_server_requests_seconds_count{job=\"user-service\"}[5m]))",
+              "legendFormat": "{{uri}}"
+            }
+          ]
+        },
+        {
+          "id": 5,
+          "title": "HTTP Latency P99 (PromQL)",
+          "type": "timeseries",
+          "gridPos": { "x": 0, "y": 16, "w": 12, "h": 8 },
+          "datasource": "Prometheus",
+          "targets": [
+            {
+              "expr": "histogram_quantile(0.99, sum by (le, uri) (rate(http_server_requests_seconds_bucket{job=\"user-service\"}[5m])))",
+              "legendFormat": "P99 {{uri}}"
+            }
+          ]
+        },
+        {
+          "id": 6,
+          "title": "JVM Heap Usage (PromQL)",
+          "type": "timeseries",
+          "gridPos": { "x": 12, "y": 16, "w": 12, "h": 8 },
+          "datasource": "Prometheus",
+          "targets": [
+            {
+              "expr": "sum(jvm_memory_used_bytes{job=\"user-service\", area=\"heap\"})",
+              "legendFormat": "Heap Used"
+            }
+          ]
+        }
+      ],
+      "time": { "from": "now-1h", "to": "now" },
+      "refresh": "30s"
     }
 
   product-dashboard.json: |
