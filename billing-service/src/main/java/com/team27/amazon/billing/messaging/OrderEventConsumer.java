@@ -28,13 +28,36 @@ public class OrderEventConsumer {
     @RabbitListener(queues = "payment.saga-listener")
     public void handleOrderEvent(Object event, @Headers Map<String, Object> headers) {
         String routingKey = (String) headers.get("amqp_receivedRoutingKey");
-        log.info("Received event with headers: {}", headers.keySet());
-        log.info("Routing key: {}", routingKey);
+        log.info("Routing key: {}, event type: {}", routingKey, event.getClass().getName());
 
-        if ("order.completed".equals(routingKey) && event instanceof OrderCompletedEvent e) {
-            handleOrderCompleted(e);
-        } else if ("order.cancelled".equals(routingKey) && event instanceof OrderCancelledEvent e) {
-            handleOrderCancelled(e);
+        if ("order.completed".equals(routingKey)) {
+            if (event instanceof OrderCompletedEvent e) {
+                handleOrderCompleted(e);
+            } else if (event instanceof Map<?, ?> map) {
+                OrderCompletedEvent e = new OrderCompletedEvent(
+                        toLong(map.get("orderId")),
+                        toLong(map.get("userId")),
+                        toLong(map.get("shippingAddressId")),
+                        toDouble(map.get("totalAmount"))
+                );
+                handleOrderCompleted(e);
+            } else {
+                log.warn("Unknown event type for order.completed: {}", event.getClass().getName());
+            }
+        } else if ("order.cancelled".equals(routingKey)) {
+            if (event instanceof OrderCancelledEvent e) {
+                handleOrderCancelled(e);
+            } else if (event instanceof Map<?, ?> map) {
+                OrderCancelledEvent e = new OrderCancelledEvent(
+                        toLong(map.get("orderId")),
+                        toLong(map.get("userId")),
+                        null,
+                        (String) map.get("reason")
+                );
+                handleOrderCancelled(e);
+            } else {
+                log.warn("Unknown event type for order.cancelled: {}", event.getClass().getName());
+            }
         } else {
             log.warn("Unhandled routing key: {}", routingKey);
         }
@@ -85,5 +108,20 @@ public class OrderEventConsumer {
             log.error("Failed to process order.cancelled for orderId={}: {}", event.orderId(), e.getMessage());
             throw e;
         }
+    }
+
+    private Long toLong(Object val) {
+        if (val == null) return null;
+        if (val instanceof Long l) return l;
+        if (val instanceof Integer i) return i.longValue();
+        if (val instanceof Number n) return n.longValue();
+        return Long.parseLong(val.toString());
+    }
+
+    private Double toDouble(Object val) {
+        if (val == null) return null;
+        if (val instanceof Double d) return d;
+        if (val instanceof Number n) return n.doubleValue();
+        return Double.parseDouble(val.toString());
     }
 }
