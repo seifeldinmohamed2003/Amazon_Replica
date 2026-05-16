@@ -1,0 +1,52 @@
+{
+  "annotations": {
+    "list": [
+      {
+        "builtIn": 1,
+        "datasource": "-- Grafana --",
+        "enable": true,
+        "hide": true,
+        "iconColor": "#999999",
+        "name": "Annotations & Alerts",
+        "type": "dashboard"
+      }
+    ]
+  },
+  "panels": [
+    {
+      "type": "logs",
+      "title": "Product Service Errors (LogQL)",
+      "datasource": "Loki",
+      "targets": [
+        {
+          "expr": "{service=\"product-service\"} |= \"ERROR\"",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "type": "logs",
+      "title": "Feign call traces (LogQL)",
+      "datasource": "Loki",
+      "targets": [
+        {
+          "expr": "{service=\"product-service\"} |= \"Feign\"",
+          "refId": "B"
+        }
+      ]
+    },
+    {
+      "type": "logs",
+      "title": "Product existence checks (LogQL)",
+      "datasource": "Loki",
+      "targets": [
+        {
+          "expr": "{service=\"product-service\"} |= \"productExists\"",
+          "refId": "C"
+        }
+      ]
+    }
+  ],
+  "title": "Product Service Dashboard",
+  "schemaVersion": 27
+}

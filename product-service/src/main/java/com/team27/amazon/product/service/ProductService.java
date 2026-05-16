@@ -54,6 +54,10 @@ import com.team27.amazon.product.cache.RedisCacheService;
 import java.time.Duration;
 import jakarta.annotation.PostConstruct;
 import jakarta.transaction.Transactional;
+import com.team27.amazon.contracts.feign.OrderServiceClient;
+import com.team27.amazon.contracts.feign.UserServiceClient;
+import com.team27.amazon.contracts.dto.UserDTO;
+import feign.FeignException;
 
 @Service
 public class ProductService extends AbstractEventSubject {
@@ -78,6 +82,12 @@ public class ProductService extends AbstractEventSubject {
 
     @Autowired
     private ObjectArrayDtoAdapter objectArrayDtoAdapter;
+
+    @Autowired(required = false)
+    private OrderServiceClient orderServiceClient;
+
+    @Autowired(required = false)
+    private UserServiceClient userServiceClient;
 
     @Value("${spring.elasticsearch.uris:http://elasticsearch:9200}")
 private String elasticsearchUri;
@@ -105,6 +115,50 @@ autoIndexProduct(savedProduct, "auto_crud_create");
         productCacheInvalidator.invalidateAllProductFeatureCaches();
 
         return savedProduct;
+    }
+
+    // S2-READ-DB helper: lightweight existence check
+    public boolean productExists(Long id) {
+        return productRepository.existsById(id);
+    }
+
+    // S2-READ-DB helper: batch product lookup
+    public List<Product> getProductsBatch(List<Long> ids) {
+        if (ids == null || ids.isEmpty()) {
+            return List.of();
+        }
+        return productRepository.findAllById(ids).stream().toList();
+    }
+
+    // Feign-safe user existence check using UserServiceClient
+    public boolean remoteUserExists(Long userId) {
+        if (userServiceClient == null) {
+            return false;
+        }
+        try {
+            UserDTO user = userServiceClient.getUser(userId);
+            return user != null;
+        } catch (FeignException.NotFound e) {
+            return false;
+        } catch (Exception e) {
+            log.warn("UserService call failed, treating as not found: {}", userId, e);
+            return false;
+        }
+    }
+
+    // Feign-safe wrapper to ask OrderService if a user has purchased a product
+    public boolean hasUserPurchasedProductViaOrderService(Long userId, Long productId) {
+        if (orderServiceClient == null) {
+            return false;
+        }
+        try {
+            return orderServiceClient.hasUserPurchasedProduct(userId, productId);
+        } catch (FeignException.NotFound e) {
+            return false;
+        } catch (Exception e) {
+            log.warn("OrderService call failed for hasUserPurchasedProduct userId={} productId={}", userId, productId, e);
+            return false;
+        }
     }
 
     public Product getProductById(Long id) {
