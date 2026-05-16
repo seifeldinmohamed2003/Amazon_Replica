@@ -1,10 +1,12 @@
 spring:
   application:
     name: user-service
+
   datasource:
-    url: jdbc:postgresql://postgres:5432/amazondb
+    url: jdbc:postgresql://user-postgres:5432/amazondb-users
     username: postgres
     password: postgres
+
   jpa:
     hibernate:
       ddl-auto: update
@@ -12,6 +14,7 @@ spring:
     properties:
       hibernate:
         dialect: org.hibernate.dialect.PostgreSQLDialect
+
   mongodb:
     uri: mongodb://root:rootpass@mongo:27017/amazonmongo?authSource=admin
 
@@ -20,8 +23,32 @@ spring:
       host: redis
       port: 6379
       password: redispass
+
 server:
   port: 8080
+
 jwt:
   secret: ${JWT_SECRET:MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=}
   expiration: ${JWT_EXPIRATION_MS:86400000}
+
+feign:
+  order-service:
+    url: http://order-service:8080
+  billing-service:
+    url: http://billing-service:8080
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: "prometheus,health,info"
+  endpoint:
+    health:
+      show-details: always
+  metrics:
+    distribution:
+      percentiles-histogram:
+        http.server.requests: true
+
+loki:
+  url: http://loki:3100/loki/api/v1/push

@@ -13,13 +13,14 @@ import org.springframework.web.bind.annotation.*;
 import com.team27.amazon.user.model.ShippingAddress;
 import com.team27.amazon.user.model.User;
 import com.team27.amazon.user.service.UserService;
-
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 @RestController
 @RequestMapping("/api/users")
 public class UserController {
 
     private final UserService userService;
-
+    private static final Logger log = LoggerFactory.getLogger(UserController.class);
     public UserController(UserService userService) {
         this.userService = userService;
     }
@@ -68,8 +69,12 @@ public class UserController {
 
     @GetMapping("/{userId}/addresses/{addressId}")
     public ResponseEntity<ShippingAddress> getAddressById(@PathVariable Long userId,
-                                                           @PathVariable Long addressId) {
-        return ResponseEntity.ok(userService.getAddressById(userId, addressId));
+                                                          @PathVariable Long addressId) {
+        log.info("Received GET /api/users/{}/addresses/{}", userId, addressId);
+        ResponseEntity<ShippingAddress> response =
+                ResponseEntity.ok(userService.getAddressById(userId, addressId));
+        log.info("Returning 200 for GET /api/users/{}/addresses/{}", userId, addressId);
+        return response;
     }
 
     @GetMapping("/{userId}/addresses")

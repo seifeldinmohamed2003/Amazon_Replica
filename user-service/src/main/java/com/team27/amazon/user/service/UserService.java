@@ -231,8 +231,11 @@ public class UserService extends AbstractEventSubject {
                 () -> getAddressByIdFromDatabase(addressId)
         );
 
-        if (!address.getUser().getId().equals(userId)) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Address does not belong to this user");
+        if (address.getUser() == null || !address.getUser().getId().equals(userId)) {
+            throw new ResponseStatusException(
+                    HttpStatus.NOT_FOUND,
+                    "Shipping address not found for this user"
+            );
         }
 
         return address;
