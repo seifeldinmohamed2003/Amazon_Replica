@@ -33,4 +33,14 @@ jwt:
 cache:
     type: redis
     redis:
-      time-to-live: 300000   
+      time-to-live: 300000
+
+feign:
+  user-service:
+    url: http://user-service:8080
+  product-service:
+    url: http://product-service:8080
+  shipping-service:
+    url: http://shipping-service:8080
+  billing-service:
+    url: http://billing-service:8080
