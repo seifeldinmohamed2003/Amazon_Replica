@@ -51,6 +51,8 @@ import com.team27.amazon.user.repository.UserRepository;
 @Service
 public class UserService extends AbstractEventSubject {
 
+    private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(UserService.class);
+
     private final UserRepository userRepository;
     private final ShippingAddressRepository shippingAddressRepository;
     private final PasswordEncoder passwordEncoder;
@@ -137,6 +139,18 @@ public class UserService extends AbstractEventSubject {
                 "email", savedUser.getEmail(),
                 "status", savedUser.getStatus() == null ? null : savedUser.getStatus().name()
         )));
+
+        // S1-F10: publish user.registered
+        log.info("Publishing user.registered for userId={} email={}", savedUser.getId(), savedUser.getEmail());
+        rabbitTemplate.convertAndSend(
+                com.team27.amazon.contracts.constants.EventExchanges.USER_EVENTS,
+                com.team27.amazon.contracts.constants.EventRoutingKeys.USER_REGISTERED,
+                Map.of(
+                        "userId", savedUser.getId(),
+                        "email", savedUser.getEmail(),
+                        "role", savedUser.getRole() == null ? null : savedUser.getRole().name()
+                )
+        );
 
         cacheInvalidationService.invalidateAllUserServiceFeatureCaches();
 
@@ -430,6 +444,7 @@ public class UserService extends AbstractEventSubject {
                 "status", savedUser.getStatus().name()
         )));
 
+        log.info("Publishing user.deactivated for userId={}", savedUser.getId());
         rabbitTemplate.convertAndSend(
                 com.team27.amazon.contracts.constants.EventExchanges.USER_EVENTS,
                 com.team27.amazon.contracts.constants.EventRoutingKeys.USER_DEACTIVATED,
