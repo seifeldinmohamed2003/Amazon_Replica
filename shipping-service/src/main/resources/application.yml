@@ -27,14 +27,6 @@ spring:
       host: redis
       port: 6379
       password: redispass
-server:
-  port: 8080
-jwt:
-  secret: ${JWT_SECRET:MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=}
-  expiration: ${JWT_EXPIRATION_MS:86400000}
-
-# RabbitMQ connection configuration
-spring:
   rabbitmq:
     host: rabbitmq
     port: 5672
@@ -48,3 +40,8 @@ spring:
           enabled: true
           initial-interval: 1000
           max-attempts: 3
+server:
+  port: 8080
+jwt:
+  secret: ${JWT_SECRET:MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=}
+  expiration: ${JWT_EXPIRATION_MS:86400000}
