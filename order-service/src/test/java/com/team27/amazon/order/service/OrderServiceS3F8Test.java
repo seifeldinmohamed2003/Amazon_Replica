@@ -1,5 +1,8 @@
 package com.team27.amazon.order.service;
 
+import com.team27.amazon.contracts.feign.ProductServiceClient;
+import com.team27.amazon.contracts.feign.UserServiceClient;
+
 import com.team27.amazon.order.dto.AddOrderItemRequest;
 import com.team27.amazon.order.model.Order;
 import com.team27.amazon.order.model.OrderItem;
@@ -35,7 +38,6 @@ class OrderServiceS3F8Test {
     @Mock
     private OrderRepository orderRepository;
 
-    @Mock
     private OrderItemRepository orderItemRepository;
 
     @Mock
@@ -49,6 +51,13 @@ class OrderServiceS3F8Test {
 
     @Mock
     private TransactionJdbcRepository transactionJdbcRepository;
+
+
+
+    @Mock
+    private ProductServiceClient productServiceClient;
+    @Mock
+    private UserServiceClient userServiceClient;
 
     @InjectMocks
     private OrderService orderService;
@@ -82,14 +91,12 @@ class OrderServiceS3F8Test {
         req2.setQuantity(1);
 
         when(orderRepository.findById(1L))
-                .thenReturn(Optional.of(pendingOrder))
-                .thenReturn(Optional.of(pendingOrder));
+            .thenReturn(Optional.of(pendingOrder))
+            .thenReturn(Optional.of(pendingOrder));
 
-        when(productJdbcRepository.existsByProductId(100L)).thenReturn(true);
-        when(productJdbcRepository.existsByProductId(200L)).thenReturn(true);
-
-        when(productJdbcRepository.findCurrentPriceByProductId(100L)).thenReturn(50.0);
-        when(productJdbcRepository.findCurrentPriceByProductId(200L)).thenReturn(75.0);
+        com.team27.amazon.contracts.dto.ProductDTO p100 = new com.team27.amazon.contracts.dto.ProductDTO(100L, "P100", "d", 50.0, "C", "B", 10, "ACTIVE", 4.0, java.util.Map.of());
+        com.team27.amazon.contracts.dto.ProductDTO p200 = new com.team27.amazon.contracts.dto.ProductDTO(200L, "P200", "d", 75.0, "C", "B", 5, "ACTIVE", 4.0, java.util.Map.of());
+        when(productServiceClient.getProductsBatch(java.util.List.of(100L, 200L))).thenReturn(java.util.List.of(p100, p200));
 
         when(orderRepository.save(any(Order.class))).thenAnswer(inv -> inv.getArgument(0));
 
@@ -116,11 +123,11 @@ class OrderServiceS3F8Test {
         req.setQuantity(4);
 
         when(orderRepository.findById(1L))
-                .thenReturn(Optional.of(pendingOrder))
-                .thenReturn(Optional.of(pendingOrder));
+            .thenReturn(Optional.of(pendingOrder))
+            .thenReturn(Optional.of(pendingOrder));
 
-        when(productJdbcRepository.existsByProductId(300L)).thenReturn(true);
-        when(productJdbcRepository.findCurrentPriceByProductId(300L)).thenReturn(90.0);
+        com.team27.amazon.contracts.dto.ProductDTO p300 = new com.team27.amazon.contracts.dto.ProductDTO(300L, "P300", "d", 90.0, "C", "B", 20, "ACTIVE", 4.0, java.util.Map.of());
+        when(productServiceClient.getProductsBatch(java.util.List.of(300L))).thenReturn(java.util.List.of(p300));
 
         when(orderRepository.save(any(Order.class))).thenAnswer(inv -> inv.getArgument(0));
 
@@ -153,7 +160,7 @@ class OrderServiceS3F8Test {
         req.setQuantity(1);
 
         when(orderRepository.findById(1L)).thenReturn(Optional.of(pendingOrder));
-        when(productJdbcRepository.existsByProductId(999L)).thenReturn(false);
+        when(productServiceClient.getProductsBatch(java.util.List.of(999L))).thenReturn(java.util.List.of());
 
         ResponseStatusException ex = assertThrows(
                 ResponseStatusException.class,

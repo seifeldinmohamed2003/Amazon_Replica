@@ -1,5 +1,8 @@
 package com.team27.amazon.order.service;
 
+import com.team27.amazon.contracts.feign.ProductServiceClient;
+import com.team27.amazon.contracts.feign.UserServiceClient;
+
 import com.team27.amazon.order.dto.OrderDetailsDTO;
 import com.team27.amazon.order.model.Order;
 import com.team27.amazon.order.model.OrderItem;
@@ -43,6 +46,13 @@ class OrderServiceDetailsTest {
 
     @Mock
     private TransactionJdbcRepository transactionJdbcRepository;
+
+
+
+    @Mock
+    private ProductServiceClient productServiceClient;
+    @Mock
+    private UserServiceClient userServiceClient;
 
     @InjectMocks
     private OrderService orderService;

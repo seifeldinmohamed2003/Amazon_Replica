@@ -1,5 +1,12 @@
 package com.team27.amazon.order.service;
 
+import com.team27.amazon.contracts.dto.ProductDTO;
+import com.team27.amazon.contracts.dto.ShipmentDTO;
+import com.team27.amazon.contracts.dto.UserDTO;
+import com.team27.amazon.contracts.feign.ProductServiceClient;
+import com.team27.amazon.contracts.feign.UserServiceClient;
+import com.team27.amazon.contracts.feign.ShippingServiceClient;
+
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.team27.amazon.order.cache.OrderRedisCacheService;
 import com.team27.amazon.order.dto.AddOrderItemRequest;
@@ -40,6 +47,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doReturn;
@@ -65,12 +73,23 @@ class OrderServiceCachingTest {
     @Mock
     private ProductJdbcRepository productJdbcRepository;
 
-    @Mock
     @SuppressWarnings("unused")
+    @Mock
     private TransactionJdbcRepository transactionJdbcRepository;
 
     @Mock
     private OrderRedisCacheService orderRedisCacheService;
+
+
+
+    @Mock
+    private ProductServiceClient productServiceClient;
+    @Mock
+    private UserServiceClient userServiceClient;
+    @Mock
+    private ShippingServiceClient shippingServiceClient;
+    @Mock
+    private com.team27.amazon.order.messaging.publishers.OrderEventPublisher orderEventPublisher;
 
     @InjectMocks
     private OrderService orderService;
@@ -125,7 +144,8 @@ class OrderServiceCachingTest {
 
         when(orderRedisCacheService.featureKey(eq("S3-F3"), any())).thenReturn("order-service::S3-F3::hash");
         when(orderRedisCacheService.get("order-service::S3-F3::hash", OrderEstimateDTO.class)).thenReturn(Optional.empty());
-        when(productJdbcRepository.findCurrentPriceByProductId(99L)).thenReturn(100.0);
+        when(productServiceClient.getProductsBatch(java.util.List.of(99L)))
+            .thenReturn(java.util.List.of(new com.team27.amazon.contracts.dto.ProductDTO(99L, "P99", "d", 100.0, "C", "B", 50, "ACTIVE", 4.0, java.util.Map.of())));
 
         OrderEstimateDTO dto = orderService.estimateOrderPrice(List.of(request));
 
@@ -153,7 +173,7 @@ class OrderServiceCachingTest {
         OrderEstimateDTO result = orderService.estimateOrderPrice(List.of(request));
 
         assertSame(cached, result);
-        verify(productJdbcRepository, never()).findCurrentPriceByProductId(anyLong());
+        verify(productServiceClient, never()).getProductsBatch(anyList());
     }
 
     @Test
@@ -327,10 +347,10 @@ class OrderServiceCachingTest {
         order.setOrderItems(List.of(item));
 
         when(orderRepository.findById(10L)).thenReturn(Optional.of(order));
-        when(shippingAddressJdbcRepository.existsByShippingAddressId(77L)).thenReturn(true);
-        when(productJdbcRepository.existsByProductId(901L)).thenReturn(true);
-        when(productJdbcRepository.findStockQuantityByProductId(901L)).thenReturn(10);
-        when(productJdbcRepository.deductStockQuantity(901L, 1)).thenReturn(1);
+        when(userServiceClient.getShippingAddress(order.getUserId(), 77L))
+            .thenReturn(new com.team27.amazon.contracts.dto.ShippingAddressDTO(77L, order.getUserId(), "a", "b", "g", "p", "c"));
+        com.team27.amazon.contracts.dto.ProductDTO p901 = new com.team27.amazon.contracts.dto.ProductDTO(901L, "P901", "d", 100.0, "C", "B", 10, "ACTIVE", 4.0, java.util.Map.of());
+        when(productServiceClient.getProductsBatch(java.util.List.of(901L))).thenReturn(java.util.List.of(p901));
         when(orderRepository.save(any(Order.class))).thenAnswer(invocation -> invocation.getArgument(0));
         when(orderRedisCacheService.orderKey(10L)).thenReturn("order-service::order::10");
 
@@ -366,14 +386,29 @@ class OrderServiceCachingTest {
         order.setStatus(OrderStatus.SHIPPED);
         order.setTotalAmount(200.0);
 
+        OrderItem item1 = new OrderItem();
+        item1.setProductId(101L);
+        item1.setQuantity(2);
+        item1.setPriceAtPurchase(50.0);
+        order.setOrderItems(List.of(item1));
+
         when(orderRepository.findById(123L)).thenReturn(Optional.of(order));
-        when(shipmentJdbcRepository.existsByOrderId(123L)).thenReturn(true);
-        when(orderRepository.save(any(Order.class))).thenAnswer(invocation -> invocation.getArgument(0));
         when(orderRedisCacheService.orderKey(123L)).thenReturn("order-service::order::123");
+        when(orderRepository.save(any(Order.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        UserDTO userDTO = new UserDTO(90L, "John Doe", "john@example.com", "555-1234", "CUSTOMER", "ACTIVE", java.util.Map.of());
+        when(userServiceClient.getUser(90L)).thenReturn(userDTO);
+
+        ProductDTO productDTO = new ProductDTO(101L, "P101", "desc", 50.0, "cat", "brand", 100, "ACTIVE", 4.5, java.util.Map.of());
+        when(productServiceClient.getProductsBatch(List.of(101L))).thenReturn(List.of(productDTO));
+
+        ShipmentDTO shipmentDTO = new ShipmentDTO(200L, 123L, "FedEx", "TRACK123", "SHIPPED", null, null, java.time.LocalDateTime.now(), null, null, java.util.Map.of());
+        when(shippingServiceClient.getActiveShipmentForOrder(123L)).thenReturn(shipmentDTO);
 
         Order result = orderService.deliverOrder(123L);
 
         assertEquals(OrderStatus.DELIVERED, result.getStatus());
+        verify(orderEventPublisher).publishOrderCompleted(any(Order.class));
         verify(orderRedisCacheService).delete("order-service::order::123");
         verify(orderRedisCacheService).deleteByPattern("order-service::S3-F1::*");
         verify(orderRedisCacheService).deleteByPattern("order-service::S3-F3::*");
@@ -413,8 +448,8 @@ class OrderServiceCachingTest {
         request.setQuantity(1);
 
         when(orderRepository.findById(500L)).thenReturn(Optional.of(pending));
-        when(productJdbcRepository.existsByProductId(1000L)).thenReturn(true);
-        when(productJdbcRepository.findCurrentPriceByProductId(1000L)).thenReturn(25.0);
+        com.team27.amazon.contracts.dto.ProductDTO p1000 = new com.team27.amazon.contracts.dto.ProductDTO(1000L, "P1000", "d", 25.0, "C", "B", 10, "ACTIVE", 4.0, java.util.Map.of());
+        when(productServiceClient.getProductsBatch(java.util.List.of(1000L))).thenReturn(java.util.List.of(p1000));
         when(orderRepository.save(any(Order.class))).thenAnswer(invocation -> invocation.getArgument(0));
         when(orderRedisCacheService.orderKey(500L)).thenReturn("order-service::order::500");
 

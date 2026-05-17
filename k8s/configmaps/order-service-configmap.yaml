@@ -1,0 +1,16 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: order-service-configmap
+  namespace: amazon
+data:
+  SPRING_DATASOURCE_URL: jdbc:postgresql://order-postgres:5432/amazondb-orders
+  SPRING_DATASOURCE_USERNAME: postgres
+  SPRING_RABBITMQ_HOST: rabbitmq
+  SPRING_RABBITMQ_PORT: "5672"
+  FEIGN_USER_SERVICE_URL: http://user-service:8080
+  FEIGN_PRODUCT_SERVICE_URL: http://product-service:8080
+  FEIGN_SHIPPING_SERVICE_URL: http://shipping-service:8080
+  FEIGN_BILLING_SERVICE_URL: http://billing-service:8080
+  MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE: prometheus,health,info
+  MANAGEMENT_METRICS_DISTRIBUTION_PERCENTILES_HISTOGRAM_HTTP_SERVER_REQUESTS: "true"

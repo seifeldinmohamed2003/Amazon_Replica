@@ -53,6 +53,13 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
 import com.team27.amazon.order.dto.CoPurchaseRecordResponse;
+import com.team27.amazon.contracts.feign.ProductServiceClient;
+import com.team27.amazon.contracts.feign.UserServiceClient;
+import com.team27.amazon.contracts.feign.ShippingServiceClient;
+import com.team27.amazon.contracts.dto.ProductDTO;
+import com.team27.amazon.contracts.dto.UserDTO;
+import com.team27.amazon.contracts.dto.ShipmentDTO;
+import com.team27.amazon.order.messaging.publishers.OrderEventPublisher;
 import jakarta.annotation.PostConstruct;
 
 @Service
@@ -80,6 +87,18 @@ public class OrderService extends AbstractEventSubject {
 
     @Autowired
     private ProductJdbcRepository productJdbcRepository;
+
+    @Autowired
+    private ProductServiceClient productServiceClient;
+
+    @Autowired
+    private UserServiceClient userServiceClient;
+
+    @Autowired
+    private ShippingServiceClient shippingServiceClient;
+
+    @Autowired
+    private OrderEventPublisher orderEventPublisher;
     
     private Order reloadOrderWithSortedItems(Long orderId) {
         Order updatedOrder = orderRepository.findById(orderId)
@@ -148,6 +167,16 @@ public class OrderService extends AbstractEventSubject {
             order.setOrderItems(currentItems);
         }
 
+        // S3-F8: Use ProductServiceClient batch to get product prices (Feign read)
+        List<Long> productIds = requests.stream()
+                .map(AddOrderItemRequest::getProductId)
+                .toList();
+        List<ProductDTO> products = productServiceClient.getProductsBatch(productIds);
+        Map<Long, ProductDTO> productMap = new HashMap<>();
+        for (ProductDTO product : products) {
+            productMap.put(product.id(), product);
+        }
+
         int nextItemOrder = currentItems.stream()
                 .map(OrderItem::getItemOrder)
                 .max(Integer::compareTo)
@@ -168,14 +197,15 @@ public class OrderService extends AbstractEventSubject {
                 );
             }
 
-            if (!productJdbcRepository.existsByProductId(request.getProductId())) {
+            ProductDTO product = productMap.get(request.getProductId());
+            if (product == null) {
                 throw new ResponseStatusException(
                         HttpStatus.NOT_FOUND,
                         "Product not found"
                 );
             }
 
-            Double currentPrice = productJdbcRepository.findCurrentPriceByProductId(request.getProductId());
+            Double currentPrice = product.price();
             if (currentPrice == null) {
                 throw new ResponseStatusException(
                         HttpStatus.NOT_FOUND,
@@ -215,6 +245,26 @@ public class OrderService extends AbstractEventSubject {
             return cached.get();
         }
 
+        // S3-F3: Use ProductServiceClient batch to get product prices (Feign read)
+        List<Long> productIds = items.stream()
+                .map(OrderEstimateItemRequestDTO::getProductId)
+                .toList();
+        List<ProductDTO> products = productServiceClient.getProductsBatch(productIds);
+        Map<Long, ProductDTO> productMap = new HashMap<>();
+        for (ProductDTO product : products) {
+            productMap.put(product.id(), product);
+        }
+
+        // Verify all requested products exist
+        for (OrderEstimateItemRequestDTO item : items) {
+            if (!productMap.containsKey(item.getProductId())) {
+                throw new ResponseStatusException(
+                        HttpStatus.NOT_FOUND,
+                        "Product not found: " + item.getProductId()
+                );
+            }
+        }
+
         int itemCount = 0;
         double subtotal = 0.0;
 
@@ -223,9 +273,10 @@ public class OrderService extends AbstractEventSubject {
                 throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Each item must include productId and quantity >= 1");
             }
 
-            Double currentPrice = productJdbcRepository.findCurrentPriceByProductId(item.getProductId());
+            ProductDTO product = productMap.get(item.getProductId());
+            Double currentPrice = product.price();
             if (currentPrice == null) {
-                throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Product not found");
+                throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Product price not found");
             }
 
             itemCount += item.getQuantity();
@@ -443,32 +494,87 @@ public class OrderService extends AbstractEventSubject {
             );
         }
 
-        if (!shipmentJdbcRepository.existsByOrderId(orderId)) {
+        // Calculate totalAmount from items if null
+        if (order.getTotalAmount() == null) {
+            List<OrderItem> items = order.getOrderItems() == null ? List.of() : order.getOrderItems();
+            double calculated = items.stream()
+                    .mapToDouble(item -> (item.getPriceAtPurchase() != null ? item.getPriceAtPurchase() : 0.0) * item.getQuantity())
+                    .sum();
+            order.setTotalAmount(calculated);
+        }
+
+        // S3-F4 pre-check 1: User must exist and be ACTIVE
+        try {
+            UserDTO user = userServiceClient.getUser(order.getUserId());
+            if (user == null || !"ACTIVE".equals(user.status())) {
+                throw new ResponseStatusException(
+                        HttpStatus.BAD_REQUEST,
+                        "User is no longer active"
+                );
+            }
+            log.info("Pre-check passed: User {} is ACTIVE for order {}", order.getUserId(), orderId);
+        } catch (Exception e) {
+            log.warn("Pre-check failed for user validation on order {}: {}", orderId, e.getMessage());
             throw new ResponseStatusException(
-                    HttpStatus.NOT_FOUND,
-                    "Shipment not found for this order"
+                    HttpStatus.BAD_REQUEST,
+                    "User is no longer active"
             );
         }
 
+        // S3-F4 pre-check 2: All products must exist
+        try {
+            List<OrderItem> items = order.getOrderItems() == null ? List.of() : order.getOrderItems();
+            List<Long> productIds = items.stream()
+                    .map(OrderItem::getProductId)
+                    .distinct()
+                    .toList();
+            
+            if (!productIds.isEmpty()) {
+                List<ProductDTO> products = productServiceClient.getProductsBatch(productIds);
+                if (products.size() != productIds.size()) {
+                    throw new ResponseStatusException(
+                            HttpStatus.BAD_REQUEST,
+                            "Product no longer exists in catalog"
+                    );
+                }
+            }
+            log.info("Pre-check passed: All products exist for order {}", orderId);
+        } catch (ResponseStatusException e) {
+            throw e;
+        } catch (Exception e) {
+            log.warn("Pre-check failed for product validation on order {}: {}", orderId, e.getMessage());
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Product no longer exists in catalog"
+            );
+        }
+
+        // S3-F4 pre-check 3: Active shipment must exist
+        try {
+            ShipmentDTO shipment = shippingServiceClient.getActiveShipmentForOrder(orderId);
+            if (shipment == null) {
+                throw new ResponseStatusException(
+                        HttpStatus.BAD_REQUEST,
+                        "No active shipment to deliver"
+                );
+            }
+            log.info("Pre-check passed: Active shipment {} exists for order {}", shipment.id(), orderId);
+        } catch (Exception e) {
+            log.warn("Pre-check failed for shipment validation on order {}: {}", orderId, e.getMessage());
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "No active shipment to deliver"
+            );
+        }
+
+        // All pre-checks passed, transition to DELIVERED
         order.setStatus(OrderStatus.DELIVERED);
         order.setDeliveredAt(LocalDateTime.now());
         Order savedOrder = orderRepository.save(order);
-
-        shipmentJdbcRepository.markDeliveredByOrderId(
-                orderId,
-                LocalDate.now(),
-                LocalDateTime.now()
-        );
-
-        Double totalAmount = savedOrder.getTotalAmount();
-        double amount = totalAmount == null ? 0.0 : totalAmount;
-
-        transactionJdbcRepository.insertPendingTransaction(
-                savedOrder.getId(),
-                savedOrder.getUserId(),
-                amount,
-                LocalDateTime.now()
-        );
+        
+        // Publish order.completed event
+        orderEventPublisher.publishOrderCompleted(savedOrder);
+        log.info("Delivered order {}: published order.completed event", orderId);
 
         notifyObservers("ORDER_DELIVERED", orderEventPayload(savedOrder.getId(), Map.of(
             "status", savedOrder.getStatus().name(),
@@ -645,58 +751,60 @@ public class OrderService extends AbstractEventSubject {
             );
         }
 
-        if (!shippingAddressJdbcRepository.existsByShippingAddressId(shippingAddressId)) {
+        // S3-F2: Use UserServiceClient to validate shipping address (Feign read)
+        try {
+            userServiceClient.getShippingAddress(order.getUserId(), shippingAddressId);
+            log.info("Validated shipping address {} for userId={}", shippingAddressId, order.getUserId());
+        } catch (Exception e) {
+            log.error("Failed to validate shipping address: {}", e.getMessage());
             throw new ResponseStatusException(
                     HttpStatus.NOT_FOUND,
-                    "Shipping address not found"
+                    "Shipping address not found or does not belong to user"
             );
         }
 
+        // S3-F2: Use ProductServiceClient batch to validate products and stock (Feign read)
         List<OrderItem> orderItems = order.getOrderItems() == null ? List.of() : order.getOrderItems();
-        double totalAmount = 0.0;
-
-        for (OrderItem orderItem : orderItems) {
-            if (!productJdbcRepository.existsByProductId(orderItem.getProductId())) {
-                throw new ResponseStatusException(
-                        HttpStatus.NOT_FOUND,
-                        "Product not found"
-                );
+        if (!orderItems.isEmpty()) {
+            List<Long> productIds = orderItems.stream()
+                    .map(OrderItem::getProductId)
+                    .toList();
+            List<ProductDTO> products = productServiceClient.getProductsBatch(productIds);
+            Map<Long, ProductDTO> productMap = new HashMap<>();
+            for (ProductDTO product : products) {
+                productMap.put(product.id(), product);
             }
 
-            Integer stockQuantity = productJdbcRepository.findStockQuantityByProductId(orderItem.getProductId());
-            if (stockQuantity == null) {
-                throw new ResponseStatusException(
-                        HttpStatus.NOT_FOUND,
-                        "Product not found"
-                );
-            }
-
-            if (stockQuantity < orderItem.getQuantity()) {
-                throw new ResponseStatusException(
-                        HttpStatus.BAD_REQUEST,
-                        "Insufficient stock for product " + orderItem.getProductId()
-                );
+            for (OrderItem orderItem : orderItems) {
+                ProductDTO product = productMap.get(orderItem.getProductId());
+                if (product == null) {
+                    throw new ResponseStatusException(
+                            HttpStatus.NOT_FOUND,
+                            "Product not found: " + orderItem.getProductId()
+                    );
+                }
+                if (product.stockQuantity() == null || product.stockQuantity() < orderItem.getQuantity()) {
+                    throw new ResponseStatusException(
+                            HttpStatus.BAD_REQUEST,
+                            "Insufficient stock for product " + orderItem.getProductId()
+                    );
+                }
             }
         }
 
-        for (OrderItem orderItem : orderItems) {
-            int updatedRows = productJdbcRepository.deductStockQuantity(
-                    orderItem.getProductId(),
-                    orderItem.getQuantity()
-            );
-            if (updatedRows == 0) {
-                throw new ResponseStatusException(
-                        HttpStatus.BAD_REQUEST,
-                        "Insufficient stock for product " + orderItem.getProductId()
-                );
-            }
-            totalAmount += orderItem.getQuantity() * orderItem.getPriceAtPurchase();
-        }
+        // Calculate total amount from order items
+        double totalAmount = orderItems.stream()
+                .mapToDouble(item -> item.getQuantity() * item.getPriceAtPurchase())
+                .sum();
 
         order.setShippingAddressId(shippingAddressId);
         order.setStatus(OrderStatus.CONFIRMED);
         order.setTotalAmount(totalAmount);
         Order savedOrder = orderRepository.save(order);
+        
+        // S3-F2: Publish order.placed event to RabbitMQ
+        orderEventPublisher.publishOrderPlaced(savedOrder);
+        
         notifyObservers("ORDER_CONFIRMED", orderEventPayload(savedOrder.getId(), Map.of(
             "status", savedOrder.getStatus().name(),
             "userId", savedOrder.getUserId(),
@@ -723,24 +831,19 @@ public class OrderService extends AbstractEventSubject {
             );
         }
 
-        // If order was confirmed, restore stock for each item
+        // Build restoredItems: only CONFIRMED orders had stock deducted
+        List<OrderItem> restoredItems = new ArrayList<>();
         if (order.getStatus() == OrderStatus.CONFIRMED) {
-            List<OrderItem> orderItems = order.getOrderItems() == null ? List.of() : order.getOrderItems();
-            for (OrderItem orderItem : orderItems) {
-                productJdbcRepository.restoreStockQuantity(
-                        orderItem.getProductId(),
-                        orderItem.getQuantity()
-                );
-            }
+            restoredItems = order.getOrderItems() == null ? List.of() : new ArrayList<>(order.getOrderItems());
         }
 
         order.setStatus(OrderStatus.CANCELLED);
         Order savedOrder = orderRepository.save(order);
-        Map<String, Object> eventDetails = new HashMap<>();
-        eventDetails.put("status", savedOrder.getStatus().name());
-        eventDetails.put("userId", savedOrder.getUserId());
-        eventDetails.put("totalAmount", savedOrder.getTotalAmount() == null ? 0 : savedOrder.getTotalAmount());
-        notifyObservers("ORDER_CANCELLED", orderEventPayload(savedOrder.getId(), eventDetails));
+        
+        // Publish order.cancelled event
+        orderEventPublisher.publishOrderCancelled(savedOrder, restoredItems, "user_requested");
+        log.info("Cancelled order {}: published order.cancelled event", orderId);
+
         Map<String, Object> cancelDetails = new HashMap<>();
         cancelDetails.put("status", savedOrder.getStatus().name());
         if (savedOrder.getUserId() != null) {
@@ -750,6 +853,7 @@ public class OrderService extends AbstractEventSubject {
             cancelDetails.put("totalAmount", savedOrder.getTotalAmount());
         }
         notifyObservers("ORDER_CANCELLED", orderEventPayload(savedOrder.getId(), cancelDetails));
+        
         invalidateOrderCaches(savedOrder.getId());
         invalidateProductDashboardCache();
         return savedOrder;
@@ -874,14 +978,14 @@ public class OrderService extends AbstractEventSubject {
     private Map<Long, ProductSnapshot> loadProductSnapshots(List<Long> productIds) {
         Map<Long, ProductSnapshot> snapshots = new HashMap<>();
 
-        List<Object[]> rows = orderRepository.findProductSnapshotsByIds(productIds);
-
-        for (Object[] row : rows) {
-            Long productId = ((Number) row[0]).longValue();
-            String name = row[1] == null ? "" : row[1].toString();
-            String category = row[2] == null ? "" : row[2].toString();
-
-            snapshots.put(productId, new ProductSnapshot(productId, name, category));
+        // S3-F11: Use ProductServiceClient batch to enrich ProductNode (Feign read)
+        List<ProductDTO> products = productServiceClient.getProductsBatch(productIds);
+        for (ProductDTO product : products) {
+            snapshots.put(product.id(), new ProductSnapshot(
+                    product.id(),
+                    product.name() == null ? "" : product.name(),
+                    product.category() == null ? "" : product.category()
+            ));
         }
 
         return snapshots;

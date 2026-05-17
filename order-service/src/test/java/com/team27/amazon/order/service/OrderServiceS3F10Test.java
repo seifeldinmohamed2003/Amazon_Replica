@@ -1,5 +1,8 @@
 package com.team27.amazon.order.service;
 
+import com.team27.amazon.contracts.feign.ProductServiceClient;
+import com.team27.amazon.contracts.feign.UserServiceClient;
+
 import com.team27.amazon.order.cache.OrderRedisCacheService;
 import com.team27.amazon.order.dto.OrderAnalyticsDashboardDTO;
 import com.team27.amazon.order.model.Order;
@@ -34,6 +37,11 @@ class OrderServiceS3F10Test {
 
     @Mock
     private OrderRedisCacheService orderRedisCacheService;
+
+    @Mock
+    private ProductServiceClient productServiceClient;
+    @Mock
+    private UserServiceClient userServiceClient;
 
     @InjectMocks
     private OrderService orderService;

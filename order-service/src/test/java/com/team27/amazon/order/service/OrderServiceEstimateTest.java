@@ -1,5 +1,8 @@
 package com.team27.amazon.order.service;
 
+import com.team27.amazon.contracts.feign.ProductServiceClient;
+import com.team27.amazon.contracts.feign.UserServiceClient;
+
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
@@ -39,13 +42,23 @@ class OrderServiceEstimateTest {
     @Mock
     private TransactionJdbcRepository transactionJdbcRepository;
 
+
+
+    @Mock
+    private ProductServiceClient productServiceClient;
+    @Mock
+    private UserServiceClient userServiceClient;
+
     @InjectMocks
     private OrderService orderService;
 
     @Test
     void estimateOrderPriceReturnsExpectedValuesForGivenExample() {
-        when(productJdbcRepository.findCurrentPriceByProductId(1L)).thenReturn(100.0);
-        when(productJdbcRepository.findCurrentPriceByProductId(2L)).thenReturn(200.0);
+        when(productServiceClient.getProductsBatch(java.util.List.of(1L, 2L)))
+            .thenReturn(java.util.List.of(
+                mockProductDTO(1L, 100.0),
+                mockProductDTO(2L, 200.0)
+            ));
 
         List<OrderEstimateItemRequestDTO> items = List.of(
                 new OrderEstimateItemRequestDTO(1L, 2),
@@ -64,8 +77,11 @@ class OrderServiceEstimateTest {
 
     @Test
     void estimateOrderPriceAppliesFivePercentDiscountForTenItems() {
-        when(productJdbcRepository.findCurrentPriceByProductId(1L)).thenReturn(100.0);
-        when(productJdbcRepository.findCurrentPriceByProductId(2L)).thenReturn(200.0);
+        when(productServiceClient.getProductsBatch(java.util.List.of(1L, 2L)))
+            .thenReturn(java.util.List.of(
+                mockProductDTO(1L, 100.0),
+                mockProductDTO(2L, 200.0)
+            ));
 
         List<OrderEstimateItemRequestDTO> items = List.of(
                 new OrderEstimateItemRequestDTO(1L, 4),
@@ -83,7 +99,10 @@ class OrderServiceEstimateTest {
 
     @Test
     void estimateOrderPriceAppliesTenPercentDiscountAboveFifteenItems() {
-        when(productJdbcRepository.findCurrentPriceByProductId(1L)).thenReturn(100.0);
+        when(productServiceClient.getProductsBatch(java.util.List.of(1L)))
+            .thenReturn(java.util.List.of(
+                mockProductDTO(1L, 100.0)
+            ));
 
         List<OrderEstimateItemRequestDTO> items = List.of(
                 new OrderEstimateItemRequestDTO(1L, 16)
@@ -100,7 +119,7 @@ class OrderServiceEstimateTest {
 
     @Test
     void estimateOrderPriceReturnsNotFoundWhenProductDoesNotExist() {
-        when(productJdbcRepository.findCurrentPriceByProductId(999L)).thenReturn(null);
+        when(productServiceClient.getProductsBatch(java.util.List.of(999L))).thenReturn(java.util.List.of());
 
         ResponseStatusException exception = assertThrows(
                 ResponseStatusException.class,
@@ -119,6 +138,21 @@ class OrderServiceEstimateTest {
         );
 
         assertEquals(400, exception.getStatusCode().value());
-        verifyNoInteractions(productJdbcRepository);
+        verifyNoInteractions(productServiceClient);
+    }
+
+    private com.team27.amazon.contracts.dto.ProductDTO mockProductDTO(Long id, Double price) {
+        return new com.team27.amazon.contracts.dto.ProductDTO(
+                id,
+                "P" + id,
+                "desc",
+                price,
+                "CAT",
+                "BRAND",
+                100,
+                "ACTIVE",
+                4.5,
+                java.util.Map.of()
+        );
     }
 }

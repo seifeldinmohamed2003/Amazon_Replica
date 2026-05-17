@@ -1,0 +1,245 @@
+[INFO] Scanning for projects...
+[WARNING] 
+[WARNING] Some problems were encountered while building the effective model for com.team27.amazon:user-service:jar:0.0.1-SNAPSHOT
+[WARNING] 'dependencies.dependency.(groupId:artifactId:type:classifier)' must be unique: com.fasterxml.jackson.datatype:jackson-datatype-jsr310:jar -> duplicate declaration of version (?) @ line 123, column 21
+[WARNING] 
+[WARNING] Some problems were encountered while building the effective model for com.team27.amazon:shipping-service:jar:0.0.1-SNAPSHOT
+[WARNING] 'dependencies.dependency.(groupId:artifactId:type:classifier)' must be unique: org.springframework.boot:spring-boot-test-autoconfigure:jar -> duplicate declaration of version (?) @ line 134, column 21
+[WARNING] 
+[WARNING] It is highly recommended to fix these problems because they threaten the stability of your build.
+[WARNING] 
+[WARNING] For this reason, future Maven versions might no longer support building such malformed projects.
+[WARNING] 
+[INFO] ------------------------------------------------------------------------
+[INFO] Reactor Build Order:
+[INFO] 
+[INFO] amazon                                                             [pom]
+[INFO] contracts                                                          [jar]
+[INFO] common-events                                                      [jar]
+[INFO] order-service                                                      [jar]
+[INFO] 
+[INFO] ----------------------< com.team27.amazon:amazon >----------------------
+[INFO] Building amazon 1.0-SNAPSHOT                                       [1/4]
+[INFO]   from pom.xml
+[INFO] --------------------------------[ pom ]---------------------------------
+[INFO] 
+[INFO] --- clean:3.2.0:clean (default-clean) @ amazon ---
+[INFO] 
+[INFO] --------------------< com.team27.amazon:contracts >---------------------
+[INFO] Building contracts 1.0-SNAPSHOT                                    [2/4]
+[INFO]   from contracts\pom.xml
+[INFO] --------------------------------[ jar ]---------------------------------
+[INFO] 
+[INFO] --- clean:3.2.0:clean (default-clean) @ contracts ---
+[INFO] Deleting D:\GitHub\27-Uncle-Ali-Amazon\contracts\target
+[INFO] 
+[INFO] --- resources:3.4.0:resources (default-resources) @ contracts ---
+[INFO] skip non existing resourceDirectory D:\GitHub\27-Uncle-Ali-Amazon\contracts\src\main\resources
+[INFO] 
+[INFO] --- compiler:3.15.0:compile (default-compile) @ contracts ---
+[INFO] Recompiling the module because of changed source code.
+[INFO] Compiling 32 source files with javac [debug target 25] to target\classes
+[INFO] 
+[INFO] --- resources:3.4.0:testResources (default-testResources) @ contracts ---
+[INFO] skip non existing resourceDirectory D:\GitHub\27-Uncle-Ali-Amazon\contracts\src\test\resources
+[INFO] 
+[INFO] --- compiler:3.15.0:testCompile (default-testCompile) @ contracts ---
+[INFO] No sources to compile
+[INFO] 
+[INFO] --- surefire:3.5.4:test (default-test) @ contracts ---
+[INFO] No tests to run.
+[INFO] 
+[INFO] ------------------< com.team27.amazon:common-events >-------------------
+[INFO] Building common-events 0.0.1-SNAPSHOT                              [3/4]
+[INFO]   from common-events\pom.xml
+[INFO] --------------------------------[ jar ]---------------------------------
+[INFO] 
+[INFO] --- clean:3.5.0:clean (default-clean) @ common-events ---
+[INFO] Deleting D:\GitHub\27-Uncle-Ali-Amazon\common-events\target
+[INFO] 
+[INFO] --- resources:3.3.1:resources (default-resources) @ common-events ---
+[INFO] skip non existing resourceDirectory D:\GitHub\27-Uncle-Ali-Amazon\common-events\src\main\resources
+[INFO] skip non existing resourceDirectory D:\GitHub\27-Uncle-Ali-Amazon\common-events\src\main\resources
+[INFO] 
+[INFO] --- compiler:3.14.1:compile (default-compile) @ common-events ---
+[INFO] Recompiling the module because of changed source code.
+[INFO] Compiling 12 source files with javac [debug parameters release 25] to target\classes
+[INFO] 
+[INFO] --- resources:3.3.1:testResources (default-testResources) @ common-events ---
+[INFO] skip non existing resourceDirectory D:\GitHub\27-Uncle-Ali-Amazon\common-events\src\test\resources
+[INFO] 
+[INFO] --- compiler:3.14.1:testCompile (default-testCompile) @ common-events ---
+[INFO] Recompiling the module because of changed dependency.
+[INFO] Compiling 2 source files with javac [debug parameters release 25] to target\test-classes
+[INFO] 
+[INFO] --- surefire:3.5.5:test (default-test) @ common-events ---
+[INFO] Using auto detected provider org.apache.maven.surefire.junitplatform.JUnitPlatformProvider
+[INFO] 
+[INFO] -------------------------------------------------------
+[INFO]  T E S T S
+[INFO] -------------------------------------------------------
+[INFO] Running com.team27.amazon.common.events.EventFactoryTest
+[INFO] Tests run: 6, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.187 s -- in com.team27.amazon.common.events.EventFactoryTest
+[INFO] Running com.team27.amazon.common.events.ObserverPatternTest
+03:26:46.459 [main] WARN com.team27.amazon.common.events.MongoEventLogger -- Failed to persist AUTH event for action REGISTERED
+java.lang.RuntimeException: mongo down
+	at com.team27.amazon.common.events.ObserverPatternTest.lambda$mongoEventLoggerSwallowsSaveFailures$0(ObserverPatternTest.java:83)
+	at com.team27.amazon.common.events.MongoEventLogger.onEvent(MongoEventLogger.java:33)
+	at com.team27.amazon.common.events.ObserverPatternTest.lambda$mongoEventLoggerSwallowsSaveFailures$1(ObserverPatternTest.java:86)
+	at org.junit.jupiter.api.AssertDoesNotThrow.assertDoesNotThrow(AssertDoesNotThrow.java:52)
+	at org.junit.jupiter.api.AssertDoesNotThrow.assertDoesNotThrow(AssertDoesNotThrow.java:39)
+	at org.junit.jupiter.api.Assertions.assertDoesNotThrow(Assertions.java:3295)
+	at com.team27.amazon.common.events.ObserverPatternTest.mongoEventLoggerSwallowsSaveFailures(ObserverPatternTest.java:86)
+	at java.base/jdk.internal.reflect.DirectMethodHandleAccessor.invoke(DirectMethodHandleAccessor.java:104)
+	at java.base/java.lang.reflect.Method.invoke(Method.java:565)
+	at org.junit.platform.commons.util.ReflectionUtils.invokeMethod(ReflectionUtils.java:701)
+	at org.junit.platform.commons.support.ReflectionSupport.invokeMethod(ReflectionSupport.java:502)
+	at org.junit.jupiter.engine.support.MethodReflectionUtils.invoke(MethodReflectionUtils.java:45)
+	at org.junit.jupiter.engine.execution.MethodInvocation.proceed(MethodInvocation.java:61)
+	at org.junit.jupiter.engine.execution.InvocationInterceptorChain$ValidatingInvocation.proceed(InvocationInterceptorChain.java:124)
+	at org.junit.jupiter.engine.extension.TimeoutExtension.intercept(TimeoutExtension.java:163)
+	at org.junit.jupiter.engine.extension.TimeoutExtension.interceptTestableMethod(TimeoutExtension.java:148)
+	at org.junit.jupiter.engine.extension.TimeoutExtension.interceptTestMethod(TimeoutExtension.java:86)
+	at org.junit.jupiter.engine.execution.InterceptingExecutableInvoker$ReflectiveInterceptorCall.lambda$ofVoidMethod$0(InterceptingExecutableInvoker.java:123)
+	at org.junit.jupiter.engine.execution.InterceptingExecutableInvoker.lambda$invoke$0(InterceptingExecutableInvoker.java:105)
+	at org.junit.jupiter.engine.execution.InvocationInterceptorChain$InterceptedInvocation.proceed(InvocationInterceptorChain.java:99)
+	at org.junit.jupiter.engine.execution.InvocationInterceptorChain.proceed(InvocationInterceptorChain.java:66)
+	at org.junit.jupiter.engine.execution.InvocationInterceptorChain.chainAndInvoke(InvocationInterceptorChain.java:47)
+	at org.junit.jupiter.engine.execution.InvocationInterceptorChain.invoke(InvocationInterceptorChain.java:39)
+	at org.junit.jupiter.engine.execution.InterceptingExecutableInvoker.invoke(InterceptingExecutableInvoker.java:104)
+	at org.junit.jupiter.engine.execution.InterceptingExecutableInvoker.invoke(InterceptingExecutableInvoker.java:98)
+	at org.junit.jupiter.engine.execution.InterceptingExecutableInvoker.invokeVoid(InterceptingExecutableInvoker.java:71)
+	at org.junit.jupiter.engine.descriptor.TestMethodTestDescriptor.lambda$invokeTestMethod$0(TestMethodTestDescriptor.java:219)
+	at org.junit.platform.engine.support.hierarchical.ThrowableCollector.execute(ThrowableCollector.java:74)
+	at org.junit.jupiter.engine.descriptor.TestMethodTestDescriptor.invokeTestMethod(TestMethodTestDescriptor.java:215)
+	at org.junit.jupiter.engine.descriptor.TestMethodTestDescriptor.execute(TestMethodTestDescriptor.java:157)
+	at org.junit.jupiter.engine.descriptor.TestMethodTestDescriptor.execute(TestMethodTestDescriptor.java:70)
+	at org.junit.platform.engine.support.hierarchical.NodeTestTask.lambda$executeRecursively$2(NodeTestTask.java:176)
+	at org.junit.platform.engine.support.hierarchical.ThrowableCollector.execute(ThrowableCollector.java:74)
+	at org.junit.platform.engine.support.hierarchical.NodeTestTask.lambda$executeRecursively$1(NodeTestTask.java:166)
+	at org.junit.platform.engine.support.hierarchical.Node.around(Node.java:138)
+	at org.junit.platform.engine.support.hierarchical.NodeTestTask.lambda$executeRecursively$0(NodeTestTask.java:164)
+	at org.junit.platform.engine.support.hierarchical.ThrowableCollector.execute(ThrowableCollector.java:74)
+	at org.junit.platform.engine.support.hierarchical.NodeTestTask.executeRecursively(NodeTestTask.java:163)
+	at org.junit.platform.engine.support.hierarchical.NodeTestTask.execute(NodeTestTask.java:116)
+	at java.base/java.util.ArrayList.forEach(ArrayList.java:1604)
+	at org.junit.platform.engine.support.hierarchical.SameThreadHierarchicalTestExecutorService.invokeAll(SameThreadHierarchicalTestExecutorService.java:42)
+	at org.junit.platform.engine.support.hierarchical.NodeTestTask.lambda$executeRecursively$2(NodeTestTask.java:180)
+	at org.junit.platform.engine.support.hierarchical.ThrowableCollector.execute(ThrowableCollector.java:74)
+	at org.junit.platform.engine.support.hierarchical.NodeTestTask.lambda$executeRecursively$1(NodeTestTask.java:166)
+	at org.junit.platform.engine.support.hierarchical.Node.around(Node.java:138)
+	at org.junit.platform.engine.support.hierarchical.NodeTestTask.lambda$executeRecursively$0(NodeTestTask.java:164)
+	at org.junit.platform.engine.support.hierarchical.ThrowableCollector.execute(ThrowableCollector.java:74)
+	at org.junit.platform.engine.support.hierarchical.NodeTestTask.executeRecursively(NodeTestTask.java:163)
+	at org.junit.platform.engine.support.hierarchical.NodeTestTask.execute(NodeTestTask.java:116)
+	at java.base/java.util.ArrayList.forEach(ArrayList.java:1604)
+	at org.junit.platform.engine.support.hierarchical.SameThreadHierarchicalTestExecutorService.invokeAll(SameThreadHierarchicalTestExecutorService.java:42)
+	at org.junit.platform.engine.support.hierarchical.NodeTestTask.lambda$executeRecursively$2(NodeTestTask.java:180)
+	at org.junit.platform.engine.support.hierarchical.ThrowableCollector.execute(ThrowableCollector.java:74)
+	at org.junit.platform.engine.support.hierarchical.NodeTestTask.lambda$executeRecursively$1(NodeTestTask.java:166)
+	at org.junit.platform.engine.support.hierarchical.Node.around(Node.java:138)
+	at org.junit.platform.engine.support.hierarchical.NodeTestTask.lambda$executeRecursively$0(NodeTestTask.java:164)
+	at org.junit.platform.engine.support.hierarchical.ThrowableCollector.execute(ThrowableCollector.java:74)
+	at org.junit.platform.engine.support.hierarchical.NodeTestTask.executeRecursively(NodeTestTask.java:163)
+	at org.junit.platform.engine.support.hierarchical.NodeTestTask.execute(NodeTestTask.java:116)
+	at org.junit.platform.engine.support.hierarchical.SameThreadHierarchicalTestExecutorService.submit(SameThreadHierarchicalTestExecutorService.java:36)
+	at org.junit.platform.engine.support.hierarchical.HierarchicalTestExecutor.execute(HierarchicalTestExecutor.java:52)
+	at org.junit.platform.engine.support.hierarchical.HierarchicalTestEngine.execute(HierarchicalTestEngine.java:58)
+	at org.junit.platform.launcher.core.EngineExecutionOrchestrator.executeEngine(EngineExecutionOrchestrator.java:246)
+	at org.junit.platform.launcher.core.EngineExecutionOrchestrator.failOrExecuteEngine(EngineExecutionOrchestrator.java:218)
+	at org.junit.platform.launcher.core.EngineExecutionOrchestrator.execute(EngineExecutionOrchestrator.java:179)
+	at org.junit.platform.launcher.core.EngineExecutionOrchestrator.execute(EngineExecutionOrchestrator.java:108)
+	at org.junit.platform.launcher.core.EngineExecutionOrchestrator.lambda$execute$0(EngineExecutionOrchestrator.java:66)
+	at org.junit.platform.launcher.core.EngineExecutionOrchestrator.withInterceptedStreams(EngineExecutionOrchestrator.java:157)
+	at org.junit.platform.launcher.core.EngineExecutionOrchestrator.execute(EngineExecutionOrchestrator.java:65)
+	at org.junit.platform.launcher.core.DefaultLauncher.execute(DefaultLauncher.java:125)
+	at org.junit.platform.launcher.core.DefaultLauncher.execute(DefaultLauncher.java:114)
+	at org.junit.platform.launcher.core.DelegatingLauncher.execute(DelegatingLauncher.java:58)
+	at org.junit.platform.launcher.core.InterceptingLauncher.lambda$execute$2(InterceptingLauncher.java:57)
+	at org.junit.platform.launcher.core.ClasspathAlignmentCheckingLauncherInterceptor.intercept(ClasspathAlignmentCheckingLauncherInterceptor.java:25)
+	at org.junit.platform.launcher.core.InterceptingLauncher.execute(InterceptingLauncher.java:56)
+	at org.junit.platform.launcher.core.DelegatingLauncher.execute(DelegatingLauncher.java:58)
+	at java.base/jdk.internal.reflect.DirectMethodHandleAccessor.invoke(DirectMethodHandleAccessor.java:104)
+	at java.base/java.lang.reflect.Method.invoke(Method.java:565)
+	at org.apache.maven.surefire.api.util.ReflectionUtils.invokeMethodWithArray(ReflectionUtils.java:125)
+	at org.apache.maven.surefire.junitplatform.LauncherAdapter.executeWithCancellationToken(LauncherAdapter.java:68)
+	at org.apache.maven.surefire.junitplatform.LauncherAdapter.execute(LauncherAdapter.java:54)
+	at org.apache.maven.surefire.junitplatform.JUnitPlatformProvider.execute(JUnitPlatformProvider.java:203)
+	at org.apache.maven.surefire.junitplatform.JUnitPlatformProvider.invokeAllTests(JUnitPlatformProvider.java:168)
+	at org.apache.maven.surefire.junitplatform.JUnitPlatformProvider.invoke(JUnitPlatformProvider.java:136)
+	at org.apache.maven.surefire.booter.ForkedBooter.runSuitesInProcess(ForkedBooter.java:385)
+	at org.apache.maven.surefire.booter.ForkedBooter.execute(ForkedBooter.java:162)
+	at org.apache.maven.surefire.booter.ForkedBooter.run(ForkedBooter.java:507)
+	at org.apache.maven.surefire.booter.ForkedBooter.main(ForkedBooter.java:495)
+[INFO] Tests run: 5, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.153 s -- in com.team27.amazon.common.events.ObserverPatternTest
+[INFO] 
+[INFO] Results:
+[INFO] 
+[INFO] Tests run: 11, Failures: 0, Errors: 0, Skipped: 0
+[INFO] 
+[INFO] 
+[INFO] ------------------< com.team27.amazon:order-service >-------------------
+[INFO] Building order-service 0.0.1-SNAPSHOT                              [4/4]
+[INFO]   from order-service\pom.xml
+[INFO] --------------------------------[ jar ]---------------------------------
+[INFO] 
+[INFO] --- clean:3.5.0:clean (default-clean) @ order-service ---
+[INFO] Deleting D:\GitHub\27-Uncle-Ali-Amazon\order-service\target
+[INFO] 
+[INFO] --- resources:3.3.1:resources (default-resources) @ order-service ---
+[INFO] Copying 2 resources from src\main\resources to target\classes
+[INFO] Copying 0 resource from src\main\resources to target\classes
+[INFO] 
+[INFO] --- compiler:3.14.1:compile (default-compile) @ order-service ---
+[INFO] Recompiling the module because of changed dependency.
+[INFO] Compiling 49 source files with javac [debug parameters release 25] to target\classes
+[WARNING] /D:/GitHub/27-Uncle-Ali-Amazon/order-service/src/main/java/com/team27/amazon/order/config/OrderEventConfig.java:[138,20] org.springframework.amqp.support.converter.Jackson2JsonMessageConverter in org.springframework.amqp.support.converter has been deprecated and marked for removal
+[INFO] /D:/GitHub/27-Uncle-Ali-Amazon/order-service/src/main/java/com/team27/amazon/order/repository/ProductRecommendationRepository.java: D:\GitHub\27-Uncle-Ali-Amazon\order-service\src\main\java\com\team27\amazon\order\repository\ProductRecommendationRepository.java uses unchecked or unsafe operations.
+[INFO] /D:/GitHub/27-Uncle-Ali-Amazon/order-service/src/main/java/com/team27/amazon/order/repository/ProductRecommendationRepository.java: Recompile with -Xlint:unchecked for details.
+[INFO] 
+[INFO] --- resources:3.3.1:testResources (default-testResources) @ order-service ---
+[INFO] skip non existing resourceDirectory D:\GitHub\27-Uncle-Ali-Amazon\order-service\src\test\resources
+[INFO] 
+[INFO] --- compiler:3.14.1:testCompile (default-testCompile) @ order-service ---
+[INFO] Recompiling the module because of changed dependency.
+[INFO] Compiling 20 source files with javac [debug parameters release 25] to target\test-classes
+[INFO] /D:/GitHub/27-Uncle-Ali-Amazon/order-service/src/test/java/com/team27/amazon/order/service/OrderItemServiceCachingTest.java: Some input files use unchecked or unsafe operations.
+[INFO] /D:/GitHub/27-Uncle-Ali-Amazon/order-service/src/test/java/com/team27/amazon/order/service/OrderItemServiceCachingTest.java: Recompile with -Xlint:unchecked for details.
+[INFO] -------------------------------------------------------------
+[ERROR] COMPILATION ERROR : 
+[INFO] -------------------------------------------------------------
+[ERROR] /D:/GitHub/27-Uncle-Ali-Amazon/order-service/src/test/java/com/team27/amazon/order/service/RecommendationServiceS3F12Test.java:[40,33] constructor RecommendationService in class com.team27.amazon.order.service.RecommendationService cannot be applied to given types;
+  required: org.springframework.data.neo4j.core.Neo4jClient,com.team27.amazon.order.repository.ProductRecommendationRepository,com.team27.amazon.contracts.feign.ProductServiceClient
+  found:    org.springframework.data.neo4j.core.Neo4jClient,com.team27.amazon.order.repository.ProductRecommendationRepository
+  reason: actual and formal argument lists differ in length
+[INFO] 1 error
+[INFO] -------------------------------------------------------------
+[INFO] ------------------------------------------------------------------------
+[INFO] Reactor Summary:
+[INFO] 
+[INFO] amazon 1.0-SNAPSHOT ................................ SUCCESS [  0.290 s]
+[INFO] contracts 1.0-SNAPSHOT ............................. SUCCESS [  4.855 s]
+[INFO] common-events 0.0.1-SNAPSHOT ....................... SUCCESS [  5.617 s]
+[INFO] order-service 0.0.1-SNAPSHOT ....................... FAILURE [ 10.272 s]
+[INFO] ------------------------------------------------------------------------
+[INFO] BUILD FAILURE
+[INFO] ------------------------------------------------------------------------
+[INFO] Total time:  22.783 s
+[INFO] Finished at: 2026-05-17T03:26:56+03:00
+[INFO] ------------------------------------------------------------------------
+[ERROR] Failed to execute goal org.apache.maven.plugins:maven-compiler-plugin:3.14.1:testCompile (default-testCompile) on project order-service: Compilation failure
+[ERROR] /D:/GitHub/27-Uncle-Ali-Amazon/order-service/src/test/java/com/team27/amazon/order/service/RecommendationServiceS3F12Test.java:[40,33] constructor RecommendationService in class com.team27.amazon.order.service.RecommendationService cannot be applied to given types;
+[ERROR]   required: org.springframework.data.neo4j.core.Neo4jClient,com.team27.amazon.order.repository.ProductRecommendationRepository,com.team27.amazon.contracts.feign.ProductServiceClient
+[ERROR]   found:    org.springframework.data.neo4j.core.Neo4jClient,com.team27.amazon.order.repository.ProductRecommendationRepository
+[ERROR]   reason: actual and formal argument lists differ in length
+[ERROR] 
+[ERROR] -> [Help 1]
+[ERROR] 
+[ERROR] To see the full stack trace of the errors, re-run Maven with the -e switch.
+[ERROR] Re-run Maven using the -X switch to enable full debug logging.
+[ERROR] 
+[ERROR] For more information about the errors and possible solutions, please read the following articles:
+[ERROR] [Help 1] http://cwiki.apache.org/confluence/display/MAVEN/MojoFailureException
+[ERROR] 
+[ERROR] After correcting the problems, you can resume the build with the command
+[ERROR]   mvn <args> -rf :order-service

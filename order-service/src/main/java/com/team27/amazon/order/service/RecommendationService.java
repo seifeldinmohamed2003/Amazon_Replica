@@ -1,7 +1,11 @@
 package com.team27.amazon.order.service;
 
+import com.team27.amazon.contracts.dto.ProductDTO;
+import com.team27.amazon.contracts.feign.ProductServiceClient;
 import com.team27.amazon.order.dto.ProductRecommendationDTO;
 import com.team27.amazon.order.repository.ProductRecommendationRepository;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.data.neo4j.core.Neo4jClient;
 import org.springframework.http.HttpStatus;
@@ -15,15 +19,20 @@ import java.util.Map;
 @Service
 public class RecommendationService {
 
+    private static final Logger log = LoggerFactory.getLogger(RecommendationService.class);
+
     private final Neo4jClient neo4jClient;
     private final ProductRecommendationRepository productRecommendationRepository;
+    private final ProductServiceClient productServiceClient;
 
     public RecommendationService(
             Neo4jClient neo4jClient,
-            ProductRecommendationRepository productRecommendationRepository
+            ProductRecommendationRepository productRecommendationRepository,
+            ProductServiceClient productServiceClient
     ) {
         this.neo4jClient = neo4jClient;
         this.productRecommendationRepository = productRecommendationRepository;
+        this.productServiceClient = productServiceClient;
     }
 
     @Cacheable(
@@ -33,7 +42,15 @@ public class RecommendationService {
     public List<ProductRecommendationDTO> getRecommendations(Long productId, Integer limit) {
         int safeLimit = limit == null || limit <= 0 ? 5 : limit;
 
-        if (!productRecommendationRepository.productExists(productId)) {
+        // S3-F12: Use ProductServiceClient to validate seed product exists (Feign read)
+        try {
+            ProductDTO seedProduct = productServiceClient.getProduct(productId);
+            if (seedProduct == null) {
+                throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Product not found");
+            }
+            log.info("Validated seed product {} for recommendations", productId);
+        } catch (Exception e) {
+            log.error("Failed to validate seed product: {}", e.getMessage());
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Product not found");
         }
 
@@ -69,9 +86,45 @@ public class RecommendationService {
             }
         }
 
-        return productRecommendationRepository.enrichActiveProducts(scores)
-                .stream()
-                .limit(safeLimit)
-                .toList();
+        // S3-F12: Use ProductServiceClient batch to enrich and filter by status (Feign read)
+        return enrichActiveProductsWithFeign(scores, safeLimit);
+    }
+
+    /**
+     * S3-F12: Enrich recommendation scores with product data from ProductServiceClient
+     * and filter only ACTIVE products.
+     */
+    private List<ProductRecommendationDTO> enrichActiveProductsWithFeign(Map<Long, Long> scores, int limit) {
+        if (scores == null || scores.isEmpty()) {
+            return List.of();
+        }
+
+        List<ProductDTO> products = productServiceClient.getProductsBatch(
+                List.copyOf(scores.keySet())
+        );
+
+        List<ProductRecommendationDTO> result = new java.util.ArrayList<>();
+
+        for (ProductDTO product : products) {
+            // Filter only ACTIVE products
+            if (product.status() != null && "ACTIVE".equalsIgnoreCase(product.status())) {
+                Long score = scores.get(product.id());
+                result.add(new ProductRecommendationDTO(
+                        product.id(),
+                        product.name(),
+                        product.category(),
+                        product.brand(),
+                        product.price() != null ? java.math.BigDecimal.valueOf(product.price()) : null,
+                        score
+                ));
+                if (result.size() >= limit) {
+                    break;
+                }
+            }
+        }
+
+        log.info("Enriched {} products from batch Feign, filtered to {} active products", 
+                 products.size(), result.size());
+        return result;
     }
 }

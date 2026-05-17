@@ -1,5 +1,9 @@
 package com.team27.amazon.order.service;
 
+import com.team27.amazon.contracts.feign.ProductServiceClient;
+import com.team27.amazon.contracts.feign.UserServiceClient;
+import com.team27.amazon.order.messaging.publishers.OrderEventPublisher;
+
 import java.util.HashMap;
 import java.util.List;
 
@@ -10,6 +14,8 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -26,6 +32,9 @@ import com.team27.amazon.order.repository.ShipmentJdbcRepository;
 import com.team27.amazon.order.repository.ShippingAddressJdbcRepository;
 import com.team27.amazon.order.repository.TransactionJdbcRepository;
 
+/**
+ * Tests for S3-F7 cancel order with order.cancelled event publishing.
+ */
 @ExtendWith(MockitoExtension.class)
 class OrderServiceCancelTest {
 
@@ -43,6 +52,15 @@ class OrderServiceCancelTest {
 
     @Mock
     private TransactionJdbcRepository transactionJdbcRepository;
+
+    @Mock
+    private ProductServiceClient productServiceClient;
+
+    @Mock
+    private UserServiceClient userServiceClient;
+
+    @Mock
+    private OrderEventPublisher orderEventPublisher;
 
     @InjectMocks
     private OrderService orderService;
@@ -81,20 +99,28 @@ class OrderServiceCancelTest {
 
         assertEquals(OrderStatus.CANCELLED, result.getStatus());
         verify(orderRepository).save(pendingOrder);
+        // Pending order has no items to restore, so empty list passed
+        verify(orderEventPublisher).publishOrderCancelled(any(Order.class), anyList(), any());
         verifyNoInteractions(productJdbcRepository);
     }
 
     @Test
-    void cancelOrderCancelsConfirmedOrderAndRestoresStock() {
+    void cancelOrderCancelsConfirmedOrderWithRestoredItems() {
         when(orderRepository.findById(12L)).thenReturn(java.util.Optional.of(confirmedOrder));
         when(orderRepository.save(confirmedOrder)).thenReturn(confirmedOrder);
 
         Order result = orderService.cancelOrder(12L);
 
         assertEquals(OrderStatus.CANCELLED, result.getStatus());
-        verify(productJdbcRepository).restoreStockQuantity(201L, 2);
-        verify(productJdbcRepository).restoreStockQuantity(202L, 1);
         verify(orderRepository).save(confirmedOrder);
+        // Confirmed order publishes with items to restore
+        verify(orderEventPublisher).publishOrderCancelled(
+                any(Order.class), 
+                any(List.class), 
+                any()
+        );
+        // No direct stock restoration from order-service
+        verifyNoInteractions(productJdbcRepository);
     }
 
     @Test
@@ -107,6 +133,7 @@ class OrderServiceCancelTest {
         );
 
         assertEquals(404, exception.getStatusCode().value());
+        verify(orderEventPublisher, never()).publishOrderCancelled(any(), any(), any());
         verifyNoInteractions(productJdbcRepository, shipmentJdbcRepository, shippingAddressJdbcRepository, transactionJdbcRepository);
     }
 
@@ -121,6 +148,7 @@ class OrderServiceCancelTest {
         );
 
         assertEquals(400, exception.getStatusCode().value());
+        verify(orderEventPublisher, never()).publishOrderCancelled(any(), any(), any());
         verifyNoInteractions(productJdbcRepository, shipmentJdbcRepository, shippingAddressJdbcRepository, transactionJdbcRepository);
     }
 
@@ -135,6 +163,7 @@ class OrderServiceCancelTest {
         );
 
         assertEquals(400, exception.getStatusCode().value());
+        verify(orderEventPublisher, never()).publishOrderCancelled(any(), any(), any());
         verifyNoInteractions(productJdbcRepository, shipmentJdbcRepository, shippingAddressJdbcRepository, transactionJdbcRepository);
     }
 
@@ -149,6 +178,7 @@ class OrderServiceCancelTest {
         );
 
         assertEquals(400, exception.getStatusCode().value());
+        verify(orderEventPublisher, never()).publishOrderCancelled(any(), any(), any());
         verifyNoInteractions(productJdbcRepository, shipmentJdbcRepository, shippingAddressJdbcRepository, transactionJdbcRepository);
     }
 
@@ -162,6 +192,7 @@ class OrderServiceCancelTest {
 
         assertEquals(OrderStatus.CANCELLED, result.getStatus());
         verify(orderRepository).save(confirmedOrder);
+        verify(orderEventPublisher).publishOrderCancelled(any(Order.class), anyList(), any());
         verifyNoInteractions(productJdbcRepository);
     }
 
@@ -175,6 +206,7 @@ class OrderServiceCancelTest {
 
         assertEquals(OrderStatus.CANCELLED, result.getStatus());
         verify(orderRepository).save(confirmedOrder);
+        verify(orderEventPublisher).publishOrderCancelled(any(Order.class), anyList(), any());
         verifyNoInteractions(productJdbcRepository);
     }
 
@@ -200,3 +232,4 @@ class OrderServiceCancelTest {
         return item;
     }
 }
+
