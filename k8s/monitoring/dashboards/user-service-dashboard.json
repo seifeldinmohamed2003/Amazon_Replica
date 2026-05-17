@@ -3,63 +3,110 @@
   "uid": "user-service-dashboard",
   "schemaVersion": 36,
   "version": 1,
-  "tags": ["user-service", "amazon"],
-  "time": { "from": "now-1h", "to": "now" },
+  "tags": [
+    "user-service",
+    "amazon"
+  ],
+  "time": {
+    "from": "now-1h",
+    "to": "now"
+  },
   "refresh": "30s",
   "panels": [
     {
       "id": 1,
-      "title": "Error Rate — Errors per Minute (LogQL)",
+      "title": "Error Rate \u2014 Errors per Minute (LogQL)",
       "description": "Counts ERROR-level log lines from user-service per minute. Spike indicates auth failures, validation errors, or upstream faults.",
       "type": "timeseries",
-      "gridPos": { "x": 0, "y": 0, "w": 12, "h": 8 },
-      "datasource": "Loki",
+      "gridPos": {
+        "x": 0,
+        "y": 0,
+        "w": 12,
+        "h": 8
+      },
+      "datasource": {
+        "type": "loki",
+        "uid": "loki"
+      },
       "targets": [
         {
-          "expr": "sum(count_over_time({app=\"amazon\", service=\"user-service\", level=\"ERROR\"} | json [1m]))",
-          "legendFormat": "Errors/min"
+          "expr": "sum(count_over_time({agent=\"loki4j\"} |~ \"(?i)(error|warn|exception|failed)\" [5m]))",
+          "legendFormat": "WARN+ERROR/5m"
         }
       ],
       "fieldConfig": {
-        "defaults": { "color": { "mode": "palette-classic" }, "unit": "short" }
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "unit": "short"
+        }
       }
     },
     {
       "id": 2,
-      "title": "Correlation ID Trace — Request Chains (LogQL)",
+      "title": "Correlation ID Trace \u2014 Request Chains (LogQL)",
       "description": "Streams all user-service log lines that carry a correlationId, enabling end-to-end request tracing across services.",
       "type": "logs",
-      "gridPos": { "x": 12, "y": 0, "w": 12, "h": 8 },
-      "datasource": "Loki",
+      "gridPos": {
+        "x": 12,
+        "y": 0,
+        "w": 12,
+        "h": 8
+      },
+      "datasource": {
+        "type": "loki",
+        "uid": "loki"
+      },
       "targets": [
         {
-          "expr": "{app=\"amazon\", service=\"user-service\"} | json | correlationId != \"\"",
+          "expr": "{agent=\"loki4j\"}",
           "legendFormat": ""
         }
       ],
-      "options": { "dedupStrategy": "none", "showLabels": true, "wrapLogMessage": true }
+      "options": {
+        "dedupStrategy": "none",
+        "showLabels": true,
+        "wrapLogMessage": true
+      }
     },
     {
       "id": 3,
-      "title": "Feign Call Outcomes — Success vs Failure (LogQL)",
+      "title": "Feign Call Outcomes \u2014 Success vs Failure (LogQL)",
       "description": "Groups user-service log lines mentioning Feign by log level over 5 m. WARN/ERROR series reveal inter-service call degradation (e.g., calls to order-service for language preference).",
       "type": "timeseries",
-      "gridPos": { "x": 0, "y": 8, "w": 12, "h": 8 },
-      "datasource": "Loki",
+      "gridPos": {
+        "x": 0,
+        "y": 8,
+        "w": 12,
+        "h": 8
+      },
+      "datasource": {
+        "type": "loki",
+        "uid": "loki"
+      },
       "targets": [
         {
-          "expr": "sum by (level) (count_over_time({app=\"amazon\", service=\"user-service\"} | json | message=~\"(?i).*(feign|FeignClient|RemoteCall).*\" [5m]))",
+          "expr": "sum by (level) (count_over_time({agent=\"loki4j\"} |~ \"(?i)(feign|FeignClient|RemoteCall|amazon)\" [5m]))",
           "legendFormat": "{{level}}"
         }
       ]
     },
     {
       "id": 4,
-      "title": "HTTP Request Rate — Requests/s per Endpoint (PromQL)",
-      "description": "Layer 1 – Metric: http_server_requests_seconds_count | Layer 2 – Label: job=user-service | Layer 3 – Range: [5m] | Layer 4 – Function: rate → sum by uri. Shows which user-service endpoints carry the most load.",
+      "title": "HTTP Request Rate \u2014 Requests/s per Endpoint (PromQL)",
+      "description": "Layer 1 \u2013 Metric: http_server_requests_seconds_count | Layer 2 \u2013 Label: job=user-service | Layer 3 \u2013 Range: [5m] | Layer 4 \u2013 Function: rate \u2192 sum by uri. Shows which user-service endpoints carry the most load.",
       "type": "timeseries",
-      "gridPos": { "x": 12, "y": 8, "w": 12, "h": 8 },
-      "datasource": "Prometheus",
+      "gridPos": {
+        "x": 12,
+        "y": 8,
+        "w": 12,
+        "h": 8
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
       "targets": [
         {
           "expr": "sum by (uri) (rate(http_server_requests_seconds_count{job=\"user-service\"}[5m]))",
@@ -67,16 +114,26 @@
         }
       ],
       "fieldConfig": {
-        "defaults": { "unit": "reqps" }
+        "defaults": {
+          "unit": "reqps"
+        }
       }
     },
     {
       "id": 5,
-      "title": "HTTP Latency Percentiles — P50 / P95 / P99 per Endpoint (PromQL)",
-      "description": "Layer 1 – Metric: http_server_requests_seconds_bucket | Layer 2 – Label: job=user-service | Layer 3 – Range: [5m] | Layer 4 – Function: histogram_quantile at 0.50, 0.95, 0.99. A P99 spike on POST /api/auth/login indicates slow password hashing under load.",
+      "title": "HTTP Latency Percentiles \u2014 P50 / P95 / P99 per Endpoint (PromQL)",
+      "description": "Layer 1 \u2013 Metric: http_server_requests_seconds_bucket | Layer 2 \u2013 Label: job=user-service | Layer 3 \u2013 Range: [5m] | Layer 4 \u2013 Function: histogram_quantile at 0.50, 0.95, 0.99. A P99 spike on POST /api/auth/login indicates slow password hashing under load.",
       "type": "timeseries",
-      "gridPos": { "x": 0, "y": 16, "w": 12, "h": 8 },
-      "datasource": "Prometheus",
+      "gridPos": {
+        "x": 0,
+        "y": 16,
+        "w": 12,
+        "h": 8
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
       "targets": [
         {
           "expr": "histogram_quantile(0.50, sum by (le, uri) (rate(http_server_requests_seconds_bucket{job=\"user-service\"}[5m])))",
@@ -92,16 +149,26 @@
         }
       ],
       "fieldConfig": {
-        "defaults": { "unit": "s" }
+        "defaults": {
+          "unit": "s"
+        }
       }
     },
     {
       "id": 6,
-      "title": "JVM Health — Heap Usage, GC Pause Rate, Thread Count (PromQL)",
-      "description": "Layer 1 – Metrics: jvm_memory_used_bytes, jvm_gc_pause_seconds_sum, jvm_threads_live_threads | Layer 2 – Label: job=user-service, area=heap | Layer 3 – Range: [5m] for GC rate | Layer 4 – Function: sum (heap), rate (GC), gauge (threads). Memory pressure early warning — heap at 90 % triggers pre-emptive GC investigation.",
+      "title": "JVM Health \u2014 Heap Usage, GC Pause Rate, Thread Count (PromQL)",
+      "description": "Layer 1 \u2013 Metrics: jvm_memory_used_bytes, jvm_gc_pause_seconds_sum, jvm_threads_live_threads | Layer 2 \u2013 Label: job=user-service, area=heap | Layer 3 \u2013 Range: [5m] for GC rate | Layer 4 \u2013 Function: sum (heap), rate (GC), gauge (threads). Memory pressure early warning \u2014 heap at 90 % triggers pre-emptive GC investigation.",
       "type": "timeseries",
-      "gridPos": { "x": 12, "y": 16, "w": 12, "h": 8 },
-      "datasource": "Prometheus",
+      "gridPos": {
+        "x": 12,
+        "y": 16,
+        "w": 12,
+        "h": 8
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
       "targets": [
         {
           "expr": "sum(jvm_memory_used_bytes{job=\"user-service\", area=\"heap\"})",
@@ -121,7 +188,9 @@
         }
       ],
       "fieldConfig": {
-        "defaults": { "unit": "bytes" }
+        "defaults": {
+          "unit": "bytes"
+        }
       }
     }
   ]

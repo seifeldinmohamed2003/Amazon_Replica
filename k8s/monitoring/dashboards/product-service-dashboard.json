@@ -3,63 +3,112 @@
   "uid": "product-service-dashboard",
   "schemaVersion": 36,
   "version": 1,
-  "tags": ["product-service", "amazon"],
-  "time": { "from": "now-1h", "to": "now" },
+  "tags": [
+    "product-service",
+    "amazon"
+  ],
+  "time": {
+    "from": "now-1h",
+    "to": "now"
+  },
   "refresh": "30s",
   "panels": [
     {
       "id": 1,
-      "title": "Error Rate — Errors per Minute (LogQL)",
+      "title": "Error Rate \u2014 Errors per Minute (LogQL)",
       "description": "Counts ERROR-level log lines from product-service per minute. Spikes correlate with Elasticsearch/Neo4j failures, invalid product writes, or Feign call timeouts to order-service.",
       "type": "timeseries",
-      "gridPos": { "x": 0, "y": 0, "w": 12, "h": 8 },
-      "datasource": "Loki",
+      "gridPos": {
+        "x": 0,
+        "y": 0,
+        "w": 12,
+        "h": 8
+      },
+      "datasource": {
+        "type": "loki",
+        "uid": "loki"
+      },
       "targets": [
         {
-          "expr": "sum(count_over_time({app=\"amazon\", service=\"product-service\", level=\"ERROR\"} | json [1m]))",
-          "legendFormat": "Errors/min"
+          "expr": "sum(count_over_time({agent=\"loki4j\"} |~ \"(?i)(error|warn|exception|failed)\" [5m]))",
+          "legendFormat": "WARN+ERROR/5m"
         }
       ],
       "fieldConfig": {
-        "defaults": { "unit": "short" }
+        "defaults": {
+          "unit": "short"
+        }
       }
     },
     {
       "id": 2,
-      "title": "Cache Operation Logs — Hit / Miss Events (LogQL)",
-      "description": "Streams product-service log lines mentioning cache operations (Redis). High miss volume on product detail lookups indicates the Redis cache is not warm — S2-F12 caching may not be effective.",
-      "type": "timeseries",
-      "gridPos": { "x": 12, "y": 0, "w": 12, "h": 8 },
-      "datasource": "Loki",
+      "title": "Cache Operation Logs \u2014 Hit / Miss Events (LogQL)",
+      "description": "Streams product-service log lines mentioning cache operations (Redis). High miss volume on product detail lookups indicates the Redis cache is not warm \u2014 S2-F12 caching may not be effective.",
+      "type": "logs",
+      "gridPos": {
+        "x": 12,
+        "y": 0,
+        "w": 12,
+        "h": 8
+      },
+      "datasource": {
+        "type": "loki",
+        "uid": "loki"
+      },
       "targets": [
         {
-          "expr": "sum by (level) (count_over_time({app=\"amazon\", service=\"product-service\"} | json | message=~\"(?i).*(cache|redis|evict|miss|hit).*\" [5m]))",
+          "expr": "{agent=\"loki4j\"}",
           "legendFormat": "{{level}}"
         }
-      ]
+      ],
+      "options": {
+        "dedupStrategy": "none",
+        "showLabels": true,
+        "wrapLogMessage": true
+      }
     },
     {
       "id": 3,
-      "title": "Correlation ID Trace — Cross-Service Request Chains (LogQL)",
-      "description": "Streams product-service log lines carrying a correlationId. Useful for tracing a single user request through the product→order Feign call chain for language preference enrichment.",
+      "title": "Correlation ID Trace \u2014 Cross-Service Request Chains (LogQL)",
+      "description": "Streams product-service log lines carrying a correlationId. Useful for tracing a single user request through the product\u2192order Feign call chain for language preference enrichment.",
       "type": "logs",
-      "gridPos": { "x": 0, "y": 8, "w": 12, "h": 8 },
-      "datasource": "Loki",
+      "gridPos": {
+        "x": 0,
+        "y": 8,
+        "w": 12,
+        "h": 8
+      },
+      "datasource": {
+        "type": "loki",
+        "uid": "loki"
+      },
       "targets": [
         {
-          "expr": "{app=\"amazon\", service=\"product-service\"} | json | correlationId != \"\"",
-          "legendFormat": ""
+          "expr": "sum by (level) (count_over_time({agent=\"loki4j\"} |~ \"(?i)(cache|redis|evict|miss|hit|product)\" [5m]))",
+          "legendFormat": "{{level}}"
         }
       ],
-      "options": { "dedupStrategy": "none", "showLabels": true, "wrapLogMessage": true }
+      "options": {
+        "dedupStrategy": "none",
+        "showLabels": true,
+        "wrapLogMessage": true
+      }
     },
     {
       "id": 4,
-      "title": "HTTP Request Rate — Requests/s per Endpoint (PromQL)",
-      "description": "Layer 1 – Metric: http_server_requests_seconds_count | Layer 2 – Label: job=product-service | Layer 3 – Range: [5m] | Layer 4 – Function: rate → sum by uri. Reveals which product endpoints (search, detail, sales) are under the most load during peak hours.",
+      "title": "HTTP Request Rate \u2014 Requests/s per Endpoint (PromQL)",
+      "description": "Layer 1 \u2013 Metric: http_server_requests_seconds_count | Layer 2 \u2013 Label: job=product-service | Layer 3 \u2013 Range: [5m] | Layer 4 \u2013 Function: rate \u2192 sum by uri. Reveals which product endpoints (search, detail, sales) are under the most load during peak hours.",
       "type": "timeseries",
-      "gridPos": { "x": 12, "y": 8, "w": 12, "h": 8 },
-      "datasource": "Prometheus",
+      "gridPos": {
+        "x": 12,
+        "y": 8,
+        "w": 12,
+        "h": 8
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
       "targets": [
         {
           "expr": "sum by (uri) (rate(http_server_requests_seconds_count{job=\"product-service\"}[5m]))",
@@ -67,16 +116,26 @@
         }
       ],
       "fieldConfig": {
-        "defaults": { "unit": "reqps" }
+        "defaults": {
+          "unit": "reqps"
+        }
       }
     },
     {
       "id": 5,
-      "title": "HTTP Latency Percentiles — P50 / P95 / P99 (PromQL)",
-      "description": "Layer 1 – Metric: http_server_requests_seconds_bucket | Layer 2 – Label: job=product-service | Layer 3 – Range: [5m] | Layer 4 – Function: histogram_quantile at 0.50, 0.95, 0.99. P99 latency on GET /api/products/{id}/sales identifies slow Feign enrichment from order-service.",
+      "title": "HTTP Latency Percentiles \u2014 P50 / P95 / P99 (PromQL)",
+      "description": "Layer 1 \u2013 Metric: http_server_requests_seconds_bucket | Layer 2 \u2013 Label: job=product-service | Layer 3 \u2013 Range: [5m] | Layer 4 \u2013 Function: histogram_quantile at 0.50, 0.95, 0.99. P99 latency on GET /api/products/{id}/sales identifies slow Feign enrichment from order-service.",
       "type": "timeseries",
-      "gridPos": { "x": 0, "y": 16, "w": 12, "h": 8 },
-      "datasource": "Prometheus",
+      "gridPos": {
+        "x": 0,
+        "y": 16,
+        "w": 12,
+        "h": 8
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
       "targets": [
         {
           "expr": "histogram_quantile(0.50, sum by (le, uri) (rate(http_server_requests_seconds_bucket{job=\"product-service\"}[5m])))",
@@ -92,16 +151,26 @@
         }
       ],
       "fieldConfig": {
-        "defaults": { "unit": "s" }
+        "defaults": {
+          "unit": "s"
+        }
       }
     },
     {
       "id": 6,
-      "title": "Cache Hit / Miss Ratio — Redis Effectiveness (PromQL)",
-      "description": "Layer 1 – Metric: cache_gets_total | Layer 2 – Label: job=product-service, result=hit|miss | Layer 3 – Range: [5m] | Layer 4 – Function: rate → sum by result. Verifies S2-F12 caching is effective — a falling hit ratio means products are not being cached or cache is being evicted prematurely.",
+      "title": "Cache Hit / Miss Ratio \u2014 Redis Effectiveness (PromQL)",
+      "description": "Layer 1 \u2013 Metric: cache_gets_total | Layer 2 \u2013 Label: job=product-service, result=hit|miss | Layer 3 \u2013 Range: [5m] | Layer 4 \u2013 Function: rate \u2192 sum by result. Verifies S2-F12 caching is effective \u2014 a falling hit ratio means products are not being cached or cache is being evicted prematurely.",
       "type": "timeseries",
-      "gridPos": { "x": 12, "y": 16, "w": 12, "h": 8 },
-      "datasource": "Prometheus",
+      "gridPos": {
+        "x": 12,
+        "y": 16,
+        "w": 12,
+        "h": 8
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
       "targets": [
         {
           "expr": "sum by (result) (rate(cache_gets_total{job=\"product-service\"}[5m]))",
@@ -113,11 +182,21 @@
         }
       ],
       "fieldConfig": {
-        "defaults": { "unit": "reqps" },
+        "defaults": {
+          "unit": "reqps"
+        },
         "overrides": [
           {
-            "matcher": { "id": "byName", "options": "Hit Ratio" },
-            "properties": [{ "id": "unit", "value": "percentunit" }]
+            "matcher": {
+              "id": "byName",
+              "options": "Hit Ratio"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "percentunit"
+              }
+            ]
           }
         ]
       }

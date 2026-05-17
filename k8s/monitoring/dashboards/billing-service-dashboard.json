@@ -3,63 +3,112 @@
   "uid": "billing-service-dashboard",
   "schemaVersion": 36,
   "version": 1,
-  "tags": ["billing-service", "amazon"],
-  "time": { "from": "now-1h", "to": "now" },
+  "tags": [
+    "billing-service",
+    "amazon"
+  ],
+  "time": {
+    "from": "now-1h",
+    "to": "now"
+  },
   "refresh": "30s",
   "panels": [
     {
       "id": 1,
-      "title": "Error Rate — Errors per Minute (LogQL)",
+      "title": "Error Rate \u2014 Errors per Minute (LogQL)",
       "description": "Counts ERROR-level log lines from billing-service per minute. Spikes indicate payment processing failures, voucher validation errors, or saga compensation (refund) events.",
       "type": "timeseries",
-      "gridPos": { "x": 0, "y": 0, "w": 12, "h": 8 },
-      "datasource": "Loki",
+      "gridPos": {
+        "x": 0,
+        "y": 0,
+        "w": 12,
+        "h": 8
+      },
+      "datasource": {
+        "type": "loki",
+        "uid": "loki"
+      },
       "targets": [
         {
-          "expr": "sum(count_over_time({app=\"amazon\", service=\"billing-service\", level=\"ERROR\"} | json [1m]))",
-          "legendFormat": "Errors/min"
+          "expr": "sum(count_over_time({agent=\"loki4j\"} |~ \"(?i)(error|warn|exception|failed)\" [5m]))",
+          "legendFormat": "WARN+ERROR/5m"
         }
       ],
       "fieldConfig": {
-        "defaults": { "unit": "short" }
+        "defaults": {
+          "unit": "short"
+        }
       }
     },
     {
       "id": 2,
       "title": "Payment & Transaction Processing Logs (LogQL)",
       "description": "Counts billing-service log lines related to payment, transaction, and refund events over 5 m, grouped by level. WARN/ERROR entries during saga fan-out indicate compensation transactions or payment gateway timeouts.",
-      "type": "timeseries",
-      "gridPos": { "x": 12, "y": 0, "w": 12, "h": 8 },
-      "datasource": "Loki",
+      "type": "logs",
+      "gridPos": {
+        "x": 12,
+        "y": 0,
+        "w": 12,
+        "h": 8
+      },
+      "datasource": {
+        "type": "loki",
+        "uid": "loki"
+      },
       "targets": [
         {
-          "expr": "sum by (level) (count_over_time({app=\"amazon\", service=\"billing-service\"} | json | message=~\"(?i).*(payment|transaction|refund|voucher|saga|billing).*\" [5m]))",
+          "expr": "{agent=\"loki4j\"}",
           "legendFormat": "{{level}}"
         }
-      ]
+      ],
+      "options": {
+        "dedupStrategy": "none",
+        "showLabels": true,
+        "wrapLogMessage": true
+      }
     },
     {
       "id": 3,
-      "title": "Correlation ID Trace — Billing Request Chains (LogQL)",
+      "title": "Correlation ID Trace \u2014 Billing Request Chains (LogQL)",
       "description": "Streams billing-service log lines carrying a correlationId. Enables tracing a single order-completed event through payment creation, voucher application, and refund if saga rolls back.",
       "type": "logs",
-      "gridPos": { "x": 0, "y": 8, "w": 12, "h": 8 },
-      "datasource": "Loki",
+      "gridPos": {
+        "x": 0,
+        "y": 8,
+        "w": 12,
+        "h": 8
+      },
+      "datasource": {
+        "type": "loki",
+        "uid": "loki"
+      },
       "targets": [
         {
-          "expr": "{app=\"amazon\", service=\"billing-service\"} | json | correlationId != \"\"",
-          "legendFormat": ""
+          "expr": "sum by (level) (count_over_time({agent=\"loki4j\"} |~ \"(?i)(payment|transaction|refund|voucher|billing)\" [5m]))",
+          "legendFormat": "{{level}}"
         }
       ],
-      "options": { "dedupStrategy": "none", "showLabels": true, "wrapLogMessage": true }
+      "options": {
+        "dedupStrategy": "none",
+        "showLabels": true,
+        "wrapLogMessage": true
+      }
     },
     {
       "id": 4,
-      "title": "HTTP Request Rate — Requests/s per Endpoint (PromQL)",
-      "description": "Layer 1 – Metric: http_server_requests_seconds_count | Layer 2 – Label: job=billing-service | Layer 3 – Range: [5m] | Layer 4 – Function: rate → sum by uri. Shows load distribution across transaction creation, refund, and revenue-analytics endpoints.",
+      "title": "HTTP Request Rate \u2014 Requests/s per Endpoint (PromQL)",
+      "description": "Layer 1 \u2013 Metric: http_server_requests_seconds_count | Layer 2 \u2013 Label: job=billing-service | Layer 3 \u2013 Range: [5m] | Layer 4 \u2013 Function: rate \u2192 sum by uri. Shows load distribution across transaction creation, refund, and revenue-analytics endpoints.",
       "type": "timeseries",
-      "gridPos": { "x": 12, "y": 8, "w": 12, "h": 8 },
-      "datasource": "Prometheus",
+      "gridPos": {
+        "x": 12,
+        "y": 8,
+        "w": 12,
+        "h": 8
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
       "targets": [
         {
           "expr": "sum by (uri) (rate(http_server_requests_seconds_count{job=\"billing-service\"}[5m]))",
@@ -67,16 +116,26 @@
         }
       ],
       "fieldConfig": {
-        "defaults": { "unit": "reqps" }
+        "defaults": {
+          "unit": "reqps"
+        }
       }
     },
     {
       "id": 5,
-      "title": "Database Connection Pool — HikariCP Active vs Max (PromQL)",
-      "description": "Layer 1 – Metrics: hikaricp_connections_active, hikaricp_connections_max, hikaricp_connections_pending | Layer 2 – Label: job=billing-service | Layer 3 – Range: [5m] | Layer 4 – Function: max_over_time (active/pending), gauge (max). Pool exhaustion alert — billing-service using 10/10 connections during saga fan-out causes queuing and latency spikes.",
+      "title": "Database Connection Pool \u2014 HikariCP Active vs Max (PromQL)",
+      "description": "Layer 1 \u2013 Metrics: hikaricp_connections_active, hikaricp_connections_max, hikaricp_connections_pending | Layer 2 \u2013 Label: job=billing-service | Layer 3 \u2013 Range: [5m] | Layer 4 \u2013 Function: max_over_time (active/pending), gauge (max). Pool exhaustion alert \u2014 billing-service using 10/10 connections during saga fan-out causes queuing and latency spikes.",
       "type": "timeseries",
-      "gridPos": { "x": 0, "y": 16, "w": 12, "h": 8 },
-      "datasource": "Prometheus",
+      "gridPos": {
+        "x": 0,
+        "y": 16,
+        "w": 12,
+        "h": 8
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
       "targets": [
         {
           "expr": "max_over_time(hikaricp_connections_active{job=\"billing-service\"}[5m])",
@@ -92,22 +151,42 @@
         }
       ],
       "fieldConfig": {
-        "defaults": { "unit": "short" },
+        "defaults": {
+          "unit": "short"
+        },
         "overrides": [
           {
-            "matcher": { "id": "byName", "options": "Pool Max Size" },
-            "properties": [{ "id": "custom.lineStyle", "value": { "fill": "dash" } }]
+            "matcher": {
+              "id": "byName",
+              "options": "Pool Max Size"
+            },
+            "properties": [
+              {
+                "id": "custom.lineStyle",
+                "value": {
+                  "fill": "dash"
+                }
+              }
+            ]
           }
         ]
       }
     },
     {
       "id": 6,
-      "title": "RabbitMQ Throughput — Payment Saga Events (PromQL)",
-      "description": "Layer 1 – Metrics: rabbitmq_published_total, rabbitmq_consumed_total | Layer 2 – Label: job=billing-service | Layer 3 – Range: [5m] | Layer 4 – Function: rate → sum by queue. Consumer lag on billing.order-completed (published > consumed by > 100) means payment transactions are not being recorded fast enough — risk of duplicate charges on retry.",
+      "title": "RabbitMQ Throughput \u2014 Payment Saga Events (PromQL)",
+      "description": "Layer 1 \u2013 Metrics: rabbitmq_published_total, rabbitmq_consumed_total | Layer 2 \u2013 Label: job=billing-service | Layer 3 \u2013 Range: [5m] | Layer 4 \u2013 Function: rate \u2192 sum by queue. Consumer lag on billing.order-completed (published > consumed by > 100) means payment transactions are not being recorded fast enough \u2014 risk of duplicate charges on retry.",
       "type": "timeseries",
-      "gridPos": { "x": 12, "y": 16, "w": 12, "h": 8 },
-      "datasource": "Prometheus",
+      "gridPos": {
+        "x": 12,
+        "y": 16,
+        "w": 12,
+        "h": 8
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
       "targets": [
         {
           "expr": "sum by (queue) (rate(spring_rabbitmq_template_published_total{job=\"billing-service\"}[5m]))",
@@ -119,7 +198,9 @@
         }
       ],
       "fieldConfig": {
-        "defaults": { "unit": "mps" }
+        "defaults": {
+          "unit": "mps"
+        }
       }
     }
   ]
