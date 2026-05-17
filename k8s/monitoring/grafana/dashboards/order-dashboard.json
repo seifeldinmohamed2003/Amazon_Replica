@@ -1,0 +1,42 @@
+{
+  "title": "Order Service Dashboard",
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "10s",
+  "panels": [
+    {
+      "id": 1,
+      "title": "Order Service Errors",
+      "type": "timeseries",
+      "targets": [
+        {
+          "expr": "sum(count_over_time({app=\"amazon\", service=\"order-service\", level=\"ERROR\"} | json [1m]))",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "title": "Order Saga State Transitions",
+      "type": "logs",
+      "targets": [
+        {
+          "expr": "{app=\"amazon\", service=\"order-service\"} | json |~ \"transitioning|ORDER_DELIVERED|PAYMENT_PENDING|PAID|PAYMENT_FAILED|REFUNDED\"",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "title": "Order Feign Failures",
+      "type": "logs",
+      "targets": [
+        {
+          "expr": "{app=\"amazon\", service=\"order-service\"} | json |~ \"Feign|service temporarily unavailable|unavailable\"",
+          "refId": "A"
+        }
+      ]
+    }
+  ]
+}

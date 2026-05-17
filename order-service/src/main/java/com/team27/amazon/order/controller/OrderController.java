@@ -4,6 +4,10 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
+import com.team27.amazon.contracts.dto.OrderDTO;
+import com.team27.amazon.contracts.dto.OrderItemDTO;
+import com.team27.amazon.contracts.dto.OrderSummaryDTO;
+import com.team27.amazon.contracts.dto.ProductSalesAggregateDTO;
 import com.team27.amazon.order.dto.CoPurchaseRecordResponse;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.format.annotation.DateTimeFormat;
@@ -64,10 +68,13 @@ public class OrderController {
 
     // READ - GET /api/orders/{id}
     @GetMapping("/{id}")
-    public ResponseEntity<Order> getOrderById(@PathVariable Long id) {
-        Optional<Order> order = orderService.getOrderById(id);
-        return order.map(ResponseEntity::ok)
-                    .orElseGet(() -> ResponseEntity.notFound().build());
+    public ResponseEntity<OrderDTO> getOrderById(@PathVariable Long id) {
+        return ResponseEntity.ok(orderService.getOrderContractById(id));
+    }
+
+    @GetMapping("/{orderId}/items")
+    public ResponseEntity<List<OrderItemDTO>> getOrderItems(@PathVariable Long orderId) {
+        return ResponseEntity.ok(orderService.getOrderItemsForContract(orderId));
     }
 
     // READ - GET /api/orders/user/{userId}
@@ -75,6 +82,53 @@ public class OrderController {
     public ResponseEntity<List<Order>> getOrdersByUserId(@PathVariable Long userId) {
         List<Order> orders = orderService.getOrdersByUserId(userId);
         return ResponseEntity.ok(orders);
+    }
+
+    @GetMapping("/user/{userId}/summary")
+    public ResponseEntity<OrderSummaryDTO> getUserOrderSummary(@PathVariable Long userId) {
+        return ResponseEntity.ok(orderService.getUserOrderSummary(userId));
+    }
+
+    @GetMapping("/user/{userId}/active-count")
+    public ResponseEntity<Integer> getActiveOrderCount(@PathVariable Long userId) {
+        return ResponseEntity.ok(orderService.getActiveOrderCount(userId));
+    }
+
+    @GetMapping("/user/{userId}/count")
+    public ResponseEntity<Long> getTotalOrderCount(@PathVariable Long userId) {
+        return ResponseEntity.ok(orderService.getTotalOrderCount(userId));
+    }
+
+    @GetMapping("/product/{productId}/sales")
+    public ResponseEntity<ProductSalesAggregateDTO> getProductSales(
+            @PathVariable Long productId,
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate) {
+        return ResponseEntity.ok(orderService.getProductSales(productId, startDate, endDate));
+    }
+
+    @GetMapping("/product/{productId}/pending-count")
+    public ResponseEntity<Integer> getPendingOrderCountForProduct(@PathVariable Long productId) {
+        return ResponseEntity.ok(orderService.getPendingOrderCountForProduct(productId));
+    }
+
+    @GetMapping("/product/{productId}/units-sold")
+    public ResponseEntity<Long> getUnitsSold(@PathVariable Long productId) {
+        return ResponseEntity.ok(orderService.getUnitsSold(productId));
+    }
+
+    @GetMapping("/product/{productId}/recent-sales-count")
+    public ResponseEntity<Integer> getRecentSalesCount(
+            @PathVariable Long productId,
+            @RequestParam(defaultValue = "30") int days) {
+        return ResponseEntity.ok(orderService.getRecentSalesCount(productId, days));
+    }
+
+    @GetMapping("/user/{userId}/has-purchased/{productId}")
+    public ResponseEntity<Boolean> hasUserPurchasedProduct(
+            @PathVariable Long userId,
+            @PathVariable Long productId) {
+        return ResponseEntity.ok(orderService.hasUserPurchasedProduct(userId, productId));
     }
 
 
@@ -106,23 +160,6 @@ public class OrderController {
             @PathVariable OrderStatus status) {
         List<Order> orders = orderService.getOrdersByUserIdAndStatus(userId, status);
         return ResponseEntity.ok(orders);
-    }
-
-    @GetMapping("/user/{userId}/summary")
-    public ResponseEntity<OrderSummaryDTO> getUserOrderSummary(@PathVariable Long userId) {
-        return ResponseEntity.ok(orderService.getUserOrderSummary(userId));
-    }
-
-    // S1-F4
-    @GetMapping("/user/{userId}/active-count")
-    public ResponseEntity<Integer> getActiveOrderCount(@PathVariable Long userId) {
-        return ResponseEntity.ok(orderService.getActiveOrderCount(userId));
-    }
-
-    // S1-F9
-    @GetMapping("/user/{userId}/count")
-    public ResponseEntity<Long> getTotalOrderCount(@PathVariable Long userId) {
-        return ResponseEntity.ok(orderService.getTotalOrderCount(userId));
     }
 
     // READ - GET /api/orders/date-range?startDate=...&endDate=...
