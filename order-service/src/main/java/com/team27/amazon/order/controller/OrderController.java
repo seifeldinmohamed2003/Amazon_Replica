@@ -95,8 +95,8 @@ public class OrderController {
     }
 
     @GetMapping("/user/{userId}/count")
-    public ResponseEntity<Long> getDeliveredOrderCount(@PathVariable Long userId) {
-        return ResponseEntity.ok(orderService.getDeliveredOrderCount(userId));
+    public ResponseEntity<Long> getTotalOrderCount(@PathVariable Long userId) {
+        return ResponseEntity.ok(orderService.getTotalOrderCount(userId));
     }
 
     @GetMapping("/product/{productId}/sales")
@@ -160,23 +160,6 @@ public class OrderController {
             @PathVariable OrderStatus status) {
         List<Order> orders = orderService.getOrdersByUserIdAndStatus(userId, status);
         return ResponseEntity.ok(orders);
-    }
-
-    @GetMapping("/user/{userId}/summary")
-    public ResponseEntity<OrderSummaryDTO> getUserOrderSummary(@PathVariable Long userId) {
-        return ResponseEntity.ok(orderService.getUserOrderSummary(userId));
-    }
-
-    // S1-F4
-    @GetMapping("/user/{userId}/active-count")
-    public ResponseEntity<Integer> getActiveOrderCount(@PathVariable Long userId) {
-        return ResponseEntity.ok(orderService.getActiveOrderCount(userId));
-    }
-
-    // S1-F9
-    @GetMapping("/user/{userId}/count")
-    public ResponseEntity<Long> getTotalOrderCount(@PathVariable Long userId) {
-        return ResponseEntity.ok(orderService.getTotalOrderCount(userId));
     }
 
     // READ - GET /api/orders/date-range?startDate=...&endDate=...
