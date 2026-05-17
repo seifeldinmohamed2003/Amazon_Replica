@@ -9,7 +9,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 
 import java.util.List;
 
-@FeignClient(name = "product-service", url = "${feign.product-service.url}")
+@FeignClient(name = "product-service", url = "${FEIGN_PRODUCT_SERVICE_URL:http://product-service:8080}")
 public interface ProductServiceClient {
 
     @GetMapping("/api/products/{id}")

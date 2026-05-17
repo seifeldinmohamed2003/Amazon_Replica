@@ -1,81 +1,198 @@
-# Shipping Service Module
+# Shipping Service — S4-READ-DB Branch
+
+## Branch
+
+feat/M3/shipping/S4-READ-DB/55-8447
+
+---
 
 ## Overview
 
-This branch contains the integrated Shipping Service module for Milestone 2.
+This branch contains the Milestone 3 Shipping Service database isolation and integration preparation work.
 
-It combines the completed shipping feature work into one shared integration branch:
+The goal of this branch is to prepare shipping-service for:
 
-`feat/shipping/milestone-2`
+- Independent database ownership
+- Saga/event-driven integration
+- Feign-based synchronous communication
+- Shared infrastructure compatibility
+- Monitoring and observability support
 
-This branch includes the previously integrated shipping features and the Milestone 2 shipping features S4-F10, S4-F11, and S4-F12.
+---
 
-## Implemented Features
+## Included Work
 
-### Completed
+### Shipping Database Isolation
 
-- S4-F1: Get latest shipment by order ID
-- S4-F2: Create shipment for an order
-- S4-F3: Find nearby shipments
-- S4-F7: Purge old shipments
-- S4-F8: Carrier performance summary
-- S4-F9: Delayed shipments
-- S4-F10: Shipping analytics dashboard
-- S4-F11: Record shipment tracking event
-- S4-F12: Get shipment tracking timeline
+Configured dedicated Shipping Service database ownership.
 
-## Verified Milestone 2 Features
+Database:
 
-The following Milestone 2 features were manually tested and verified.
+amazondb-shipments
 
-### S4-F10: Shipping Analytics Dashboard
+PostgreSQL service:
 
-Verified behavior:
+shipping-postgres
 
-- Requires JWT authentication
-- Returns `401 Unauthorized` when token is missing
-- Returns `400 Bad Request` for invalid date range
-- Calculates total shipments
-- Calculates average delivery time
-- Calculates on-time delivery rate
-- Groups shipments by status
-- Calculates average delivery attempts
-- Stores analytics result in Redis cache
-- Logs `ANALYTICS_VIEWED` event in MongoDB
+Purpose:
 
-### S4-F11: Record Shipment Tracking Event
+- Prevent cross-service DB coupling
+- Ensure microservice isolation
+- Support independent deployments
 
-Verified behavior:
+---
 
-- Requires JWT authentication
-- Returns `401 Unauthorized` when token is missing
-- Creates tracking event successfully
-- Returns `201 Created`
-- Returns `404 Not Found` for invalid shipment ID
-- Stores tracking event in Cassandra
+### Shipping Integration Endpoints
 
-### S4-F12: Shipment Tracking Timeline
+Added:
 
-Verified behavior:
+GET /api/shipments/order/{orderId}/active
 
-- Requires JWT authentication
-- Returns shipment tracking timeline
-- Supports optional `startTime` and `endTime` filters
-- Returns `401 Unauthorized` when token is missing
-- Returns `404 Not Found` for invalid shipment ID
-- Stores timeline result in Redis cache
+Purpose:
 
-## Technical Notes
+- Active shipment lookup
+- Saga pre-check endpoint
+- Shipment validation
 
-- PostgreSQL is used for shipment records.
-- Redis is used for caching.
-- MongoDB is used for event logging.
-- Cassandra is used for shipment tracking events.
-- The shipping service runs internally on port `8080`.
-- In Docker Compose, shipping is exposed locally on port `8084`.
+Added:
 
-## Notes
+GET /api/shipments/order/{orderId}/ids
 
-This is a shared Milestone 2 shipping integration branch.
+Purpose:
 
-The branch should be used for the final Pull Request into `main` after all shipping Milestone 2 work is confirmed by the team.
+- Shipment aggregation support
+- Timeline lookup support
+- Future integration support
+
+---
+
+### Feign Integration
+
+Added:
+
+- OrderServiceClient
+- ProductServiceClient
+
+Purpose:
+
+- Replace direct DB communication
+- Support compile-time independence
+- Standardize service reads
+
+---
+
+### RabbitMQ Saga Preparation
+
+Prepared Shipping Service for event-driven communication.
+
+Integrated support for:
+
+- order.completed
+- order.cancelled
+- shipment.created
+- shipment.status-changed
+- shipment.cancelled
+
+Purpose:
+
+- Saga orchestration
+- Decoupled communication
+- Asynchronous side effects
+
+---
+
+### Logging Improvements
+
+Added structured logging preparation.
+
+Includes:
+
+- RabbitMQ event logs
+- Consumer logs
+- Publisher logs
+- Integration tracing support
+
+---
+
+### Monitoring Preparation
+
+Prepared monitoring support for:
+
+- Prometheus
+- Grafana
+- LogQL
+- logback-spring.xml
+
+---
+
+### Kubernetes Preparation
+
+Prepared stable Kubernetes naming compatibility.
+
+Services:
+
+- shipping-service
+- shipping-postgres
+- rabbitmq
+- prometheus
+- grafana
+- loki
+
+---
+
+## Build Verification
+
+Verified successfully:
+
+mvn -pl shipping-service -am clean package -DskipTests
+
+mvn clean compile -DskipTests
+
+Result:
+
+BUILD SUCCESS
+
+---
+
+## Communication Rules
+
+### Reads
+
+Use:
+
+Feign Clients
+
+### Side Effects
+
+Use:
+
+RabbitMQ Events
+
+### Forbidden
+
+Shipping Service must NOT:
+
+- Directly query another service database
+- Share PostgreSQL schemas
+- Depend directly on another service implementation
+
+---
+
+## Final Status
+
+✔ Shipping DB isolation prepared  
+✔ Dedicated shipment database configured  
+✔ Shared integration endpoints added  
+✔ Feign clients added  
+✔ RabbitMQ integration prepared  
+✔ Saga communication support added  
+✔ Logging improvements added  
+✔ Monitoring preparation added  
+✔ Kubernetes naming prepared  
+✔ Build verification passed
+
+---
+
+## Author
+
+Seif Elsherbiny — 55-8447

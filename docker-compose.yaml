@@ -153,6 +153,22 @@ services:
     depends_on:
         - postgres
 
+
+  rabbitmq:
+    image: rabbitmq:4-management
+    container_name: amazon-rabbitmq
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    environment:
+      RABBITMQ_DEFAULT_USER: guest
+      RABBITMQ_DEFAULT_PASS: guest
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
   shipping-service:
     build: ./shipping-service
     ports:
@@ -166,6 +182,15 @@ services:
       SPRING_DATA_REDIS_HOST: redis
       SPRING_DATA_REDIS_PORT: 6379
       SPRING_DATA_REDIS_PASSWORD: redispass
+      SPRING_RABBITMQ_HOST: rabbitmq
+      SPRING_RABBITMQ_PORT: 5672
+      SPRING_RABBITMQ_USERNAME: guest
+      SPRING_RABBITMQ_PASSWORD: guest
+      FEIGN_ORDER_SERVICE_URL: http://order-service:8080
+      FEIGN_PRODUCT_SERVICE_URL: http://product-service:8080
+      FEIGN_USER_SERVICE_URL: http://user-service:8080
+      FEIGN_BILLING_SERVICE_URL: http://billing-service:8080
+      FEIGN_SHIPPING_SERVICE_URL: http://shipping-service:8080
       JWT_SECRET: MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=
       JWT_EXPIRATION_MS: 86400000
     depends_on:
@@ -173,6 +198,10 @@ services:
         condition: service_completed_successfully
       postgres:
         condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+
+
   billing-service:
     build: ./billing-service
     ports:

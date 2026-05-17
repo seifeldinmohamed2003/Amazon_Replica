@@ -15,7 +15,7 @@ import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.cache.annotation.Caching;
 import org.springframework.http.HttpStatus;
-import org.springframework.jdbc.core.JdbcTemplate;
+
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
@@ -39,6 +39,12 @@ import com.team27.amazon.shipping.model.cassandra.ShipmentTrackingEvent;
 import com.team27.amazon.shipping.repository.ShipmentRepository;
 import com.team27.amazon.shipping.repository.ShipmentTrackingEventRepository;
 
+import com.team27.amazon.contracts.dto.OrderDTO;
+import com.team27.amazon.contracts.dto.ShipmentDTO;
+import com.team27.amazon.contracts.feign.OrderServiceClient;
+import com.team27.amazon.contracts.feign.ProductServiceClient;
+
+
 import jakarta.annotation.PostConstruct;
 
 @Service
@@ -46,7 +52,8 @@ public class ShipmentService extends AbstractEventSubject {
 
     private final ShipmentRepository shipmentRepository;
     private final ShipmentTrackingEventRepository shipmentTrackingEventRepository;
-    private final JdbcTemplate jdbcTemplate;
+    private final OrderServiceClient orderServiceClient;
+    private final ProductServiceClient productServiceClient;
     private final ObjectMapper objectMapper;
     private final ObjectArrayDtoAdapter objectArrayDtoAdapter;
 
@@ -57,13 +64,15 @@ public class ShipmentService extends AbstractEventSubject {
     public ShipmentService(
             ShipmentRepository shipmentRepository,
             ShipmentTrackingEventRepository shipmentTrackingEventRepository,
-            JdbcTemplate jdbcTemplate,
+            OrderServiceClient orderServiceClient,
+            ProductServiceClient productServiceClient,
             ObjectMapper objectMapper,
             ObjectArrayDtoAdapter objectArrayDtoAdapter
     ) {
         this.shipmentRepository = shipmentRepository;
         this.shipmentTrackingEventRepository = shipmentTrackingEventRepository;
-        this.jdbcTemplate = jdbcTemplate;
+        this.orderServiceClient = orderServiceClient;
+        this.productServiceClient = productServiceClient;
         this.objectMapper = objectMapper;
         this.objectArrayDtoAdapter = objectArrayDtoAdapter;
     }
@@ -158,13 +167,9 @@ public class ShipmentService extends AbstractEventSubject {
     // Cache key: shipping-service::S4-F1::{orderId}
     @Cacheable(cacheNames = RedisConfiguration.CACHE_S4_F1, key = "#orderId")
     public Shipment getLatestShipmentByOrderId(Long orderId) {
-        Integer orderCount = jdbcTemplate.queryForObject(
-                "SELECT COUNT(*) FROM orders WHERE id = ?",
-                Integer.class,
-                orderId
-        );
+        OrderDTO order = orderServiceClient.getOrder(orderId);
 
-        if (orderCount == null || orderCount == 0) {
+        if (order == null) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Order not found");
         }
 
@@ -183,13 +188,9 @@ public class ShipmentService extends AbstractEventSubject {
         @CacheEvict(cacheNames = RedisConfiguration.CACHE_S4_F10, allEntries = true)
     })
     public Shipment createShipmentForOrder(Long orderId, CreateShipmentRequest request) {
-        Integer orderCount = jdbcTemplate.queryForObject(
-                "SELECT COUNT(*) FROM orders WHERE id = ?",
-                Integer.class,
-                orderId
-        );
+        OrderDTO order = orderServiceClient.getOrder(orderId);
 
-        if (orderCount == null || orderCount == 0) {
+        if (order == null) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Order not found");
         }
 
@@ -211,6 +212,35 @@ public class ShipmentService extends AbstractEventSubject {
                 "status", savedShipment.getStatus() == null ? null : savedShipment.getStatus().name()
         )));
         return savedShipment;
+    }
+
+
+    public ShipmentDTO getActiveShipmentForOrder(Long orderId) {
+        OrderDTO order = orderServiceClient.getOrder(orderId);
+
+        if (order == null) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Order not found");
+        }
+
+        Shipment shipment = shipmentRepository.findActiveShipmentsForOrder(orderId)
+                .stream()
+                .findFirst()
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "No active shipment found for this order"));
+
+        return toShipmentDTO(shipment);
+    }
+
+    public List<Long> getShipmentIdsForOrder(Long orderId) {
+        OrderDTO order = orderServiceClient.getOrder(orderId);
+
+        if (order == null) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Order not found");
+        }
+
+        return shipmentRepository.findByOrderId(orderId)
+                .stream()
+                .map(Shipment::getId)
+                .toList();
     }
 
     // S4-F11: Record Shipment Tracking Event
@@ -634,6 +664,23 @@ public class ShipmentService extends AbstractEventSubject {
         }
 
         throw new IllegalArgumentException("Unsupported date value type: " + value.getClass().getName());
+    }
+
+
+    private ShipmentDTO toShipmentDTO(Shipment shipment) {
+        return new ShipmentDTO(
+                shipment.getId(),
+                shipment.getOrderId(),
+                shipment.getCarrier(),
+                shipment.getTrackingNumber(),
+                shipment.getStatus() == null ? null : shipment.getStatus().name(),
+                shipment.getEstimatedDelivery(),
+                shipment.getActualDelivery(),
+                shipment.getLastUpdate(),
+                shipment.getLatitude(),
+                shipment.getLongitude(),
+                shipment.getMetadata()
+        );
     }
 
     private Map<String, Object> shipmentEventPayload(Long shipmentId, Map<String, Object> details) {
