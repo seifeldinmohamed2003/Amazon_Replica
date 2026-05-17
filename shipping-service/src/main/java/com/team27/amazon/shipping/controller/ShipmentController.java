@@ -1,5 +1,7 @@
 package com.team27.amazon.shipping.controller;
 
+import com.team27.amazon.contracts.dto.ShipmentDTO;
+
 import com.team27.amazon.shipping.dto.BatchStatusUpdateRequest;
 import com.team27.amazon.shipping.dto.CarrierSummaryDTO;
 import com.team27.amazon.shipping.dto.CreateShipmentRequest;
@@ -79,6 +81,17 @@ public class ShipmentController {
     @GetMapping("/order/{orderId}/latest")
     public Shipment getLatestShipmentByOrderId(@PathVariable Long orderId) {
         return shipmentService.getLatestShipmentByOrderId(orderId);
+    }
+
+
+    @GetMapping("/order/{orderId}/active")
+    public ShipmentDTO getActiveShipmentForOrder(@PathVariable Long orderId) {
+        return shipmentService.getActiveShipmentForOrder(orderId);
+    }
+
+    @GetMapping("/order/{orderId}/ids")
+    public List<Long> getShipmentIdsForOrder(@PathVariable Long orderId) {
+        return shipmentService.getShipmentIdsForOrder(orderId);
     }
 
     @GetMapping("/nearby")

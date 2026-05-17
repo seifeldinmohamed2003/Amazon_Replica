@@ -9,10 +9,11 @@ import org.springframework.context.annotation.Configuration;
 public class FeignCorrelationConfig {
 
     @Bean
-    public RequestInterceptor correlationIdInterceptor() {
+    public RequestInterceptor correlationIdFeignInterceptor() {
         return template -> {
             String correlationId = MDC.get("correlationId");
-            if (correlationId != null) {
+
+            if (correlationId != null && !correlationId.isBlank()) {
                 template.header("X-Correlation-ID", correlationId);
             }
         };

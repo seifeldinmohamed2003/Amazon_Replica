@@ -9,6 +9,7 @@ import com.team27.amazon.billing.dto.RevenueReportDTO;
 import com.team27.amazon.billing.dto.TransactionDetailsDTO;
 import com.team27.amazon.billing.dto.UserTransactionSummaryDTO;
 import com.team27.amazon.billing.dto.VoucherUsageDTO;
+import com.team27.amazon.billing.messaging.PaymentEventPublisher;
 import com.team27.amazon.billing.model.AuditLogDocument;
 import com.team27.amazon.billing.model.DiscountType;
 import com.team27.amazon.billing.model.Transaction;
@@ -20,6 +21,10 @@ import com.team27.amazon.billing.repository.TransactionAuditRepository;
 import com.team27.amazon.billing.repository.TransactionRepository;
 import com.team27.amazon.billing.repository.TransactionVoucherRepository;
 import com.team27.amazon.billing.repository.VoucherRepository;
+import com.team27.amazon.contracts.feign.OrderServiceClient;
+import com.team27.amazon.contracts.feign.ProductServiceClient;
+import com.team27.amazon.contracts.feign.ShippingServiceClient;
+import com.team27.amazon.contracts.feign.UserServiceClient;
 import jakarta.transaction.Transactional;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
@@ -36,7 +41,6 @@ import com.team27.amazon.billing.strategy.RefundStrategy;
 import com.team27.amazon.billing.strategy.RefundStrategySelector;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -52,7 +56,8 @@ public class BillingService {
 
     @Autowired
     private TransactionAuditEventRepository auditRepository;
-
+    @Autowired
+    private OrderServiceClient orderServiceClient;
     @Autowired
     private RefundStrategySelector refundStrategySelector;
     @Autowired
@@ -71,6 +76,14 @@ public class BillingService {
     private MongoEventLogger mongoEventLogger;
     @Autowired
     private MongoDocumentAdapter mongoDocumentAdapter;
+    @Autowired
+    private UserServiceClient userServiceClient;
+    @Autowired
+    private ProductServiceClient productServiceClient;
+    @Autowired
+    private ShippingServiceClient shippingServiceClient;
+    @Autowired
+    private PaymentEventPublisher publisher;
 
     // ── Cache key constants ───────────────────────────────────────────────────
     private static final String SVC = "billing-service";
@@ -302,8 +315,9 @@ public class BillingService {
         UserTransactionSummaryDTO cached = cacheService.get(key, UserTransactionSummaryDTO.class);
         if (cached != null) return cached;
 
-        int userExists = transactionRepository.countUserById(userId);
-        if (userExists == 0) {
+        try {
+            userServiceClient.getUser(userId);
+        } catch (feign.FeignException.NotFound e) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "User not found");
         }
 
@@ -328,28 +342,44 @@ public class BillingService {
         return dto;
     }
 
+    public Map<String, Object> getUserTransactionTotal(Long userId, LocalDateTime start, LocalDateTime end) {
+        Double total = transactionRepository.sumTotalByUserAndDateRange(userId, start, end);
+        if (total == null) total = 0.0;
+        return Map.of("userId", userId, "total", total, "startDate", start, "endDate", end);
+    }
+
+    public Map<String, Object> getUserOrderCount(Long userId) {
+        Long count = transactionRepository.countOrdersByUser(userId);
+        if (count == null) count = 0L;
+        return Map.of("userId", userId, "orderCount", count);
+    }
+
+
+
     // ── S5-F4 ── Process Transaction for Order ────────────────────────────────
 
     @Transactional
     public Transaction processTransactionForOrder(Long orderId, String method,
                                                   String cardLastFour, boolean simulateFailure) {
-        String orderStatus = transactionRepository.findOrderStatusById(orderId);
-        if (orderStatus == null) {
+        com.team27.amazon.contracts.dto.OrderDTO order;
+        try {
+            order = orderServiceClient.getOrder(orderId);
+        } catch (feign.FeignException.NotFound e) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Order not found");
         }
-        if (!orderStatus.equals("DELIVERED")) {
+
+        if (!java.util.Set.of("DELIVERED", "PAYMENT_PENDING").contains(order.status())) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                    "Order must be DELIVERED to process payment");
+                    "Order is not in a payable state");
         }
 
-        int completedCount = transactionRepository.countCompletedTransactionsByOrderId(orderId);
-        if (completedCount > 0) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "already paid");
-        }
+        Transaction pendingTxn = transactionRepository
+                .findPendingTransactionByOrderId(orderId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
+                        "Transaction not initialized for this order — saga state may be corrupt"));
 
-        Double amount = transactionRepository.findOrderTotalAmountById(orderId);
-        Long userId = transactionRepository.findUserIdByOrderId(orderId);
-
+        Double amount = pendingTxn.getAmount();
+        Long userId = pendingTxn.getUserId();
         Map<String, Object> details = new HashMap<>();
         if (cardLastFour != null) details.put("cardLastFour", cardLastFour);
 
@@ -578,16 +608,70 @@ public class BillingService {
     public List<CategoryRevenueDTO> getCategoryRevenueReport() {
         String key = f10Key();
         List<CategoryRevenueDTO> cached = cacheService.get(key, new TypeReference<List<CategoryRevenueDTO>>() {});
-        if (cached != null) return cached;
-        List<Object[]> results = categoryRepository.getCategoryRevenueData();
-        List<CategoryRevenueDTO> report = results.stream()
-                .<CategoryRevenueDTO>map(row -> {
-                    String category = (row[0] != null) ? row[0].toString() : "Unknown";
-                    Double revenue = (row[1] != null) ? ((Number) row[1]).doubleValue() : 0.0;
+        // 1. Local query for COMPLETED/REFUNDED transactions
+        List<Transaction> transactions = transactionRepository
+                .searchTransactions(null, LocalDateTime.of(2000,1,1,0,0), LocalDateTime.now());
 
+        // 2. Per-request cache: productId → category
+        Map<Long, String> productCategoryCache = new HashMap<>();
+        Map<String, Double> grossRevenueMap = new HashMap<>();
+        Map<String, Double> refundedRevenueMap = new HashMap<>();
+        Map<String, Long> txCountMap = new HashMap<>();
+        Map<String, Long> refundCountMap = new HashMap<>();
+
+        for (Transaction txn : transactions) {
+            if (txn.getStatus() != TransactionStatus.COMPLETED &&
+                    txn.getStatus() != TransactionStatus.REFUNDED) continue;
+
+            try {
+                List<com.team27.amazon.contracts.dto.OrderItemDTO> items =
+                        orderServiceClient.getOrderItems(txn.getOrderId());
+
+                // Collect uncached productIds
+                List<Long> uncachedIds = items.stream()
+                        .map(com.team27.amazon.contracts.dto.OrderItemDTO::productId)
+                        .filter(pid -> !productCategoryCache.containsKey(pid))
+                        .collect(Collectors.toList());
+
+                // Batch fetch from product-service
+                if (!uncachedIds.isEmpty()) {
+                    List<com.team27.amazon.contracts.dto.ProductDTO> products =
+                            productServiceClient.getProductsBatch(uncachedIds);
+                    products.forEach(p -> productCategoryCache.put(p.id(), p.category()));
+                }
+
+                // Aggregate by category
+                for (com.team27.amazon.contracts.dto.OrderItemDTO item : items) {
+                    String category = productCategoryCache.getOrDefault(
+                            item.productId(), "Unknown");
+                    double lineTotal = item.priceAtPurchase() * item.quantity();
+
+                    if (txn.getStatus() == TransactionStatus.COMPLETED) {
+                        grossRevenueMap.merge(category, lineTotal, Double::sum);
+                        txCountMap.merge(category, 1L, Long::sum);
+                    } else {
+                        refundedRevenueMap.merge(category, lineTotal, Double::sum);
+                        refundCountMap.merge(category, 1L, Long::sum);
+                    }
+                }
+            } catch (feign.FeignException e) {
+                log.warn("Feign call failed for orderId {}: {}", txn.getOrderId(), e.getMessage());
+            }
+        }
+
+        // Build result
+        List<CategoryRevenueDTO> report = grossRevenueMap.entrySet().stream()
+                .map(entry -> {
+                    String cat = entry.getKey();
+                    double gross = entry.getValue();
+                    double refunded = refundedRevenueMap.getOrDefault(cat, 0.0);
                     return CategoryRevenueDTO.builder()
-                            .categoryName(category)
-                            .netRevenue(revenue)
+                            .categoryName(cat)
+                            .grossRevenue(gross)
+                            .refundedRevenue(refunded)
+                            .netRevenue(gross - refunded)
+                            .transactionCount(txCountMap.getOrDefault(cat, 0L))
+                            .refundCount(refundCountMap.getOrDefault(cat, 0L))
                             .build();
                 })
                 .collect(Collectors.toList());
@@ -602,6 +686,21 @@ public class BillingService {
         String key = f11Key(transactionId);
         List<AuditLogDTO> cached = cacheService.get(key, new TypeReference<List<AuditLogDTO>>() {});
         if (cached != null) return cached;
+
+        // Feign → shipping-service for shipment IDs
+        Long txnIdLong = Long.parseLong(transactionId);
+        Transaction txn = transactionRepository.findById(txnIdLong)
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND, "Transaction not found"));
+
+        List<Long> shipmentIds;
+        try {
+            shipmentIds = shippingServiceClient.getShipmentIdsForOrder(txn.getOrderId());
+        } catch (feign.FeignException e) {
+            log.warn("Could not fetch shipment IDs for order {}: {}", txn.getOrderId(), e.getMessage());
+            shipmentIds = java.util.Collections.emptyList();
+        }
+
         List<AuditLogDocument> logs = transactionAuditRepository.findAllByTransactionId(transactionId);
         List<AuditLogDTO> dtos = logs.stream()
                 .map(mongoDocumentAdapter::toDTO)
@@ -633,11 +732,19 @@ public class BillingService {
                 throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
                         "orderItemIds must not be empty when refundAll is false");
             }
-            int validCount = transactionRepository.countItemsBelongingToOrder(
-                    request.getOrderItemIds(), tx.getOrderId());
-            if (validCount != request.getOrderItemIds().size()) {
-                throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                        "Some orderItemIds do not belong to this transaction's order");
+            try {
+                List<com.team27.amazon.contracts.dto.OrderItemDTO> items =
+                        orderServiceClient.getOrderItems(tx.getOrderId());
+                java.util.Set<Long> validIds = items.stream()
+                        .map(com.team27.amazon.contracts.dto.OrderItemDTO::id)
+                        .collect(Collectors.toSet());
+                if (!validIds.containsAll(request.getOrderItemIds())) {
+                    throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                            "orderItemIds contain ids not in this order");
+                }
+            } catch (feign.FeignException e) {
+                throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE,
+                        "Order service temporarily unavailable");
             }
         }
 
@@ -688,6 +795,9 @@ public class BillingService {
         auditDetails.put("refundAmount", result.getAmount());
         auditDetails.put("refundedItemIds", result.getRefundedItemIds());
 
+
+
+
         writeAuditEvent(tx.getId(), "REFUNDED",
                 tx.getMethod().name(), result.getAmount(), auditDetails);
 
@@ -696,6 +806,15 @@ public class BillingService {
         cacheService.deleteByPattern(SVC + "::S5-F10::*");
         cacheService.deleteByPattern(SVC + "::S5-F11::*");
 
+        publisher.publishPaymentRefunded(
+                new com.team27.amazon.contracts.events.PaymentRefundedEvent(
+                        saved.getId(),
+                        saved.getOrderId(),
+                        result.getAmount()
+                )
+        );
+
         return saved;
     }
 }
+

@@ -5,12 +5,14 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
+import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.HttpStatusEntryPoint;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 
+@EnableWebSecurity
 @Configuration
 public class SecurityConfiguration {
 
@@ -26,10 +28,17 @@ public class SecurityConfiguration {
                         .authenticationEntryPoint(new HttpStatusEntryPoint(HttpStatus.UNAUTHORIZED))
                 )
                 .authorizeHttpRequests(authorize -> authorize
-                        .requestMatchers("/actuator/**").permitAll()
-                        .requestMatchers("/actuator/**").permitAll()
-                        .requestMatchers("/api/transactions/health", "/api/auth/register", "/api/auth/login").permitAll()
-                        .requestMatchers("/api/transactions/user/*/total", "/api/transactions/user/*/order-count").permitAll()
+                        .requestMatchers(
+                            "/api/transactions/health",
+                            "/api/auth/register",
+                            "/api/auth/login",
+                            "/actuator",
+                            "/actuator/**",
+                            "/actuator/health",
+                            "/actuator/prometheus",
+                            "/api/transactions/user/*/total",
+                            "/api/transactions/user/*/order-count"
+                        ).permitAll()
                         .anyRequest().authenticated())
                 .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
 

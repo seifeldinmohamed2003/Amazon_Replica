@@ -4,13 +4,15 @@ metadata:
   name: grafana-dashboards
   namespace: monitoring
 data:
-  dashboard-paths.yaml: |
-    dashboards:
-      user-service: /etc/grafana/provisioning/dashboards/user-dashboard.json
-      product-service: /etc/grafana/provisioning/dashboards/product-dashboard.json
-      order-service: /etc/grafana/provisioning/dashboards/order-dashboard.json
-      shipping-service: /etc/grafana/provisioning/dashboards/shipping-dashboard.json
-      billing-service: /etc/grafana/provisioning/dashboards/billing-dashboard.json
+  dashboards-provider.yaml: |
+    apiVersion: 1
+    providers:
+      - name: 'Amazon Dashboards'
+        orgId: 1
+        folder: 'Amazon'
+        type: file
+        options:
+          path: /etc/grafana/provisioning/dashboards
 
   # ---------------------------------------------------------------------------
   # USER SERVICE — 3 LogQL + 3 PromQL panels

@@ -2,9 +2,23 @@ spring:
   application:
     name: product-service
   datasource:
-    url: jdbc:postgresql://postgres:5432/amazondb
+    url: jdbc:postgresql://product-postgres:5432/amazondb-products
     username: postgres
     password: postgres
+  rabbitmq:
+    host: ${SPRING_RABBITMQ_HOST:rabbitmq}
+    port: ${SPRING_RABBITMQ_PORT:5672}
+    username: ${SPRING_RABBITMQ_USERNAME:guest}
+    password: ${SPRING_RABBITMQ_PASSWORD:guest}
+    listener:
+      simple:
+        acknowledge-mode: auto
+        default-requeue-rejected: false
+        retry:
+          enabled: true
+          initial-interval: 1000
+          max-retries: 3
+          multiplier: 2
   jpa:
     hibernate:
       ddl-auto: update
@@ -42,13 +56,15 @@ jwt:
 
 feign:
   order-service:
-    url: http://order-service:8080
+    url: ${FEIGN_ORDER_SERVICE_URL:http://order-service:8080}
+  user-service:
+    url: ${FEIGN_USER_SERVICE_URL:http://user-service:8080}
 
 management:
   endpoints:
     web:
       exposure:
-        include: "prometheus,health,info"
+        include: prometheus,health,info
   endpoint:
     health:
       show-details: always

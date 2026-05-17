@@ -121,6 +121,17 @@ public interface TransactionRepository extends JpaRepository<Transaction, Long> 
     """, nativeQuery = true)
     List<Object[]> findItemDetailsByIds(@Param("itemIds") List<Long> itemIds);
 
+    @Query("SELECT COALESCE(SUM(t.amount), 0.0) FROM Transaction t " +
+       "WHERE t.userId = :userId AND t.status = TransactionStatus.COMPLETED " +
+       "AND t.createdAt BETWEEN :start AND :end")
+    Double sumTotalByUserAndDateRange(@Param("userId") Long userId,
+                                  @Param("start") LocalDateTime start,
+                                  @Param("end") LocalDateTime end);
+
+    @Query("SELECT COUNT(t) FROM Transaction t WHERE t.userId = :userId " +
+           "AND t.status = TransactionStatus.COMPLETED")
+    Long countOrdersByUser(@Param("userId") Long userId);
+
 
 
 }

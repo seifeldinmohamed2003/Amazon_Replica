@@ -1,10 +1,12 @@
 spring:
   application:
     name: shipping-service
+
   datasource:
-    url: jdbc:postgresql://postgres:5432/amazondb
-    username: postgres
-    password: postgres
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://shipping-postgres:5432/amazondb-shipments}
+    username: ${SPRING_DATASOURCE_USERNAME:postgres}
+    password: ${SPRING_DATASOURCE_PASSWORD:postgres}
+
   jpa:
     hibernate:
       ddl-auto: update
@@ -12,14 +14,31 @@ spring:
     properties:
       hibernate:
         dialect: org.hibernate.dialect.PostgreSQLDialect
+
+  rabbitmq:
+    host: rabbitmq
+    port: 5672
+    username: guest
+    password: guest
+    listener:
+      simple:
+        acknowledge-mode: auto
+        default-requeue-rejected: false
+        retry:
+          enabled: true
+          initial-interval: 1000
+          max-attempts: 3
+
   cassandra:
     contact-points: cassandra
     port: 9042
     local-datacenter: datacenter1
     keyspace-name: amazonks
     schema-action: CREATE_IF_NOT_EXISTS
+
   mongodb:
     uri: mongodb://root:rootpass@mongo:27017/amazonmongo?authSource=admin
+
   data:
     mongodb:
       uri: mongodb://root:rootpass@mongo:27017/amazonmongo?authSource=admin
@@ -42,15 +61,16 @@ spring:
           max-attempts: 3
 server:
   port: 8080
+
 jwt:
   secret: ${JWT_SECRET:MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=}
   expiration: ${JWT_EXPIRATION_MS:86400000}
 
 feign:
   order-service:
-    url: http://order-service:8080
-  user-service:
-    url: http://user-service:8080
+    url: ${FEIGN_ORDER_SERVICE_URL:http://order-service:8080}
+  product-service:
+    url: ${FEIGN_PRODUCT_SERVICE_URL:http://product-service:8080}
 
 management:
   endpoints:
@@ -64,6 +84,8 @@ management:
     distribution:
       percentiles-histogram:
         http.server.requests: true
+    tags:
+      application: shipping-service
 
 loki:
   url: http://loki:3100/loki/api/v1/push

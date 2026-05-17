@@ -5,7 +5,7 @@ import org.springframework.web.bind.annotation.*;
 
 import java.math.BigDecimal;
 
-@FeignClient(name = "billing-service", url = "${feign.billing-service.url}")
+@FeignClient(name = "billing-service", url = "${FEIGN_BILLING_SERVICE_URL:http://billing-service:8080}")
 public interface BillingServiceClient {
 
     @GetMapping("/api/transactions/user/{userId}/total")

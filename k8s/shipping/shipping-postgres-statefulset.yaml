@@ -1,0 +1,35 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: shipping-postgres
+spec:
+  serviceName: shipping-postgres
+  replicas: 1
+  selector:
+    matchLabels:
+      app: shipping-postgres
+  template:
+    metadata:
+      labels:
+        app: shipping-postgres
+    spec:
+      containers:
+        - name: shipping-postgres
+          image: postgres:17
+          ports:
+            - containerPort: 5432
+          envFrom:
+            - secretRef:
+                name: shipping-postgres-secret
+          volumeMounts:
+            - name: shipping-postgres-data
+              mountPath: /var/lib/postgresql/data
+  volumeClaimTemplates:
+    - metadata:
+        name: shipping-postgres-data
+      spec:
+        accessModes:
+          - ReadWriteOnce
+        resources:
+          requests:
+            storage: 1Gi
