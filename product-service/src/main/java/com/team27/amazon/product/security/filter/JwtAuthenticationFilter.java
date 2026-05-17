@@ -42,7 +42,8 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         if (HttpMethod.OPTIONS.matches(request.getMethod())) {
             return true;
         }
-        return "/api/products/health".equals(path)
+        return path.startsWith("/actuator")
+                || "/api/products/health".equals(path)
             || "/error".equals(path)
                 || "/api/auth/register".equals(path)
                 || "/api/auth/login".equals(path);
