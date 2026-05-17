@@ -364,11 +364,9 @@ autoIndexProduct(savedProduct, "auto_crud_create");
             throw new InvalidReviewException("Rating must be between 1 and 5.");
         }
 
-        if (!productRepository.userExists(request.getUserId())) {
-            throw new UserNotFoundException(request.getUserId());
-        }
+        ensureUserExistsViaUserService(request.getUserId());
 
-        if (!productRepository.hasDeliveredPurchase(request.getUserId(), productId)) {
+        if (!hasPurchasedViaOrderService(request.getUserId(), productId)) {
             throw new InvalidReviewException("User must purchase this product before reviewing it.");
         }
 
@@ -407,8 +405,66 @@ ProductReview savedReview = savedProduct.getProductReviews()
             "rating", savedReview.getRating(),
             "details", reviewDetails(savedReview)
         )));
+        productEventPublisher.publishProductReviewAdded(
+                savedProduct.getId(),
+                savedReview.getId(),
+                savedReview.getUserId(),
+                savedReview.getRating()
+        );
+
+        productEventPublisher.publishProductRated(
+                savedProduct.getId(),
+                savedProduct.getRating(),
+                savedProduct.getTotalRatings()
+        );
         productCacheInvalidator.invalidateProductReview(savedReview.getId(), productId);
         return savedReview;
+    }
+    private void ensureUserExistsViaUserService(Long userId) {
+        if (userServiceClient == null) {
+            throw new ResponseStatusException(
+                    HttpStatus.SERVICE_UNAVAILABLE,
+                    "User service client is not available"
+            );
+        }
+
+        try {
+            UserDTO user = userServiceClient.getUser(userId);
+
+            if (user == null || user.id() == null) {
+                throw new UserNotFoundException(userId);
+            }
+        } catch (FeignException.NotFound ex) {
+            throw new UserNotFoundException(userId);
+        } catch (FeignException ex) {
+            log.warn("User service failed while checking user. userId={}", userId, ex);
+            throw new ResponseStatusException(
+                    HttpStatus.SERVICE_UNAVAILABLE,
+                    "User service temporarily unavailable"
+            );
+        }
+    }
+
+    private boolean hasPurchasedViaOrderService(Long userId, Long productId) {
+        if (orderServiceClient == null) {
+            throw new ResponseStatusException(
+                    HttpStatus.SERVICE_UNAVAILABLE,
+                    "Order service client is not available"
+            );
+        }
+
+        try {
+            return orderServiceClient.hasUserPurchasedProduct(userId, productId);
+        } catch (FeignException.NotFound ex) {
+            return false;
+        } catch (FeignException ex) {
+            log.warn("Order service failed while checking purchase. userId={}, productId={}",
+                    userId, productId, ex);
+            throw new ResponseStatusException(
+                    HttpStatus.SERVICE_UNAVAILABLE,
+                    "Order service temporarily unavailable"
+            );
+        }
     }
 
     @Transactional
