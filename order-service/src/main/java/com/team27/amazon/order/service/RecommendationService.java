@@ -1,9 +1,12 @@
 package com.team27.amazon.order.service;
 
-import com.team27.amazon.contracts.dto.ProductDTO;
-import com.team27.amazon.contracts.feign.ProductServiceClient;
-import com.team27.amazon.order.dto.ProductRecommendationDTO;
-import com.team27.amazon.order.repository.ProductRecommendationRepository;
+import java.math.BigDecimal;
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.cache.annotation.Cacheable;
@@ -12,9 +15,11 @@ import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
 
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
+import com.team27.amazon.contracts.dto.ProductDTO;
+import com.team27.amazon.contracts.feign.ProductServiceClient;
+import com.team27.amazon.order.dto.ProductRecommendationDTO;
+
+import feign.FeignException;
 
 @Service
 public class RecommendationService {
@@ -22,16 +27,13 @@ public class RecommendationService {
     private static final Logger log = LoggerFactory.getLogger(RecommendationService.class);
 
     private final Neo4jClient neo4jClient;
-    private final ProductRecommendationRepository productRecommendationRepository;
     private final ProductServiceClient productServiceClient;
 
     public RecommendationService(
             Neo4jClient neo4jClient,
-            ProductRecommendationRepository productRecommendationRepository,
             ProductServiceClient productServiceClient
     ) {
         this.neo4jClient = neo4jClient;
-        this.productRecommendationRepository = productRecommendationRepository;
         this.productServiceClient = productServiceClient;
     }
 
@@ -42,17 +44,7 @@ public class RecommendationService {
     public List<ProductRecommendationDTO> getRecommendations(Long productId, Integer limit) {
         int safeLimit = limit == null || limit <= 0 ? 5 : limit;
 
-        // S3-F12: Use ProductServiceClient to validate seed product exists (Feign read)
-        try {
-            ProductDTO seedProduct = productServiceClient.getProduct(productId);
-            if (seedProduct == null) {
-                throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Product not found");
-            }
-            log.info("Validated seed product {} for recommendations", productId);
-        } catch (Exception e) {
-            log.error("Failed to validate seed product: {}", e.getMessage());
-            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Product not found");
-        }
+        verifySeedProductExists(productId);
 
         List<Map<String, Object>> rows = neo4jClient.query("""
                     MATCH (seed:ProductNode {productId: $productId})-[r:BOUGHT_TOGETHER]-(rec:ProductNode)
@@ -86,45 +78,60 @@ public class RecommendationService {
             }
         }
 
-        // S3-F12: Use ProductServiceClient batch to enrich and filter by status (Feign read)
-        return enrichActiveProductsWithFeign(scores, safeLimit);
+        return enrichActiveProducts(scores)
+                .stream()
+                .limit(safeLimit)
+                .toList();
     }
 
-    /**
-     * S3-F12: Enrich recommendation scores with product data from ProductServiceClient
-     * and filter only ACTIVE products.
-     */
-    private List<ProductRecommendationDTO> enrichActiveProductsWithFeign(Map<Long, Long> scores, int limit) {
+    private void verifySeedProductExists(Long productId) {
+        try {
+            if (!productServiceClient.productExists(productId).exists()) {
+                throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Product not found");
+            }
+
+            log.info("Validated seed product {} for recommendations", productId);
+        } catch (FeignException.NotFound ex) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Product not found", ex);
+        } catch (FeignException ex) {
+            log.warn("product-service existence check failed for product {}: {}", productId, ex.getMessage());
+            throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, "Product service temporarily unavailable", ex);
+        }
+    }
+
+    private List<ProductRecommendationDTO> enrichActiveProducts(Map<Long, Long> scores) {
         if (scores == null || scores.isEmpty()) {
             return List.of();
         }
 
-        List<ProductDTO> products = productServiceClient.getProductsBatch(
-                List.copyOf(scores.keySet())
-        );
+        List<ProductDTO> products;
+        try {
+            products = productServiceClient.getProductsBatch(new ArrayList<>(scores.keySet()));
+        } catch (FeignException ex) {
+            log.warn("product-service batch recommendation enrichment failed for products {}: {}",
+                    scores.keySet(),
+                    ex.getMessage());
+            throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, "Product service temporarily unavailable", ex);
+        }
 
-        List<ProductRecommendationDTO> result = new java.util.ArrayList<>();
-
-        for (ProductDTO product : products) {
-            // Filter only ACTIVE products
-            if (product.status() != null && "ACTIVE".equalsIgnoreCase(product.status())) {
-                Long score = scores.get(product.id());
-                result.add(new ProductRecommendationDTO(
+        List<ProductRecommendationDTO> result = products.stream()
+                .filter(product -> "ACTIVE".equalsIgnoreCase(product.status()))
+                .filter(product -> scores.containsKey(product.id()))
+                .map(product -> new ProductRecommendationDTO(
                         product.id(),
                         product.name(),
                         product.category(),
                         product.brand(),
-                        product.price() != null ? java.math.BigDecimal.valueOf(product.price()) : null,
-                        score
-                ));
-                if (result.size() >= limit) {
-                    break;
-                }
-            }
-        }
+                        BigDecimal.valueOf(product.price() == null ? 0.0 : product.price()),
+                        scores.get(product.id())
+                ))
+                .sorted(Comparator.comparing(ProductRecommendationDTO::score).reversed())
+                .toList();
 
-        log.info("Enriched {} products from batch Feign, filtered to {} active products", 
-                 products.size(), result.size());
+        log.info("Enriched {} recommended products from product-service; {} active products returned",
+                products.size(),
+                result.size());
+
         return result;
     }
 }

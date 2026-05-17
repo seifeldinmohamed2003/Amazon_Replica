@@ -1,19 +1,24 @@
 spring:
   application:
     name: order-service
+
   datasource:
-    url: jdbc:postgresql://postgres:5432/amazondb
+    url: jdbc:postgresql://order-postgres:5432/amazondb-orders
     username: postgres
     password: postgres
+
   jpa:
     hibernate:
       ddl-auto: update
     show-sql: true
+
   h2:
     console:
       enabled: true
+
   mongodb:
     uri: mongodb://root:rootpass@mongo:27017/amazonmongo?authSource=admin
+
   data:
     redis:
       host: redis
@@ -21,14 +26,17 @@ spring:
       password: redispass
       timeout: 1s
       connect-timeout: 1s
+
   neo4j:
     uri: bolt://neo4j:7687
     username: neo4j
     password: neo4jpass
+
   cache:
     type: redis
     redis:
       time-to-live: 300000
+
   rabbitmq:
     host: rabbitmq
     port: 5672
@@ -41,12 +49,11 @@ spring:
         retry:
           enabled: true
           initial-interval: 1000
-          max-attempts: 3
+          max-retries: 3
+
 server:
   port: 8080
-jwt:
-  secret: ${JWT_SECRET:MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=}
-  expiration: ${JWT_EXPIRATION_MS:86400000}
+
 feign:
   order-service:
     url: http://order-service:8080
@@ -58,11 +65,16 @@ feign:
     url: http://shipping-service:8080
   billing-service:
     url: http://billing-service:8080
+
+jwt:
+  secret: ${JWT_SECRET:MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=}
+  expiration: ${JWT_EXPIRATION_MS:86400000}
+
 management:
   endpoints:
     web:
       exposure:
-        include: prometheus,health,info
+        include: "prometheus,health,info"
   metrics:
     distribution:
       percentiles-histogram:
