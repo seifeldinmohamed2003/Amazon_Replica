@@ -1,0 +1,51 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: user-postgres
+  namespace: amazon
+spec:
+  serviceName: user-postgres
+  replicas: 1
+  selector:
+    matchLabels:
+      app: user-postgres
+  template:
+    metadata:
+      labels:
+        app: user-postgres
+    spec:
+      containers:
+        - name: postgres
+          image: postgres:17
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 5432
+              name: postgres
+          envFrom:
+            - secretRef:
+                name: user-postgres-secret
+          volumeMounts:
+            - name: user-postgres-storage
+              mountPath: /var/lib/postgresql/data
+          readinessProbe:
+            exec:
+              command:
+                - sh
+                - -c
+                - pg_isready -U postgres -d amazondb-users
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            failureThreshold: 6
+          livenessProbe:
+            exec:
+              command:
+                - sh
+                - -c
+                - pg_isready -U postgres -d amazondb-users
+            initialDelaySeconds: 30
+            periodSeconds: 20
+            failureThreshold: 6
+      volumes:
+        - name: user-postgres-storage
+          persistentVolumeClaim:
+            claimName: user-postgres-pvc

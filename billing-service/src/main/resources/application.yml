@@ -2,7 +2,7 @@ spring:
   application:
     name: billing-service
   datasource:
-    url: jdbc:postgresql://postgres:5432/amazondb
+    url: jdbc:postgresql://billing-postgres:5432/amazondb-billing
     username: postgres
     password: postgres
   data:
@@ -10,7 +10,21 @@ spring:
       host: amazon-redis
       port: 6379
       password: redispass
-
+  rabbitmq:
+    host: rabbitmq
+    port: 5672
+    username: guest
+    password: guest
+    listener:
+      simple:
+        acknowledge-mode: auto
+        default-requeue-rejected: false
+        retry:
+          enabled: true
+          initial-interval: 1000
+          max-attempts: 3
+          multiplier: 1.5
+          max-interval: 10000
   jpa:
     hibernate:
       ddl-auto: update
@@ -19,10 +33,61 @@ spring:
       hibernate:
         dialect: org.hibernate.dialect.PostgreSQLDialect
   mongodb:
-    uri: mongodb://root:rootpass@mongo:27017/amazonmongo?authSource=admin
+    uri: mongodb://localhost:27017/amazonmongo
 
+
+feign:
+  billing-service:
+    url: http://localhost:8080
+  user-service:
+    url: http://user-service:8080
+  order-service:
+    url: http://order-service:8080
+  product-service:
+    url: http://product-service:8080
+  shipping-service:
+    url: http://shipping-service:8080
+
+  rabbitmq:
+    host: rabbitmq
+    port: 5672
+    username: guest
+    password: guest
+    listener:
+      simple:
+        acknowledge-mode: auto
+        default-requeue-rejected: false
+        retry:
+          enabled: true
+          initial-interval: 1000
+          max-attempts: 3
 server:
   port: 8080
+
 jwt:
   secret: ${JWT_SECRET:MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=}
   expiration: ${JWT_EXPIRATION_MS:86400000}
+
+feign:
+  order-service:
+    url: http://order-service:8080
+  user-service:
+    url: http://user-service:8080
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus
+  endpoint:
+    health:
+      show-details: always
+    prometheus:
+      enabled: true
+  metrics:
+    export:
+      prometheus:
+        enabled: true
+
+loki:
+  url: http://loki:3100/loki/api/v1/push

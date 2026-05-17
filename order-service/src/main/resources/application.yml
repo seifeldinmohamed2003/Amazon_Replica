@@ -49,8 +49,7 @@ spring:
         retry:
           enabled: true
           initial-interval: 1000
-          max-retries: 3
-
+          max-attempts: 3
 server:
   port: 8080
 
@@ -69,13 +68,32 @@ feign:
 jwt:
   secret: ${JWT_SECRET:MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=}
   expiration: ${JWT_EXPIRATION_MS:86400000}
+feign:
+  user-service:
+    url: http://user-service:8080
+  product-service:
+    url: http://product-service:8080
+  billing-service:
+    url: http://billing-service:8080
+  shipping-service:
+    url: http://shipping-service:8080
+cache:
+    type: redis
+    redis:
+      time-to-live: 300000
 
 management:
   endpoints:
     web:
       exposure:
         include: "prometheus,health,info"
+  endpoint:
+    health:
+      show-details: always
   metrics:
     distribution:
       percentiles-histogram:
         http.server.requests: true
+
+loki:
+  url: http://loki:3100/loki/api/v1/push

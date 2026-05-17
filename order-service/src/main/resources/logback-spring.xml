@@ -1,11 +1,12 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <configuration>
+
     <springProperty scope="context" name="APP_NAME" source="spring.application.name" defaultValue="order-service"/>
-    <springProperty scope="context" name="LOKI_URL" source="loki.url" defaultValue="http://loki.monitoring.svc.cluster.local:3100/loki/api/v1/push"/>
+    <springProperty scope="context" name="LOKI_URL" source="loki.url" defaultValue="http://loki:3100/loki/api/v1/push"/>
 
     <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
         <encoder>
-            <pattern>%d{yyyy-MM-dd HH:mm:ss.SSS} %-5level [%thread] [%X{correlationId}] %logger{36} - %msg%n</pattern>
+            <pattern>{"timestamp":"%d{yyyy-MM-dd'T'HH:mm:ss.SSS}","level":"%level","service":"${APP_NAME}","correlationId":"%X{correlationId}","thread":"%thread","logger":"%logger{36}","message":"%replace(%msg){'&quot;','\\&quot;'}"}%n</pattern>
         </encoder>
     </appender>
 
@@ -15,11 +16,12 @@
         </http>
         <format>
             <label>
-                <pattern>app=amazon,service=${APP_NAME},level=%level</pattern>
+                <pattern>app=amazon,service=${APP_NAME},host=${HOSTNAME},level=%level</pattern>
             </label>
             <message>
-                <pattern>{"timestamp":"%date{ISO8601}","level":"%level","service":"${APP_NAME}","logger":"%logger","thread":"%thread","message":"%replace(%msg){'&quot;','\\&quot;'}","correlationId":"%X{correlationId}","orderId":"%X{orderId}","userId":"%X{userId}","productId":"%X{productId}","shippingAddressId":"%X{shippingAddressId}","shipmentId":"%X{shipmentId}","transactionId":"%X{transactionId}","routingKey":"%X{routingKey}"}</pattern>
+                <pattern>{"timestamp":"%d{yyyy-MM-dd'T'HH:mm:ss.SSS}","level":"%level","service":"${APP_NAME}","correlationId":"%X{correlationId}","thread":"%thread","logger":"%logger{36}","message":"%replace(%msg){'&quot;','\\&quot;'}"}</pattern>
             </message>
+            <sortByTime>true</sortByTime>
         </format>
     </appender>
 
@@ -27,4 +29,5 @@
         <appender-ref ref="CONSOLE"/>
         <appender-ref ref="LOKI"/>
     </root>
+
 </configuration>

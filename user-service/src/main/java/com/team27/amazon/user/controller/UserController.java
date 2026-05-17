@@ -4,6 +4,7 @@ import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
 
+import com.team27.amazon.contracts.dto.UserDTO;
 import com.team27.amazon.user.dto.*;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
@@ -13,13 +14,14 @@ import org.springframework.web.bind.annotation.*;
 import com.team27.amazon.user.model.ShippingAddress;
 import com.team27.amazon.user.model.User;
 import com.team27.amazon.user.service.UserService;
-
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 @RestController
 @RequestMapping("/api/users")
 public class UserController {
 
     private final UserService userService;
-
+    private static final Logger log = LoggerFactory.getLogger(UserController.class);
     public UserController(UserService userService) {
         this.userService = userService;
     }
@@ -32,8 +34,8 @@ public class UserController {
     }
 
     @GetMapping("/{id}")
-    public ResponseEntity<User> getUserById(@PathVariable Long id) {
-        return ResponseEntity.ok(userService.getUserById(id));
+    public ResponseEntity<UserDTO> getUserById(@PathVariable Long id) {
+        return ResponseEntity.ok(userService.getUserAsDTO(id));
     }
 
     @GetMapping
@@ -67,9 +69,18 @@ public class UserController {
     }
 
     @GetMapping("/{userId}/addresses/{addressId}")
-    public ResponseEntity<ShippingAddress> getAddressById(@PathVariable Long userId,
-                                                           @PathVariable Long addressId) {
-        return ResponseEntity.ok(userService.getAddressById(userId, addressId));
+    public ResponseEntity<com.team27.amazon.contracts.dto.ShippingAddressDTO> getAddressById(
+            @PathVariable Long userId,
+            @PathVariable Long addressId) {
+
+        log.info("Received GET /api/users/{}/addresses/{}", userId, addressId);
+
+        com.team27.amazon.contracts.dto.ShippingAddressDTO address =
+                userService.getShippingAddressAsDTO(userId, addressId);
+
+        log.info("Returning 200 for GET /api/users/{}/addresses/{}", userId, addressId);
+
+        return ResponseEntity.ok(address);
     }
 
     @GetMapping("/{userId}/addresses")
@@ -156,7 +167,7 @@ public class UserController {
         return userService.getUserProfile(id);
     }
 
-    @GetMapping("/language")
+    @GetMapping("/preferences/language")
     public ResponseEntity<List<User>> getUsersByLanguage(
             @RequestParam String lang,
             @RequestParam(name = "minOrders", defaultValue = "0") long minOrders

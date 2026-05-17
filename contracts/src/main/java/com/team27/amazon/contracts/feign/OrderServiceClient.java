@@ -9,7 +9,7 @@ import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 
-@FeignClient(name = "order-service", url = "${feign.order-service.url}")
+@FeignClient(name = "order-service", url = "${FEIGN_ORDER_SERVICE_URL:http://order-service:8080}")
 public interface OrderServiceClient {
 
     @GetMapping("/api/orders/{orderId}")

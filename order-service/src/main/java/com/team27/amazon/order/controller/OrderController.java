@@ -23,6 +23,11 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import com.team27.amazon.order.dto.AddOrderItemRequest;
+import com.team27.amazon.order.model.Order;
+import com.team27.amazon.order.service.OrderService;
+import org.springframework.web.bind.annotation.*;
+
+import com.team27.amazon.contracts.dto.OrderSummaryDTO;
 import com.team27.amazon.order.dto.OrderAnalyticsDTO;
 import com.team27.amazon.order.dto.OrderAnalyticsDashboardDTO;
 import com.team27.amazon.order.dto.OrderDetailsDTO;
@@ -155,6 +160,23 @@ public class OrderController {
             @PathVariable OrderStatus status) {
         List<Order> orders = orderService.getOrdersByUserIdAndStatus(userId, status);
         return ResponseEntity.ok(orders);
+    }
+
+    @GetMapping("/user/{userId}/summary")
+    public ResponseEntity<OrderSummaryDTO> getUserOrderSummary(@PathVariable Long userId) {
+        return ResponseEntity.ok(orderService.getUserOrderSummary(userId));
+    }
+
+    // S1-F4
+    @GetMapping("/user/{userId}/active-count")
+    public ResponseEntity<Integer> getActiveOrderCount(@PathVariable Long userId) {
+        return ResponseEntity.ok(orderService.getActiveOrderCount(userId));
+    }
+
+    // S1-F9
+    @GetMapping("/user/{userId}/count")
+    public ResponseEntity<Long> getTotalOrderCount(@PathVariable Long userId) {
+        return ResponseEntity.ok(orderService.getTotalOrderCount(userId));
     }
 
     // READ - GET /api/orders/date-range?startDate=...&endDate=...

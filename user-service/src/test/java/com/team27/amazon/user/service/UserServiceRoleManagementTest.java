@@ -15,9 +15,11 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.util.Optional;
+import java.util.function.Supplier;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -54,6 +56,8 @@ class UserServiceRoleManagementTest {
 
         when(userRepository.findById(1L)).thenReturn(Optional.of(existing));
         when(userRepository.save(existing)).thenAnswer(invocation -> invocation.getArgument(0));
+        when(redisCacheService.getOrCompute(any(), any(Class.class), any(), any()))
+                .thenAnswer(inv -> ((Supplier<?>) inv.getArgument(3)).get());
 
         User updated = userService.changeUserRole(1L, Role.ADMIN);
 

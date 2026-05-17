@@ -4,40 +4,599 @@ metadata:
   name: grafana-dashboards
   namespace: monitoring
 data:
-  dashboard-paths.yaml: |
-    dashboards:
-      user-service: /etc/grafana/provisioning/dashboards/user-dashboard.json
-      product-service: /etc/grafana/provisioning/dashboards/product-dashboard.json
-      order-service: /etc/grafana/provisioning/dashboards/order-dashboard.json
-      shipping-service: /etc/grafana/provisioning/dashboards/shipping-dashboard.json
-      billing-service: /etc/grafana/provisioning/dashboards/billing-dashboard.json
+  dashboards-provider.yaml: |
+    apiVersion: 1
+    providers:
+      - name: 'Amazon Dashboards'
+        orgId: 1
+        folder: 'Amazon'
+        type: file
+        options:
+          path: /etc/grafana/provisioning/dashboards
 
+  # ---------------------------------------------------------------------------
+  # USER SERVICE — 3 LogQL + 3 PromQL panels
+  # ---------------------------------------------------------------------------
   user-dashboard.json: |
     {
       "title": "User Service Dashboard",
-      "panels": []
+      "uid": "user-service-dashboard",
+      "schemaVersion": 36,
+      "version": 1,
+      "tags": ["user-service", "amazon"],
+      "time": { "from": "now-1h", "to": "now" },
+      "refresh": "30s",
+      "panels": [
+        {
+          "id": 1,
+          "title": "Error Rate — Errors per Minute (LogQL)",
+          "description": "Counts ERROR-level log lines from user-service per minute. Spike indicates auth failures, validation errors, or upstream faults.",
+          "type": "timeseries",
+          "gridPos": { "x": 0, "y": 0, "w": 12, "h": 8 },
+          "datasource": "Loki",
+          "targets": [
+            {
+              "expr": "sum(count_over_time({app=\"amazon\", service=\"user-service\", level=\"ERROR\"} | json [1m]))",
+              "legendFormat": "Errors/min"
+            }
+          ]
+        },
+        {
+          "id": 2,
+          "title": "Correlation ID Trace — Request Chains (LogQL)",
+          "description": "Streams all user-service log lines that carry a correlationId, enabling end-to-end request tracing across services.",
+          "type": "logs",
+          "gridPos": { "x": 12, "y": 0, "w": 12, "h": 8 },
+          "datasource": "Loki",
+          "targets": [
+            {
+              "expr": "{app=\"amazon\", service=\"user-service\"} | json | correlationId != \"\"",
+              "legendFormat": ""
+            }
+          ],
+          "options": { "dedupStrategy": "none", "showLabels": true, "wrapLogMessage": true }
+        },
+        {
+          "id": 3,
+          "title": "Feign Call Outcomes — Success vs Failure (LogQL)",
+          "description": "Groups user-service log lines mentioning Feign by log level over 5 m. WARN/ERROR series reveal inter-service call degradation (e.g., calls to order-service for language preference).",
+          "type": "timeseries",
+          "gridPos": { "x": 0, "y": 8, "w": 12, "h": 8 },
+          "datasource": "Loki",
+          "targets": [
+            {
+              "expr": "sum by (level) (count_over_time({app=\"amazon\", service=\"user-service\"} | json | message=~\"(?i).*(feign|FeignClient|RemoteCall).*\" [5m]))",
+              "legendFormat": "{{level}}"
+            }
+          ]
+        },
+        {
+          "id": 4,
+          "title": "HTTP Request Rate — Requests/s per Endpoint (PromQL)",
+          "description": "Metric: http_server_requests_seconds_count | Label: job=user-service | Range: [5m] | Function: rate → sum by uri",
+          "type": "timeseries",
+          "gridPos": { "x": 12, "y": 8, "w": 12, "h": 8 },
+          "datasource": "Prometheus",
+          "targets": [
+            {
+              "expr": "sum by (uri) (rate(http_server_requests_seconds_count{job=\"user-service\"}[5m]))",
+              "legendFormat": "{{uri}}"
+            }
+          ],
+          "fieldConfig": { "defaults": { "unit": "reqps" } }
+        },
+        {
+          "id": 5,
+          "title": "HTTP Latency Percentiles — P50 / P95 / P99 (PromQL)",
+          "description": "Metric: http_server_requests_seconds_bucket | Label: job=user-service | Range: [5m] | Function: histogram_quantile at 0.50, 0.95, 0.99",
+          "type": "timeseries",
+          "gridPos": { "x": 0, "y": 16, "w": 12, "h": 8 },
+          "datasource": "Prometheus",
+          "targets": [
+            {
+              "expr": "histogram_quantile(0.50, sum by (le, uri) (rate(http_server_requests_seconds_bucket{job=\"user-service\"}[5m])))",
+              "legendFormat": "P50 {{uri}}"
+            },
+            {
+              "expr": "histogram_quantile(0.95, sum by (le, uri) (rate(http_server_requests_seconds_bucket{job=\"user-service\"}[5m])))",
+              "legendFormat": "P95 {{uri}}"
+            },
+            {
+              "expr": "histogram_quantile(0.99, sum by (le, uri) (rate(http_server_requests_seconds_bucket{job=\"user-service\"}[5m])))",
+              "legendFormat": "P99 {{uri}}"
+            }
+          ],
+          "fieldConfig": { "defaults": { "unit": "s" } }
+        },
+        {
+          "id": 6,
+          "title": "JVM Health — Heap Usage, GC Pause Rate, Thread Count (PromQL)",
+          "description": "Metrics: jvm_memory_used_bytes, jvm_gc_pause_seconds_sum, jvm_threads_live_threads | Label: job=user-service, area=heap | Range: [5m] for GC rate | Function: sum (heap), rate (GC), gauge (threads)",
+          "type": "timeseries",
+          "gridPos": { "x": 12, "y": 16, "w": 12, "h": 8 },
+          "datasource": "Prometheus",
+          "targets": [
+            {
+              "expr": "sum(jvm_memory_used_bytes{job=\"user-service\", area=\"heap\"})",
+              "legendFormat": "Heap Used"
+            },
+            {
+              "expr": "sum(jvm_memory_max_bytes{job=\"user-service\", area=\"heap\"})",
+              "legendFormat": "Heap Max"
+            },
+            {
+              "expr": "rate(jvm_gc_pause_seconds_sum{job=\"user-service\"}[5m])",
+              "legendFormat": "GC Pause Rate (s/s)"
+            },
+            {
+              "expr": "jvm_threads_live_threads{job=\"user-service\"}",
+              "legendFormat": "Live Threads"
+            }
+          ],
+          "fieldConfig": { "defaults": { "unit": "bytes" } }
+        }
+      ]
     }
 
+  # ---------------------------------------------------------------------------
+  # PRODUCT SERVICE — 3 LogQL + 3 PromQL panels
+  # ---------------------------------------------------------------------------
   product-dashboard.json: |
     {
       "title": "Product Service Dashboard",
-      "panels": []
+      "uid": "product-service-dashboard",
+      "schemaVersion": 36,
+      "version": 1,
+      "tags": ["product-service", "amazon"],
+      "time": { "from": "now-1h", "to": "now" },
+      "refresh": "30s",
+      "panels": [
+        {
+          "id": 1,
+          "title": "Error Rate — Errors per Minute (LogQL)",
+          "description": "Counts ERROR-level log lines from product-service per minute. Spikes correlate with Elasticsearch/Neo4j failures or Feign call timeouts to order-service.",
+          "type": "timeseries",
+          "gridPos": { "x": 0, "y": 0, "w": 12, "h": 8 },
+          "datasource": "Loki",
+          "targets": [
+            {
+              "expr": "sum(count_over_time({app=\"amazon\", service=\"product-service\", level=\"ERROR\"} | json [1m]))",
+              "legendFormat": "Errors/min"
+            }
+          ]
+        },
+        {
+          "id": 2,
+          "title": "Cache Operation Logs — Hit / Miss Events (LogQL)",
+          "description": "Counts product-service log lines mentioning Redis cache operations over 5 m by level. High miss volume indicates cache is not warm — S2-F12 caching may not be effective.",
+          "type": "timeseries",
+          "gridPos": { "x": 12, "y": 0, "w": 12, "h": 8 },
+          "datasource": "Loki",
+          "targets": [
+            {
+              "expr": "sum by (level) (count_over_time({app=\"amazon\", service=\"product-service\"} | json | message=~\"(?i).*(cache|redis|evict|miss|hit).*\" [5m]))",
+              "legendFormat": "{{level}}"
+            }
+          ]
+        },
+        {
+          "id": 3,
+          "title": "Correlation ID Trace — Cross-Service Request Chains (LogQL)",
+          "description": "Streams product-service log lines carrying a correlationId. Useful for tracing a single user request through the product→order Feign call chain for language preference enrichment.",
+          "type": "logs",
+          "gridPos": { "x": 0, "y": 8, "w": 12, "h": 8 },
+          "datasource": "Loki",
+          "targets": [
+            {
+              "expr": "{app=\"amazon\", service=\"product-service\"} | json | correlationId != \"\"",
+              "legendFormat": ""
+            }
+          ],
+          "options": { "dedupStrategy": "none", "showLabels": true, "wrapLogMessage": true }
+        },
+        {
+          "id": 4,
+          "title": "HTTP Request Rate — Requests/s per Endpoint (PromQL)",
+          "description": "Metric: http_server_requests_seconds_count | Label: job=product-service | Range: [5m] | Function: rate → sum by uri. Reveals which product endpoints (search, detail, sales) carry the most load.",
+          "type": "timeseries",
+          "gridPos": { "x": 12, "y": 8, "w": 12, "h": 8 },
+          "datasource": "Prometheus",
+          "targets": [
+            {
+              "expr": "sum by (uri) (rate(http_server_requests_seconds_count{job=\"product-service\"}[5m]))",
+              "legendFormat": "{{uri}}"
+            }
+          ],
+          "fieldConfig": { "defaults": { "unit": "reqps" } }
+        },
+        {
+          "id": 5,
+          "title": "HTTP Latency Percentiles — P50 / P95 / P99 (PromQL)",
+          "description": "Metric: http_server_requests_seconds_bucket | Label: job=product-service | Range: [5m] | Function: histogram_quantile at 0.50, 0.95, 0.99. P99 on GET /api/products/{id}/sales identifies slow Feign enrichment from order-service.",
+          "type": "timeseries",
+          "gridPos": { "x": 0, "y": 16, "w": 12, "h": 8 },
+          "datasource": "Prometheus",
+          "targets": [
+            {
+              "expr": "histogram_quantile(0.50, sum by (le, uri) (rate(http_server_requests_seconds_bucket{job=\"product-service\"}[5m])))",
+              "legendFormat": "P50 {{uri}}"
+            },
+            {
+              "expr": "histogram_quantile(0.95, sum by (le, uri) (rate(http_server_requests_seconds_bucket{job=\"product-service\"}[5m])))",
+              "legendFormat": "P95 {{uri}}"
+            },
+            {
+              "expr": "histogram_quantile(0.99, sum by (le, uri) (rate(http_server_requests_seconds_bucket{job=\"product-service\"}[5m])))",
+              "legendFormat": "P99 {{uri}}"
+            }
+          ],
+          "fieldConfig": { "defaults": { "unit": "s" } }
+        },
+        {
+          "id": 6,
+          "title": "Cache Hit / Miss Ratio — Redis Effectiveness (PromQL)",
+          "description": "Metric: cache_gets_total | Label: job=product-service, result=hit|miss | Range: [5m] | Function: rate → sum by result. Verifies S2-F12 caching — a falling hit ratio means products are not being cached or cache is being evicted prematurely.",
+          "type": "timeseries",
+          "gridPos": { "x": 12, "y": 16, "w": 12, "h": 8 },
+          "datasource": "Prometheus",
+          "targets": [
+            {
+              "expr": "sum by (result) (rate(cache_gets_total{job=\"product-service\"}[5m]))",
+              "legendFormat": "Cache {{result}}"
+            },
+            {
+              "expr": "sum(rate(cache_gets_total{job=\"product-service\", result=\"hit\"}[5m])) / sum(rate(cache_gets_total{job=\"product-service\"}[5m]))",
+              "legendFormat": "Hit Ratio"
+            }
+          ]
+        }
+      ]
     }
 
+  # ---------------------------------------------------------------------------
+  # ORDER SERVICE — 3 LogQL + 3 PromQL panels
+  # ---------------------------------------------------------------------------
   order-dashboard.json: |
     {
       "title": "Order Service Dashboard",
-      "panels": []
+      "uid": "order-service-dashboard",
+      "schemaVersion": 36,
+      "version": 1,
+      "tags": ["order-service", "amazon"],
+      "time": { "from": "now-1h", "to": "now" },
+      "refresh": "30s",
+      "panels": [
+        {
+          "id": 1,
+          "title": "Error Rate — Errors per Minute (LogQL)",
+          "description": "Counts ERROR-level log lines from order-service per minute. Spikes during checkout flows indicate saga rollback events, payment failures, or downstream service timeouts.",
+          "type": "timeseries",
+          "gridPos": { "x": 0, "y": 0, "w": 12, "h": 8 },
+          "datasource": "Loki",
+          "targets": [
+            {
+              "expr": "sum(count_over_time({app=\"amazon\", service=\"order-service\", level=\"ERROR\"} | json [1m]))",
+              "legendFormat": "Errors/min"
+            }
+          ]
+        },
+        {
+          "id": 2,
+          "title": "Saga / Event Processing Logs — Payment & Shipment Events (LogQL)",
+          "description": "Counts order-service log lines related to saga events over 5 m, grouped by level. WARN/ERROR entries indicate rollback or consumer lag in payment.saga-listener.",
+          "type": "timeseries",
+          "gridPos": { "x": 12, "y": 0, "w": 12, "h": 8 },
+          "datasource": "Loki",
+          "targets": [
+            {
+              "expr": "sum by (level) (count_over_time({app=\"amazon\", service=\"order-service\"} | json | message=~\"(?i).*(saga|payment|shipment|event|listener).*\" [5m]))",
+              "legendFormat": "{{level}}"
+            }
+          ]
+        },
+        {
+          "id": 3,
+          "title": "Correlation ID Trace — End-to-End Order Request Chains (LogQL)",
+          "description": "Streams order-service log lines that carry a correlationId, enabling full-path tracing from order creation through payment initiation to shipment scheduling.",
+          "type": "logs",
+          "gridPos": { "x": 0, "y": 8, "w": 12, "h": 8 },
+          "datasource": "Loki",
+          "targets": [
+            {
+              "expr": "{app=\"amazon\", service=\"order-service\"} | json | correlationId != \"\"",
+              "legendFormat": ""
+            }
+          ],
+          "options": { "dedupStrategy": "none", "showLabels": true, "wrapLogMessage": true }
+        },
+        {
+          "id": 4,
+          "title": "HTTP Request Rate — Requests/s per Endpoint (PromQL)",
+          "description": "Metric: http_server_requests_seconds_count | Label: job=order-service | Range: [5m] | Function: rate → sum by uri. Shows which order endpoints (create, estimate, status) are under the most load.",
+          "type": "timeseries",
+          "gridPos": { "x": 12, "y": 8, "w": 12, "h": 8 },
+          "datasource": "Prometheus",
+          "targets": [
+            {
+              "expr": "sum by (uri) (rate(http_server_requests_seconds_count{job=\"order-service\"}[5m]))",
+              "legendFormat": "{{uri}}"
+            }
+          ],
+          "fieldConfig": { "defaults": { "unit": "reqps" } }
+        },
+        {
+          "id": 5,
+          "title": "HTTP Latency Percentiles — P50 / P95 / P99 (PromQL)",
+          "description": "Metric: http_server_requests_seconds_bucket | Label: job=order-service | Range: [5m] | Function: histogram_quantile at 0.50, 0.95, 0.99. P99 spikes on POST /api/orders indicate slow saga orchestration or blocking Feign calls.",
+          "type": "timeseries",
+          "gridPos": { "x": 0, "y": 16, "w": 12, "h": 8 },
+          "datasource": "Prometheus",
+          "targets": [
+            {
+              "expr": "histogram_quantile(0.50, sum by (le, uri) (rate(http_server_requests_seconds_bucket{job=\"order-service\"}[5m])))",
+              "legendFormat": "P50 {{uri}}"
+            },
+            {
+              "expr": "histogram_quantile(0.95, sum by (le, uri) (rate(http_server_requests_seconds_bucket{job=\"order-service\"}[5m])))",
+              "legendFormat": "P95 {{uri}}"
+            },
+            {
+              "expr": "histogram_quantile(0.99, sum by (le, uri) (rate(http_server_requests_seconds_bucket{job=\"order-service\"}[5m])))",
+              "legendFormat": "P99 {{uri}}"
+            }
+          ],
+          "fieldConfig": { "defaults": { "unit": "s" } }
+        },
+        {
+          "id": 6,
+          "title": "RabbitMQ Throughput — Published vs Consumed per Queue (PromQL)",
+          "description": "Metrics: rabbitmq_published_total, rabbitmq_consumed_total | Label: job=order-service | Range: [5m] | Function: rate → sum by queue. Consumer lag on order.payment-initiated (published > consumed by > 100) reveals payment-service bottleneck.",
+          "type": "timeseries",
+          "gridPos": { "x": 12, "y": 16, "w": 12, "h": 8 },
+          "datasource": "Prometheus",
+          "targets": [
+            {
+              "expr": "sum by (queue) (rate(rabbitmq_published_total{job=\"order-service\"}[5m]))",
+              "legendFormat": "Published: {{queue}}"
+            },
+            {
+              "expr": "sum by (queue) (rate(rabbitmq_consumed_total{job=\"order-service\"}[5m]))",
+              "legendFormat": "Consumed: {{queue}}"
+            }
+          ],
+          "fieldConfig": { "defaults": { "unit": "mps" } }
+        }
+      ]
     }
 
+  # ---------------------------------------------------------------------------
+  # SHIPPING SERVICE — 3 LogQL + 3 PromQL panels
+  # ---------------------------------------------------------------------------
   shipping-dashboard.json: |
     {
       "title": "Shipping Service Dashboard",
-      "panels": []
+      "uid": "shipping-service-dashboard",
+      "schemaVersion": 36,
+      "version": 1,
+      "tags": ["shipping-service", "amazon"],
+      "time": { "from": "now-1h", "to": "now" },
+      "refresh": "30s",
+      "panels": [
+        {
+          "id": 1,
+          "title": "Error Rate — Errors per Minute (LogQL)",
+          "description": "Counts ERROR-level log lines from shipping-service per minute. Spikes indicate failed shipment creation from order-placed events, carrier API timeouts, or geo-lookup failures.",
+          "type": "timeseries",
+          "gridPos": { "x": 0, "y": 0, "w": 12, "h": 8 },
+          "datasource": "Loki",
+          "targets": [
+            {
+              "expr": "sum(count_over_time({app=\"amazon\", service=\"shipping-service\", level=\"ERROR\"} | json [1m]))",
+              "legendFormat": "Errors/min"
+            }
+          ]
+        },
+        {
+          "id": 2,
+          "title": "Shipment Status & Tracking Event Logs (LogQL)",
+          "description": "Counts shipping-service log lines related to status transitions and tracking events over 5 m, by level. WARN entries indicate delayed or stuck shipments requiring manual intervention.",
+          "type": "timeseries",
+          "gridPos": { "x": 12, "y": 0, "w": 12, "h": 8 },
+          "datasource": "Loki",
+          "targets": [
+            {
+              "expr": "sum by (level) (count_over_time({app=\"amazon\", service=\"shipping-service\"} | json | message=~\"(?i).*(shipment|tracking|status|carrier|dispatch|delivered|delayed).*\" [5m]))",
+              "legendFormat": "{{level}}"
+            }
+          ]
+        },
+        {
+          "id": 3,
+          "title": "Correlation ID Trace — Shipment Request Chains (LogQL)",
+          "description": "Streams shipping-service log lines carrying a correlationId. Enables tracing a single order-placed event through shipment creation, carrier assignment, and status update notifications.",
+          "type": "logs",
+          "gridPos": { "x": 0, "y": 8, "w": 12, "h": 8 },
+          "datasource": "Loki",
+          "targets": [
+            {
+              "expr": "{app=\"amazon\", service=\"shipping-service\"} | json | correlationId != \"\"",
+              "legendFormat": ""
+            }
+          ],
+          "options": { "dedupStrategy": "none", "showLabels": true, "wrapLogMessage": true }
+        },
+        {
+          "id": 4,
+          "title": "HTTP Request Rate — Requests/s per Endpoint (PromQL)",
+          "description": "Metric: http_server_requests_seconds_count | Label: job=shipping-service | Range: [5m] | Function: rate → sum by uri. Shows load across shipment creation, tracking, and nearby-lookup endpoints.",
+          "type": "timeseries",
+          "gridPos": { "x": 12, "y": 8, "w": 12, "h": 8 },
+          "datasource": "Prometheus",
+          "targets": [
+            {
+              "expr": "sum by (uri) (rate(http_server_requests_seconds_count{job=\"shipping-service\"}[5m]))",
+              "legendFormat": "{{uri}}"
+            }
+          ],
+          "fieldConfig": { "defaults": { "unit": "reqps" } }
+        },
+        {
+          "id": 5,
+          "title": "HTTP Latency Percentiles — P50 / P95 / P99 (PromQL)",
+          "description": "Metric: http_server_requests_seconds_bucket | Label: job=shipping-service | Range: [5m] | Function: histogram_quantile at 0.50, 0.95, 0.99. High P99 on GET /api/shipments/nearby indicates slow geo-spatial queries.",
+          "type": "timeseries",
+          "gridPos": { "x": 0, "y": 16, "w": 12, "h": 8 },
+          "datasource": "Prometheus",
+          "targets": [
+            {
+              "expr": "histogram_quantile(0.50, sum by (le, uri) (rate(http_server_requests_seconds_bucket{job=\"shipping-service\"}[5m])))",
+              "legendFormat": "P50 {{uri}}"
+            },
+            {
+              "expr": "histogram_quantile(0.95, sum by (le, uri) (rate(http_server_requests_seconds_bucket{job=\"shipping-service\"}[5m])))",
+              "legendFormat": "P95 {{uri}}"
+            },
+            {
+              "expr": "histogram_quantile(0.99, sum by (le, uri) (rate(http_server_requests_seconds_bucket{job=\"shipping-service\"}[5m])))",
+              "legendFormat": "P99 {{uri}}"
+            }
+          ],
+          "fieldConfig": { "defaults": { "unit": "s" } }
+        },
+        {
+          "id": 6,
+          "title": "RabbitMQ Throughput — Order Events Consumed per Queue (PromQL)",
+          "description": "Metrics: rabbitmq_published_total, rabbitmq_consumed_total | Label: job=shipping-service | Range: [5m] | Function: rate → sum by queue. Consumer lag on shipping.order-placed (published > consumed by > 100) means shipments are not created fast enough — saga fan-out bottleneck.",
+          "type": "timeseries",
+          "gridPos": { "x": 12, "y": 16, "w": 12, "h": 8 },
+          "datasource": "Prometheus",
+          "targets": [
+            {
+              "expr": "sum by (queue) (rate(rabbitmq_published_total{job=\"shipping-service\"}[5m]))",
+              "legendFormat": "Published: {{queue}}"
+            },
+            {
+              "expr": "sum by (queue) (rate(rabbitmq_consumed_total{job=\"shipping-service\"}[5m]))",
+              "legendFormat": "Consumed: {{queue}}"
+            }
+          ],
+          "fieldConfig": { "defaults": { "unit": "mps" } }
+        }
+      ]
     }
 
+  # ---------------------------------------------------------------------------
+  # BILLING SERVICE — 3 LogQL + 3 PromQL panels
+  # ---------------------------------------------------------------------------
   billing-dashboard.json: |
     {
       "title": "Billing Service Dashboard",
-      "panels": []
+      "uid": "billing-service-dashboard",
+      "schemaVersion": 36,
+      "version": 1,
+      "tags": ["billing-service", "amazon"],
+      "time": { "from": "now-1h", "to": "now" },
+      "refresh": "30s",
+      "panels": [
+        {
+          "id": 1,
+          "title": "Error Rate — Errors per Minute (LogQL)",
+          "description": "Counts ERROR-level log lines from billing-service per minute. Spikes indicate payment processing failures, voucher validation errors, or saga compensation (refund) events.",
+          "type": "timeseries",
+          "gridPos": { "x": 0, "y": 0, "w": 12, "h": 8 },
+          "datasource": "Loki",
+          "targets": [
+            {
+              "expr": "sum(count_over_time({app=\"amazon\", service=\"billing-service\", level=\"ERROR\"} | json [1m]))",
+              "legendFormat": "Errors/min"
+            }
+          ]
+        },
+        {
+          "id": 2,
+          "title": "Payment & Transaction Processing Logs (LogQL)",
+          "description": "Counts billing-service log lines related to payment, transaction, and refund events over 5 m, by level. WARN/ERROR entries during saga fan-out indicate compensation transactions or payment gateway timeouts.",
+          "type": "timeseries",
+          "gridPos": { "x": 12, "y": 0, "w": 12, "h": 8 },
+          "datasource": "Loki",
+          "targets": [
+            {
+              "expr": "sum by (level) (count_over_time({app=\"amazon\", service=\"billing-service\"} | json | message=~\"(?i).*(payment|transaction|refund|voucher|saga|billing).*\" [5m]))",
+              "legendFormat": "{{level}}"
+            }
+          ]
+        },
+        {
+          "id": 3,
+          "title": "Correlation ID Trace — Billing Request Chains (LogQL)",
+          "description": "Streams billing-service log lines carrying a correlationId. Enables tracing a single order-completed event through payment creation, voucher application, and refund if saga rolls back.",
+          "type": "logs",
+          "gridPos": { "x": 0, "y": 8, "w": 12, "h": 8 },
+          "datasource": "Loki",
+          "targets": [
+            {
+              "expr": "{app=\"amazon\", service=\"billing-service\"} | json | correlationId != \"\"",
+              "legendFormat": ""
+            }
+          ],
+          "options": { "dedupStrategy": "none", "showLabels": true, "wrapLogMessage": true }
+        },
+        {
+          "id": 4,
+          "title": "HTTP Request Rate — Requests/s per Endpoint (PromQL)",
+          "description": "Metric: http_server_requests_seconds_count | Label: job=billing-service | Range: [5m] | Function: rate → sum by uri. Shows load distribution across transaction creation, refund, and revenue-analytics endpoints.",
+          "type": "timeseries",
+          "gridPos": { "x": 12, "y": 8, "w": 12, "h": 8 },
+          "datasource": "Prometheus",
+          "targets": [
+            {
+              "expr": "sum by (uri) (rate(http_server_requests_seconds_count{job=\"billing-service\"}[5m]))",
+              "legendFormat": "{{uri}}"
+            }
+          ],
+          "fieldConfig": { "defaults": { "unit": "reqps" } }
+        },
+        {
+          "id": 5,
+          "title": "Database Connection Pool — HikariCP Active vs Max (PromQL)",
+          "description": "Metrics: hikaricp_connections_active, hikaricp_connections_max, hikaricp_connections_pending | Label: job=billing-service | Range: [5m] | Function: max_over_time (active/pending), gauge (max). Pool exhaustion — billing-service using 10/10 connections during saga fan-out causes queuing and latency spikes.",
+          "type": "timeseries",
+          "gridPos": { "x": 0, "y": 16, "w": 12, "h": 8 },
+          "datasource": "Prometheus",
+          "targets": [
+            {
+              "expr": "max_over_time(hikaricp_connections_active{job=\"billing-service\"}[5m])",
+              "legendFormat": "Active (max over 5m)"
+            },
+            {
+              "expr": "hikaricp_connections_max{job=\"billing-service\"}",
+              "legendFormat": "Pool Max Size"
+            },
+            {
+              "expr": "max_over_time(hikaricp_connections_pending{job=\"billing-service\"}[5m])",
+              "legendFormat": "Pending Acquisitions (max over 5m)"
+            }
+          ],
+          "fieldConfig": { "defaults": { "unit": "short" } }
+        },
+        {
+          "id": 6,
+          "title": "RabbitMQ Throughput — Payment Saga Events (PromQL)",
+          "description": "Metrics: rabbitmq_published_total, rabbitmq_consumed_total | Label: job=billing-service | Range: [5m] | Function: rate → sum by queue. Consumer lag on billing.order-completed (published > consumed by > 100) means payment transactions are not recorded fast enough — risk of duplicate charges on retry.",
+          "type": "timeseries",
+          "gridPos": { "x": 12, "y": 16, "w": 12, "h": 8 },
+          "datasource": "Prometheus",
+          "targets": [
+            {
+              "expr": "sum by (queue) (rate(rabbitmq_published_total{job=\"billing-service\"}[5m]))",
+              "legendFormat": "Published: {{queue}}"
+            },
+            {
+              "expr": "sum by (queue) (rate(rabbitmq_consumed_total{job=\"billing-service\"}[5m]))",
+              "legendFormat": "Consumed: {{queue}}"
+            }
+          ],
+          "fieldConfig": { "defaults": { "unit": "mps" } }
+        }
+      ]
     }

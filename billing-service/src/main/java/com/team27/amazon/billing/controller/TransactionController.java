@@ -64,6 +64,23 @@ public class TransactionController {
         return ResponseEntity.ok(billingService.getUserTransactionSummary(userId));
     }
 
+    // S1-F6
+    @GetMapping("/user/{userId}/total")
+    public ResponseEntity<java.math.BigDecimal> getUserTransactionTotal(
+            @PathVariable Long userId,
+            @RequestParam String startDate,
+            @RequestParam String endDate) {
+        return ResponseEntity.ok(billingService.getUserTransactionTotal(userId, startDate, endDate));
+    }
+
+    @GetMapping("/user/{userId}/order-count")
+    public ResponseEntity<Long> getUserOrderCount(
+            @PathVariable Long userId,
+            @RequestParam String startDate,
+            @RequestParam String endDate) {
+        return ResponseEntity.ok(billingService.getUserOrderCount(userId, startDate, endDate));
+    }
+
     @PostMapping("/order/{orderId}")
     public ResponseEntity<Transaction> processTransactionForOrder(
             @PathVariable Long orderId,
@@ -171,5 +188,21 @@ public class TransactionController {
             @RequestBody RefundRequest request) {
         return ResponseEntity.ok(billingService.processPartialRefund(id, request));
     }
+
+    @GetMapping("/user/{userId}/total")
+    public ResponseEntity<Map<String, Object>> getUserTransactionTotal(
+            @PathVariable Long userId,
+            @RequestParam String startDate,
+            @RequestParam String endDate) {
+        LocalDateTime start = LocalDate.parse(startDate).atStartOfDay();
+        LocalDateTime end = LocalDate.parse(endDate).atTime(23, 59, 59);
+        return ResponseEntity.ok(billingService.getUserTransactionTotal(userId, start, end));
+}
+
+    @GetMapping("/user/{userId}/order-count")
+    public ResponseEntity<Map<String, Object>> getUserOrderCount(
+            @PathVariable Long userId) {
+        return ResponseEntity.ok(billingService.getUserOrderCount(userId));
+}
 
 }

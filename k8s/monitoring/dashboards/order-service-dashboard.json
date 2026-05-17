@@ -1,0 +1,191 @@
+{
+  "title": "Order Service Dashboard",
+  "uid": "order-service-dashboard",
+  "schemaVersion": 36,
+  "version": 1,
+  "tags": [
+    "order-service",
+    "amazon"
+  ],
+  "time": {
+    "from": "now-1h",
+    "to": "now"
+  },
+  "refresh": "30s",
+  "panels": [
+    {
+      "id": 1,
+      "title": "Error Rate \u2014 Errors per Minute (LogQL)",
+      "description": "Counts ERROR-level log lines from order-service per minute. Spikes during checkout flows indicate saga rollback events, payment failures, or downstream service timeouts.",
+      "type": "timeseries",
+      "gridPos": {
+        "x": 0,
+        "y": 0,
+        "w": 12,
+        "h": 8
+      },
+      "datasource": {
+        "type": "loki",
+        "uid": "loki"
+      },
+      "targets": [
+        {
+          "expr": "sum(count_over_time({agent=\"loki4j\"} |~ \"(?i)(error|warn|exception|failed)\" [5m]))",
+          "legendFormat": "WARN+ERROR/5m"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        }
+      }
+    },
+    {
+      "id": 2,
+      "title": "Saga / Event Processing Logs \u2014 Payment & Shipment Events (LogQL)",
+      "description": "Counts order-service log lines related to saga events (payment, shipment, saga) over 5 m. Distinguishes INFO (normal flow) vs WARN/ERROR (rollback or consumer lag) to detect saga fan-out issues.",
+      "type": "logs",
+      "gridPos": {
+        "x": 12,
+        "y": 0,
+        "w": 12,
+        "h": 8
+      },
+      "datasource": {
+        "type": "loki",
+        "uid": "loki"
+      },
+      "targets": [
+        {
+          "expr": "{agent=\"loki4j\"}",
+          "legendFormat": "{{level}}"
+        }
+      ],
+      "options": {
+        "dedupStrategy": "none",
+        "showLabels": true,
+        "wrapLogMessage": true
+      }
+    },
+    {
+      "id": 3,
+      "title": "Correlation ID Trace \u2014 End-to-End Order Request Chains (LogQL)",
+      "description": "Streams order-service log lines that carry a correlationId, enabling full-path tracing from order creation through payment initiation to shipment scheduling.",
+      "type": "logs",
+      "gridPos": {
+        "x": 0,
+        "y": 8,
+        "w": 12,
+        "h": 8
+      },
+      "datasource": {
+        "type": "loki",
+        "uid": "loki"
+      },
+      "targets": [
+        {
+          "expr": "sum by (level) (count_over_time({agent=\"loki4j\"} |~ \"(?i)(saga|payment|shipment|event|listener|order)\" [5m]))",
+          "legendFormat": "{{level}}"
+        }
+      ],
+      "options": {
+        "dedupStrategy": "none",
+        "showLabels": true,
+        "wrapLogMessage": true
+      }
+    },
+    {
+      "id": 4,
+      "title": "HTTP Request Rate \u2014 Requests/s per Endpoint (PromQL)",
+      "description": "Layer 1 \u2013 Metric: http_server_requests_seconds_count | Layer 2 \u2013 Label: job=order-service | Layer 3 \u2013 Range: [5m] | Layer 4 \u2013 Function: rate \u2192 sum by uri. Shows which order-service endpoints (create, estimate, status) are under the most load during peak checkout hours.",
+      "type": "timeseries",
+      "gridPos": {
+        "x": 12,
+        "y": 8,
+        "w": 12,
+        "h": 8
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "expr": "sum by (uri) (rate(http_server_requests_seconds_count{job=\"order-service\"}[5m]))",
+          "legendFormat": "{{uri}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps"
+        }
+      }
+    },
+    {
+      "id": 5,
+      "title": "HTTP Latency Percentiles \u2014 P50 / P95 / P99 (PromQL)",
+      "description": "Layer 1 \u2013 Metric: http_server_requests_seconds_bucket | Layer 2 \u2013 Label: job=order-service | Layer 3 \u2013 Range: [5m] | Layer 4 \u2013 Function: histogram_quantile at 0.50, 0.95, 0.99. P99 spikes on POST /api/orders indicate slow saga orchestration or blocking Feign calls to product/user services.",
+      "type": "timeseries",
+      "gridPos": {
+        "x": 0,
+        "y": 16,
+        "w": 12,
+        "h": 8
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.50, sum by (le, uri) (rate(http_server_requests_seconds_bucket{job=\"order-service\"}[5m])))",
+          "legendFormat": "P50 {{uri}}"
+        },
+        {
+          "expr": "histogram_quantile(0.95, sum by (le, uri) (rate(http_server_requests_seconds_bucket{job=\"order-service\"}[5m])))",
+          "legendFormat": "P95 {{uri}}"
+        },
+        {
+          "expr": "histogram_quantile(0.99, sum by (le, uri) (rate(http_server_requests_seconds_bucket{job=\"order-service\"}[5m])))",
+          "legendFormat": "P99 {{uri}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s"
+        }
+      }
+    },
+    {
+      "id": 6,
+      "title": "RabbitMQ Throughput \u2014 Published vs Consumed per Queue (PromQL)",
+      "description": "Layer 1 \u2013 Metrics: rabbitmq_published_total, rabbitmq_consumed_total | Layer 2 \u2013 Label: job=order-service | Layer 3 \u2013 Range: [5m] | Layer 4 \u2013 Function: rate \u2192 sum by queue. Consumer lag (published count > consumed count by > 100 on order.payment-initiated) reveals payment-service processing bottleneck.",
+      "type": "timeseries",
+      "gridPos": {
+        "x": 12,
+        "y": 16,
+        "w": 12,
+        "h": 8
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "expr": "sum by (queue) (rate(spring_rabbitmq_template_published_total{job=\"order-service\"}[5m]))",
+          "legendFormat": "Published: {{queue}}"
+        },
+        {
+          "expr": "sum by (queue) (rate(spring_rabbitmq_listener_seconds_count{job=\"order-service\"}[5m]))",
+          "legendFormat": "Consumed: {{queue}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "mps"
+        }
+      }
+    }
+  ]
+}
