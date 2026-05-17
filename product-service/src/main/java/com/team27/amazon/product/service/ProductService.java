@@ -516,14 +516,31 @@ ProductReview savedReview = savedProduct.getProductReviews()
                 cacheKey,
                 Duration.ofMinutes(10),
                 new TypeReference<List<TopProductDTO>>() {},
-                () -> {
-                    List<Object[]> rows = productRepository.findTopRatedProducts(limit);
-
-                    return rows.stream()
-                            .map(objectArrayDtoAdapter::toTopProductDTO)
-                            .toList();
-                }
+                () -> productRepository.findTopRatedProductEntities(limit)
+                        .stream()
+                        .map(product -> TopProductDTO.builder()
+                                .productId(product.getId())
+                                .name(product.getName())
+                                .rating(product.getRating())
+                                .totalSales(getUnitsSoldFromOrderService(product.getId()))
+                                .build())
+                        .toList()
         );
+    }
+
+    private Long getUnitsSoldFromOrderService(Long productId) {
+        if (orderServiceClient == null) {
+            return 0L;
+        }
+
+        try {
+            return orderServiceClient.getUnitsSold(productId);
+        } catch (FeignException.NotFound ex) {
+            return 0L;
+        } catch (FeignException ex) {
+            log.warn("Order service failed while loading units sold. productId={}", productId, ex);
+            return 0L;
+        }
     }
 
         public ProductCatalogDashboardDTO getProductCatalogDashboard() {
