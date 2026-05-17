@@ -6,6 +6,7 @@ import org.springframework.cloud.openfeign.EnableFeignClients;
 
 @EnableFeignClients(basePackages = "com.team27.amazon.contracts.feign")
 @SpringBootApplication
+@EnableFeignClients(basePackages = "com.team27.amazon.contracts.feign")
 public class ShippingServiceApplication {
 
     public static void main(String[] args) {
