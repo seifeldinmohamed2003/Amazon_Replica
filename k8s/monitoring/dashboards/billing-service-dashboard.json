@@ -87,8 +87,8 @@
           "legendFormat": "Pool Max Size"
         },
         {
-          "expr": "max_over_time(hikaricp_connections_pending{job=\"billing-service\"}[5m])",
-          "legendFormat": "Pending Acquisitions (max over 5m)"
+          "expr": "max_over_time(hikaricp_connections_timeout_total{job=\"billing-service\"}[5m])",
+          "legendFormat": "Connection Timeouts (max over 5m)"
         }
       ],
       "fieldConfig": {
@@ -110,11 +110,11 @@
       "datasource": "Prometheus",
       "targets": [
         {
-          "expr": "sum by (queue) (rate(rabbitmq_published_total{job=\"billing-service\"}[5m]))",
+          "expr": "sum by (queue) (rate(spring_rabbitmq_template_published_total{job=\"billing-service\"}[5m]))",
           "legendFormat": "Published: {{queue}}"
         },
         {
-          "expr": "sum by (queue) (rate(rabbitmq_consumed_total{job=\"billing-service\"}[5m]))",
+          "expr": "sum by (queue) (rate(spring_rabbitmq_listener_seconds_count{job=\"billing-service\"}[5m]))",
           "legendFormat": "Consumed: {{queue}}"
         }
       ],

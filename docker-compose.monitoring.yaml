@@ -1,3 +1,7 @@
+networks:
+  amazon-net:
+    external: true
+
 services:
   loki:
     image: grafana/loki:3.4.2
@@ -8,6 +12,8 @@ services:
     volumes:
       - ./monitoring/loki/loki-config.yaml:/etc/loki/config.yaml:ro
       - loki-data:/var/loki
+    networks:
+      - amazon-net
     healthcheck:
       test: ["CMD-SHELL", "wget -q --spider http://localhost:3100/ready || exit 1"]
       interval: 10s
@@ -29,6 +35,8 @@ services:
     volumes:
       - ./monitoring/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
       - prometheus-data:/prometheus
+    networks:
+      - amazon-net
     depends_on:
       - loki
     healthcheck:
@@ -51,6 +59,8 @@ services:
       - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
       - ./k8s/monitoring/dashboards:/etc/grafana/dashboards:ro
       - grafana-data:/var/lib/grafana
+    networks:
+      - amazon-net
     depends_on:
       loki:
         condition: service_healthy

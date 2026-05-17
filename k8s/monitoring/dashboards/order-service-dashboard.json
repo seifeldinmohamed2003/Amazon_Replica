@@ -104,11 +104,11 @@
       "datasource": "Prometheus",
       "targets": [
         {
-          "expr": "sum by (queue) (rate(rabbitmq_published_total{job=\"order-service\"}[5m]))",
+          "expr": "sum by (queue) (rate(spring_rabbitmq_template_published_total{job=\"order-service\"}[5m]))",
           "legendFormat": "Published: {{queue}}"
         },
         {
-          "expr": "sum by (queue) (rate(rabbitmq_consumed_total{job=\"order-service\"}[5m]))",
+          "expr": "sum by (queue) (rate(spring_rabbitmq_listener_seconds_count{job=\"order-service\"}[5m]))",
           "legendFormat": "Consumed: {{queue}}"
         }
       ],
