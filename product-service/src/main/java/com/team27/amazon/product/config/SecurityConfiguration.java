@@ -30,7 +30,8 @@ public SecurityFilterChain securityFilterChain(HttpSecurity http, JwtAuthenticat
                             response.sendError(HttpStatus.FORBIDDEN.value(), "Forbidden"))
             )
             .authorizeHttpRequests(authorize -> authorize
-                    .requestMatchers("/error").permitAll()
+                    .requestMatchers("/actuator/**").permitAll()
+                        .requestMatchers("/error").permitAll()
                     .requestMatchers("/actuator/**").permitAll()
                     .requestMatchers("/api/products/health").permitAll()
                     .requestMatchers("/api/auth/register", "/api/auth/login").permitAll()
