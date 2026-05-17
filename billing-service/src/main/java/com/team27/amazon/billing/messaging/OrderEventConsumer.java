@@ -1,5 +1,6 @@
 package com.team27.amazon.billing.messaging;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.team27.amazon.billing.model.Transaction;
 import com.team27.amazon.billing.model.TransactionMethod;
 import com.team27.amazon.billing.model.TransactionStatus;
@@ -10,6 +11,7 @@ import com.team27.amazon.contracts.events.PaymentInitiatedEvent;
 import com.team27.amazon.contracts.events.PaymentRefundedEvent;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.amqp.core.Message;
 import org.springframework.amqp.rabbit.annotation.RabbitListener;
 import org.springframework.messaging.handler.annotation.Headers;
 import org.springframework.stereotype.Component;
@@ -24,37 +26,49 @@ public class OrderEventConsumer {
 
     private final TransactionRepository transactionRepository;
     private final PaymentEventPublisher paymentEventPublisher;
+    private final ObjectMapper objectMapper = new ObjectMapper();
 
     @RabbitListener(queues = "payment.saga-listener")
     public void handleOrderEvent(Object event, @Headers Map<String, Object> headers) {
         String routingKey = (String) headers.get("amqp_receivedRoutingKey");
         log.info("Routing key: {}, event type: {}", routingKey, event.getClass().getName());
 
+        Map<?, ?> map = null;
+
+        if (event instanceof Message msg) {
+            try {
+                map = objectMapper.readValue(msg.getBody(), Map.class);
+            } catch (Exception e) {
+                log.error("Failed to parse Message body: {}", e.getMessage());
+                return;
+            }
+        } else if (event instanceof Map<?, ?> m) {
+            map = m;
+        }
+
         if ("order.completed".equals(routingKey)) {
             if (event instanceof OrderCompletedEvent e) {
                 handleOrderCompleted(e);
-            } else if (event instanceof Map<?, ?> map) {
-                OrderCompletedEvent e = new OrderCompletedEvent(
+            } else if (map != null) {
+                handleOrderCompleted(new OrderCompletedEvent(
                         toLong(map.get("orderId")),
                         toLong(map.get("userId")),
                         toLong(map.get("shippingAddressId")),
                         toDouble(map.get("totalAmount"))
-                );
-                handleOrderCompleted(e);
+                ));
             } else {
                 log.warn("Unknown event type for order.completed: {}", event.getClass().getName());
             }
         } else if ("order.cancelled".equals(routingKey)) {
             if (event instanceof OrderCancelledEvent e) {
                 handleOrderCancelled(e);
-            } else if (event instanceof Map<?, ?> map) {
-                OrderCancelledEvent e = new OrderCancelledEvent(
+            } else if (map != null) {
+                handleOrderCancelled(new OrderCancelledEvent(
                         toLong(map.get("orderId")),
                         toLong(map.get("userId")),
                         null,
                         (String) map.get("reason")
-                );
-                handleOrderCancelled(e);
+                ));
             } else {
                 log.warn("Unknown event type for order.cancelled: {}", event.getClass().getName());
             }
