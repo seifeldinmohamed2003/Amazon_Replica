@@ -51,6 +51,7 @@ import com.team27.amazon.product.cache.ProductCacheInvalidator;
 import com.team27.amazon.product.cache.ProductCacheKeys;
 import com.team27.amazon.product.cache.RedisCacheService;
 import com.team27.amazon.contracts.dto.ProductSalesAggregateDTO;
+import com.team27.amazon.product.messaging.publishers.ProductEventPublisher;
 
 import java.time.Duration;
 import jakarta.annotation.PostConstruct;
@@ -68,6 +69,9 @@ public class ProductService extends AbstractEventSubject {
 
     @Autowired
     private ProductReviewRepository productReviewRepository;
+
+    @Autowired
+    private ProductEventPublisher productEventPublisher;
 
     @Autowired
     @Qualifier("productEventLogger")
@@ -582,24 +586,61 @@ ProductReview savedReview = savedProduct.getProductReviews()
 
     @Transactional
     public Product discontinueProduct(Long productId) {
-    Product product = getProductById(productId);
+        Product product = getProductById(productId);
 
-    boolean existsInPendingOrders = productRepository.existsInPendingOrders(productId);
-    if (existsInPendingOrders) {
-        throw new ResponseStatusException(
-                HttpStatus.BAD_REQUEST,
-                "Cannot discontinue product because it is used in pending orders"
+        int pendingOrderCount = getPendingOrderCountFromOrderService(productId);
+
+        if (pendingOrderCount > 0) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Cannot discontinue product because it is used in pending orders"
+            );
+        }
+
+        String oldStatus = product.getStatus() == null ? null : product.getStatus().name();
+
+        product.setStatus(ProductStatus.INACTIVE);
+
+        Product savedProduct = productRepository.save(product);
+
+        String newStatus = savedProduct.getStatus() == null ? null : savedProduct.getStatus().name();
+
+        productEventPublisher.publishProductDiscontinued(
+                savedProduct.getId(),
+                oldStatus,
+                newStatus
         );
+
+        notifyObservers("STATUS_CHANGED", productEventPayload(savedProduct.getId(), Map.of(
+                "oldStatus", oldStatus,
+                "newStatus", newStatus
+        )));
+
+        productCacheInvalidator.invalidateProduct(productId);
+
+        return savedProduct;
     }
 
-    product.setStatus(ProductStatus.INACTIVE);
-    Product savedProduct = productRepository.save(product);
-    notifyObservers("STATUS_CHANGED", productEventPayload(savedProduct.getId(), Map.of(
-            "status", savedProduct.getStatus() == null ? null : savedProduct.getStatus().name()
-    )));
-        productCacheInvalidator.invalidateProduct(productId);
-        return savedProduct;
-}
+    private int getPendingOrderCountFromOrderService(Long productId) {
+        if (orderServiceClient == null) {
+            throw new ResponseStatusException(
+                    HttpStatus.SERVICE_UNAVAILABLE,
+                    "Order service client is not available"
+            );
+        }
+
+        try {
+            return orderServiceClient.getPendingOrderCountForProduct(productId);
+        } catch (FeignException.NotFound ex) {
+            return 0;
+        } catch (FeignException ex) {
+            log.warn("Order service failed while checking pending orders. productId={}", productId, ex);
+            throw new ResponseStatusException(
+                    HttpStatus.SERVICE_UNAVAILABLE,
+                    "Order service temporarily unavailable"
+            );
+        }
+    }
 
     private Map<String, Object> productEventPayload(Long productId, Map<String, Object> details) {
         Map<String, Object> payload = new HashMap<>();
