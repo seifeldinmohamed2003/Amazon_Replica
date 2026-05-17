@@ -50,6 +50,7 @@ import com.fasterxml.jackson.core.type.TypeReference;
 import com.team27.amazon.product.cache.ProductCacheInvalidator;
 import com.team27.amazon.product.cache.ProductCacheKeys;
 import com.team27.amazon.product.cache.RedisCacheService;
+import com.team27.amazon.contracts.dto.ProductSalesAggregateDTO;
 
 import java.time.Duration;
 import jakarta.annotation.PostConstruct;
@@ -292,23 +293,52 @@ autoIndexProduct(savedProduct, "auto_crud_create");
         return savedProduct;
     }
 
+    private ProductSalesAggregateDTO getProductSalesFromOrderService(Long productId,
+                                                                     LocalDate startDate,
+                                                                     LocalDate endDate) {
+        if (orderServiceClient == null) {
+            throw new ResponseStatusException(
+                    HttpStatus.SERVICE_UNAVAILABLE,
+                    "Order service client is not available"
+            );
+        }
+
+        try {
+            return orderServiceClient.getProductSales(
+                    productId,
+                    startDate.toString(),
+                    endDate.toString()
+            );
+        } catch (FeignException.NotFound ex) {
+            return new ProductSalesAggregateDTO(0L, 0.0, 0.0);
+        } catch (FeignException ex) {
+            log.warn("Order service failed while loading product sales. productId={}", productId, ex);
+            throw new ResponseStatusException(
+                    HttpStatus.SERVICE_UNAVAILABLE,
+                    "Order service temporarily unavailable"
+            );
+        }
+    }
+
     public ProductSalesDTO getProductSalesSummary(Long productId, LocalDate startDate, LocalDate endDate) {
         String cacheKey = ProductCacheKeys.s2f3Sales(productId, startDate, endDate);
 
         return redisCacheService.getOrLoad(
                 cacheKey,
                 Duration.ofMinutes(10),
-                new TypeReference<ProductSalesDTO>() {
-                },
+                new TypeReference<ProductSalesDTO>() {},
                 () -> {
                     Product product = getProductById(productId);
 
-                    LocalDateTime startDateTime = startDate.atStartOfDay();
-                    LocalDateTime endDateTime = endDate.atTime(LocalTime.MAX);
+                    ProductSalesAggregateDTO sales = getProductSalesFromOrderService(productId, startDate, endDate);
 
-                    Object[] result = productRepository.getProductSalesSummary(productId, startDateTime, endDateTime);
-
-                    return objectArrayDtoAdapter.toProductSalesDTO(product.getId(), product.getName(), result);
+                    return ProductSalesDTO.builder()
+                            .productId(product.getId())
+                            .name(product.getName())
+                            .totalUnitsSold(sales.totalUnitsSold())
+                            .totalRevenue(sales.totalRevenue())
+                            .averageSellingPrice(sales.averageSellingPrice())
+                            .build();
                 }
         );
     }
