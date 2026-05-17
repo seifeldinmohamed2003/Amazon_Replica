@@ -482,15 +482,13 @@ ProductReview savedReview = savedProduct.getProductReviews()
             throw new InvalidReviewException("Review does not belong to the specified product.");
         }
 
-        if (!productRepository.hasDeliveredPurchase(review.getUserId(), productId)) {
+        if (!hasPurchasedViaOrderService(review.getUserId(), productId)) {
             throw new InvalidReviewException("Reviewer does not have a verified purchase for this product.");
         }
 
-        if (!productRepository.userExists(request.getVerifiedBy())) {
-            throw new UserNotFoundException(request.getVerifiedBy());
-        }
+        UserDTO verifier = getUserViaUserService(request.getVerifiedBy());
 
-        if (!productRepository.isAdminUser(request.getVerifiedBy())) {
+        if (verifier.role() == null || !"ADMIN".equalsIgnoreCase(verifier.role())) {
             throw new ReviewVerificationForbiddenException("Only an admin user can verify reviews.");
         }
 
@@ -514,6 +512,34 @@ ProductReview savedReview = savedProduct.getProductReviews()
         )));
         return product;
     }
+
+    private UserDTO getUserViaUserService(Long userId) {
+        if (userServiceClient == null) {
+            throw new ResponseStatusException(
+                    HttpStatus.SERVICE_UNAVAILABLE,
+                    "User service client is not available"
+            );
+        }
+
+        try {
+            UserDTO user = userServiceClient.getUser(userId);
+
+            if (user == null || user.id() == null) {
+                throw new UserNotFoundException(userId);
+            }
+
+            return user;
+        } catch (FeignException.NotFound ex) {
+            throw new UserNotFoundException(userId);
+        } catch (FeignException ex) {
+            log.warn("User service failed while loading user. userId={}", userId, ex);
+            throw new ResponseStatusException(
+                    HttpStatus.SERVICE_UNAVAILABLE,
+                    "User service temporarily unavailable"
+            );
+        }
+    }
+
     @Transactional
     public List<LowStockAlertDTO> getLowStockAlerts(Integer threshold) {
         if (threshold == null || threshold < 0) {
