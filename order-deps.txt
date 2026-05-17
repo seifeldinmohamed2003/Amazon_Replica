@@ -1,0 +1,1 @@
+com.team27.amazon:amazon:pom:1.0-SNAPSHOT
