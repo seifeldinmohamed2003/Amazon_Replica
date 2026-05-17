@@ -50,6 +50,8 @@ import com.fasterxml.jackson.core.type.TypeReference;
 import com.team27.amazon.product.cache.ProductCacheInvalidator;
 import com.team27.amazon.product.cache.ProductCacheKeys;
 import com.team27.amazon.product.cache.RedisCacheService;
+import com.team27.amazon.contracts.dto.ProductSalesAggregateDTO;
+import com.team27.amazon.product.messaging.publishers.ProductEventPublisher;
 
 import java.time.Duration;
 import jakarta.annotation.PostConstruct;
@@ -67,6 +69,9 @@ public class ProductService extends AbstractEventSubject {
 
     @Autowired
     private ProductReviewRepository productReviewRepository;
+
+    @Autowired
+    private ProductEventPublisher productEventPublisher;
 
     @Autowired
     @Qualifier("productEventLogger")
@@ -292,23 +297,52 @@ autoIndexProduct(savedProduct, "auto_crud_create");
         return savedProduct;
     }
 
+    private ProductSalesAggregateDTO getProductSalesFromOrderService(Long productId,
+                                                                     LocalDate startDate,
+                                                                     LocalDate endDate) {
+        if (orderServiceClient == null) {
+            throw new ResponseStatusException(
+                    HttpStatus.SERVICE_UNAVAILABLE,
+                    "Order service client is not available"
+            );
+        }
+
+        try {
+            return orderServiceClient.getProductSales(
+                    productId,
+                    startDate.toString(),
+                    endDate.toString()
+            );
+        } catch (FeignException.NotFound ex) {
+            return new ProductSalesAggregateDTO(0L, 0.0, 0.0);
+        } catch (FeignException ex) {
+            log.warn("Order service failed while loading product sales. productId={}", productId, ex);
+            throw new ResponseStatusException(
+                    HttpStatus.SERVICE_UNAVAILABLE,
+                    "Order service temporarily unavailable"
+            );
+        }
+    }
+
     public ProductSalesDTO getProductSalesSummary(Long productId, LocalDate startDate, LocalDate endDate) {
         String cacheKey = ProductCacheKeys.s2f3Sales(productId, startDate, endDate);
 
         return redisCacheService.getOrLoad(
                 cacheKey,
                 Duration.ofMinutes(10),
-                new TypeReference<ProductSalesDTO>() {
-                },
+                new TypeReference<ProductSalesDTO>() {},
                 () -> {
                     Product product = getProductById(productId);
 
-                    LocalDateTime startDateTime = startDate.atStartOfDay();
-                    LocalDateTime endDateTime = endDate.atTime(LocalTime.MAX);
+                    ProductSalesAggregateDTO sales = getProductSalesFromOrderService(productId, startDate, endDate);
 
-                    Object[] result = productRepository.getProductSalesSummary(productId, startDateTime, endDateTime);
-
-                    return objectArrayDtoAdapter.toProductSalesDTO(product.getId(), product.getName(), result);
+                    return ProductSalesDTO.builder()
+                            .productId(product.getId())
+                            .name(product.getName())
+                            .totalUnitsSold(sales.totalUnitsSold())
+                            .totalRevenue(sales.totalRevenue())
+                            .averageSellingPrice(sales.averageSellingPrice())
+                            .build();
                 }
         );
     }
@@ -330,11 +364,9 @@ autoIndexProduct(savedProduct, "auto_crud_create");
             throw new InvalidReviewException("Rating must be between 1 and 5.");
         }
 
-        if (!productRepository.userExists(request.getUserId())) {
-            throw new UserNotFoundException(request.getUserId());
-        }
+        ensureUserExistsViaUserService(request.getUserId());
 
-        if (!productRepository.hasDeliveredPurchase(request.getUserId(), productId)) {
+        if (!hasPurchasedViaOrderService(request.getUserId(), productId)) {
             throw new InvalidReviewException("User must purchase this product before reviewing it.");
         }
 
@@ -373,8 +405,66 @@ ProductReview savedReview = savedProduct.getProductReviews()
             "rating", savedReview.getRating(),
             "details", reviewDetails(savedReview)
         )));
+        productEventPublisher.publishProductReviewAdded(
+                savedProduct.getId(),
+                savedReview.getId(),
+                savedReview.getUserId(),
+                savedReview.getRating()
+        );
+
+        productEventPublisher.publishProductRated(
+                savedProduct.getId(),
+                savedProduct.getRating(),
+                savedProduct.getTotalRatings()
+        );
         productCacheInvalidator.invalidateProductReview(savedReview.getId(), productId);
         return savedReview;
+    }
+    private void ensureUserExistsViaUserService(Long userId) {
+        if (userServiceClient == null) {
+            throw new ResponseStatusException(
+                    HttpStatus.SERVICE_UNAVAILABLE,
+                    "User service client is not available"
+            );
+        }
+
+        try {
+            UserDTO user = userServiceClient.getUser(userId);
+
+            if (user == null || user.id() == null) {
+                throw new UserNotFoundException(userId);
+            }
+        } catch (FeignException.NotFound ex) {
+            throw new UserNotFoundException(userId);
+        } catch (FeignException ex) {
+            log.warn("User service failed while checking user. userId={}", userId, ex);
+            throw new ResponseStatusException(
+                    HttpStatus.SERVICE_UNAVAILABLE,
+                    "User service temporarily unavailable"
+            );
+        }
+    }
+
+    private boolean hasPurchasedViaOrderService(Long userId, Long productId) {
+        if (orderServiceClient == null) {
+            throw new ResponseStatusException(
+                    HttpStatus.SERVICE_UNAVAILABLE,
+                    "Order service client is not available"
+            );
+        }
+
+        try {
+            return orderServiceClient.hasUserPurchasedProduct(userId, productId);
+        } catch (FeignException.NotFound ex) {
+            return false;
+        } catch (FeignException ex) {
+            log.warn("Order service failed while checking purchase. userId={}, productId={}",
+                    userId, productId, ex);
+            throw new ResponseStatusException(
+                    HttpStatus.SERVICE_UNAVAILABLE,
+                    "Order service temporarily unavailable"
+            );
+        }
     }
 
     @Transactional
@@ -392,15 +482,13 @@ ProductReview savedReview = savedProduct.getProductReviews()
             throw new InvalidReviewException("Review does not belong to the specified product.");
         }
 
-        if (!productRepository.hasDeliveredPurchase(review.getUserId(), productId)) {
+        if (!hasPurchasedViaOrderService(review.getUserId(), productId)) {
             throw new InvalidReviewException("Reviewer does not have a verified purchase for this product.");
         }
 
-        if (!productRepository.userExists(request.getVerifiedBy())) {
-            throw new UserNotFoundException(request.getVerifiedBy());
-        }
+        UserDTO verifier = getUserViaUserService(request.getVerifiedBy());
 
-        if (!productRepository.isAdminUser(request.getVerifiedBy())) {
+        if (verifier.role() == null || !"ADMIN".equalsIgnoreCase(verifier.role())) {
             throw new ReviewVerificationForbiddenException("Only an admin user can verify reviews.");
         }
 
@@ -424,6 +512,34 @@ ProductReview savedReview = savedProduct.getProductReviews()
         )));
         return product;
     }
+
+    private UserDTO getUserViaUserService(Long userId) {
+        if (userServiceClient == null) {
+            throw new ResponseStatusException(
+                    HttpStatus.SERVICE_UNAVAILABLE,
+                    "User service client is not available"
+            );
+        }
+
+        try {
+            UserDTO user = userServiceClient.getUser(userId);
+
+            if (user == null || user.id() == null) {
+                throw new UserNotFoundException(userId);
+            }
+
+            return user;
+        } catch (FeignException.NotFound ex) {
+            throw new UserNotFoundException(userId);
+        } catch (FeignException ex) {
+            log.warn("User service failed while loading user. userId={}", userId, ex);
+            throw new ResponseStatusException(
+                    HttpStatus.SERVICE_UNAVAILABLE,
+                    "User service temporarily unavailable"
+            );
+        }
+    }
+
     @Transactional
     public List<LowStockAlertDTO> getLowStockAlerts(Integer threshold) {
         if (threshold == null || threshold < 0) {
@@ -438,9 +554,36 @@ ProductReview savedReview = savedProduct.getProductReviews()
                 new TypeReference<List<LowStockAlertDTO>>() {},
                 () -> productRepository.findLowStockProducts(threshold)
                         .stream()
-                        .map(LowStockAlertDTO::from)
+                        .map(product -> {
+                            LowStockAlertDTO dto = LowStockAlertDTO.from(product);
+                            int recentSalesCount = getRecentSalesCountFromOrderService(product.getId(), 30);
+
+                            dto.setAlertMessage(
+                                    dto.getAlertMessage()
+                                            + " Recent sales in last 30 days: "
+                                            + recentSalesCount
+                            );
+
+                            return dto;
+                        })
                         .toList()
         );
+    }
+
+    private int getRecentSalesCountFromOrderService(Long productId, int days) {
+        if (orderServiceClient == null) {
+            return 0;
+        }
+
+        try {
+            return orderServiceClient.getRecentSalesCount(productId, days);
+        } catch (FeignException.NotFound ex) {
+            return 0;
+        } catch (FeignException ex) {
+            log.warn("Order service failed while loading recent sales count. productId={}, days={}",
+                    productId, days, ex);
+            return 0;
+        }
     }
     public List<Product> searchBySpecification(String key, String value, ProductStatus status) {
         if (key == null || key.isBlank() || value == null || value.isBlank()) {
@@ -482,14 +625,31 @@ ProductReview savedReview = savedProduct.getProductReviews()
                 cacheKey,
                 Duration.ofMinutes(10),
                 new TypeReference<List<TopProductDTO>>() {},
-                () -> {
-                    List<Object[]> rows = productRepository.findTopRatedProducts(limit);
-
-                    return rows.stream()
-                            .map(objectArrayDtoAdapter::toTopProductDTO)
-                            .toList();
-                }
+                () -> productRepository.findTopRatedProductEntities(limit)
+                        .stream()
+                        .map(product -> TopProductDTO.builder()
+                                .productId(product.getId())
+                                .name(product.getName())
+                                .rating(product.getRating())
+                                .totalSales(getUnitsSoldFromOrderService(product.getId()))
+                                .build())
+                        .toList()
         );
+    }
+
+    private Long getUnitsSoldFromOrderService(Long productId) {
+        if (orderServiceClient == null) {
+            return 0L;
+        }
+
+        try {
+            return orderServiceClient.getUnitsSold(productId);
+        } catch (FeignException.NotFound ex) {
+            return 0L;
+        } catch (FeignException ex) {
+            log.warn("Order service failed while loading units sold. productId={}", productId, ex);
+            return 0L;
+        }
     }
 
         public ProductCatalogDashboardDTO getProductCatalogDashboard() {
@@ -552,24 +712,61 @@ ProductReview savedReview = savedProduct.getProductReviews()
 
     @Transactional
     public Product discontinueProduct(Long productId) {
-    Product product = getProductById(productId);
+        Product product = getProductById(productId);
 
-    boolean existsInPendingOrders = productRepository.existsInPendingOrders(productId);
-    if (existsInPendingOrders) {
-        throw new ResponseStatusException(
-                HttpStatus.BAD_REQUEST,
-                "Cannot discontinue product because it is used in pending orders"
+        int pendingOrderCount = getPendingOrderCountFromOrderService(productId);
+
+        if (pendingOrderCount > 0) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Cannot discontinue product because it is used in pending orders"
+            );
+        }
+
+        String oldStatus = product.getStatus() == null ? null : product.getStatus().name();
+
+        product.setStatus(ProductStatus.INACTIVE);
+
+        Product savedProduct = productRepository.save(product);
+
+        String newStatus = savedProduct.getStatus() == null ? null : savedProduct.getStatus().name();
+
+        productEventPublisher.publishProductDiscontinued(
+                savedProduct.getId(),
+                oldStatus,
+                newStatus
         );
+
+        notifyObservers("STATUS_CHANGED", productEventPayload(savedProduct.getId(), Map.of(
+                "oldStatus", oldStatus,
+                "newStatus", newStatus
+        )));
+
+        productCacheInvalidator.invalidateProduct(productId);
+
+        return savedProduct;
     }
 
-    product.setStatus(ProductStatus.INACTIVE);
-    Product savedProduct = productRepository.save(product);
-    notifyObservers("STATUS_CHANGED", productEventPayload(savedProduct.getId(), Map.of(
-            "status", savedProduct.getStatus() == null ? null : savedProduct.getStatus().name()
-    )));
-        productCacheInvalidator.invalidateProduct(productId);
-        return savedProduct;
-}
+    private int getPendingOrderCountFromOrderService(Long productId) {
+        if (orderServiceClient == null) {
+            throw new ResponseStatusException(
+                    HttpStatus.SERVICE_UNAVAILABLE,
+                    "Order service client is not available"
+            );
+        }
+
+        try {
+            return orderServiceClient.getPendingOrderCountForProduct(productId);
+        } catch (FeignException.NotFound ex) {
+            return 0;
+        } catch (FeignException ex) {
+            log.warn("Order service failed while checking pending orders. productId={}", productId, ex);
+            throw new ResponseStatusException(
+                    HttpStatus.SERVICE_UNAVAILABLE,
+                    "Order service temporarily unavailable"
+            );
+        }
+    }
 
     private Map<String, Object> productEventPayload(Long productId, Map<String, Object> details) {
         Map<String, Object> payload = new HashMap<>();
