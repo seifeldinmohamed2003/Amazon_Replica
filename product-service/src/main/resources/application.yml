@@ -5,6 +5,20 @@ spring:
     url: jdbc:postgresql://product-postgres:5432/amazondb-products
     username: postgres
     password: postgres
+  rabbitmq:
+    host: ${SPRING_RABBITMQ_HOST:rabbitmq}
+    port: ${SPRING_RABBITMQ_PORT:5672}
+    username: ${SPRING_RABBITMQ_USERNAME:guest}
+    password: ${SPRING_RABBITMQ_PASSWORD:guest}
+    listener:
+      simple:
+        acknowledge-mode: auto
+        default-requeue-rejected: false
+        retry:
+          enabled: true
+          initial-interval: 1000
+          max-retries: 3
+          multiplier: 2
   jpa:
     hibernate:
       ddl-auto: update
