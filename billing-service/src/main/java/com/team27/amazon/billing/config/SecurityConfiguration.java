@@ -26,6 +26,7 @@ public class SecurityConfiguration {
                         .authenticationEntryPoint(new HttpStatusEntryPoint(HttpStatus.UNAUTHORIZED))
                 )
                 .authorizeHttpRequests(authorize -> authorize
+                        .requestMatchers("/actuator/**").permitAll()
                         .requestMatchers("/api/transactions/health", "/api/auth/register", "/api/auth/login").permitAll()
                         .requestMatchers("/api/transactions/user/*/total", "/api/transactions/user/*/order-count").permitAll()
                         .anyRequest().authenticated())

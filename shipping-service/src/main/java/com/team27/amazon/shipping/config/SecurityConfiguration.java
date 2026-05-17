@@ -34,6 +34,7 @@ public class SecurityConfiguration {
                         })
                 )
                 .authorizeHttpRequests(authorize -> authorize
+                        .requestMatchers("/actuator/**").permitAll()
                         .requestMatchers("/api/shipments/health", "/api/auth/register", "/api/auth/login", "/error").permitAll()
                         .anyRequest().authenticated())
                 .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
