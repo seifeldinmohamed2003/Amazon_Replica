@@ -6,6 +6,7 @@ import java.util.List;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
+import org.springframework.data.jpa.repository.Modifying;
 
 import com.team27.amazon.product.model.Product;
 import com.team27.amazon.product.model.ProductStatus;
@@ -159,4 +160,32 @@ Object[] getProductSalesSummary(
               AND p.status::text = 'ACTIVE'
             """, nativeQuery = true)
     Long countLowStockActiveProductsForDashboard();
+
+    @Modifying
+    @Query(value = """
+            UPDATE products
+            SET stock_quantity = stock_quantity - :quantity
+            WHERE id = :productId
+              AND stock_quantity >= :quantity
+              AND status::text = 'ACTIVE'
+            """, nativeQuery = true)
+    int deductStockIfAvailable(@Param("productId") Long productId,
+                               @Param("quantity") Integer quantity);
+
+    @Modifying
+    @Query(value = """
+            UPDATE products
+            SET stock_quantity = stock_quantity + :quantity
+            WHERE id = :productId
+            """, nativeQuery = true)
+    int restoreStock(@Param("productId") Long productId,
+                     @Param("quantity") Integer quantity);
+
+    @Query(value = """
+            SELECT *
+            FROM products p
+            ORDER BY p.rating DESC, p.total_ratings DESC
+            LIMIT :limit
+            """, nativeQuery = true)
+    List<Product> findTopRatedProductEntities(@Param("limit") Integer limit);
 }
