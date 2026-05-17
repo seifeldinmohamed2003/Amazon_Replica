@@ -554,9 +554,36 @@ ProductReview savedReview = savedProduct.getProductReviews()
                 new TypeReference<List<LowStockAlertDTO>>() {},
                 () -> productRepository.findLowStockProducts(threshold)
                         .stream()
-                        .map(LowStockAlertDTO::from)
+                        .map(product -> {
+                            LowStockAlertDTO dto = LowStockAlertDTO.from(product);
+                            int recentSalesCount = getRecentSalesCountFromOrderService(product.getId(), 30);
+
+                            dto.setAlertMessage(
+                                    dto.getAlertMessage()
+                                            + " Recent sales in last 30 days: "
+                                            + recentSalesCount
+                            );
+
+                            return dto;
+                        })
                         .toList()
         );
+    }
+
+    private int getRecentSalesCountFromOrderService(Long productId, int days) {
+        if (orderServiceClient == null) {
+            return 0;
+        }
+
+        try {
+            return orderServiceClient.getRecentSalesCount(productId, days);
+        } catch (FeignException.NotFound ex) {
+            return 0;
+        } catch (FeignException ex) {
+            log.warn("Order service failed while loading recent sales count. productId={}, days={}",
+                    productId, days, ex);
+            return 0;
+        }
     }
     public List<Product> searchBySpecification(String key, String value, ProductStatus status) {
         if (key == null || key.isBlank() || value == null || value.isBlank()) {
