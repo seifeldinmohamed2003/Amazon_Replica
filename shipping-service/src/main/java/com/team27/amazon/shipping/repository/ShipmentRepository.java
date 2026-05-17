@@ -108,9 +108,7 @@ public interface ShipmentRepository extends JpaRepository<Shipment, Long> {
             @Param("key") String key,
             @Param("value") String value
     );
-    List<Shipment> findByOrderId(Long orderId);
-
-    @Query("""
+@Query("""
         SELECT s FROM Shipment s
         WHERE s.orderId = :orderId
         AND s.status IN (
