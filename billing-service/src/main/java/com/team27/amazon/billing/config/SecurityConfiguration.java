@@ -35,9 +35,7 @@ public class SecurityConfiguration {
                             "/actuator",
                             "/actuator/**",
                             "/actuator/health",
-                            "/actuator/prometheus",
-                            "/api/transactions/user/*/total",
-                            "/api/transactions/user/*/order-count"
+                            "/actuator/prometheus"
                         ).permitAll()
                         .anyRequest().authenticated())
                 .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);

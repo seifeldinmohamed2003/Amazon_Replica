@@ -42,12 +42,9 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         if (HttpMethod.OPTIONS.matches(request.getMethod())) {
             return true;
         }
-        return path.startsWith("/actuator")
-                || "/api/transactions/health".equals(path)
+        return "/api/transactions/health".equals(path)
                 || "/api/auth/register".equals(path)
                 || "/api/auth/login".equals(path)
-                || path.matches("/api/transactions/user/\d+/total")
-                || path.matches("/api/transactions/user/\d+/order-count")
                 || path.startsWith("/actuator");
     }
 
