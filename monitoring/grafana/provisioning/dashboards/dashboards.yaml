@@ -1,0 +1,13 @@
+apiVersion: 1
+
+providers:
+  - name: Amazon Service Dashboards
+    orgId: 1
+    folder: Amazon
+    folderUid: amazon
+    type: file
+    disableDeletion: false
+    updateIntervalSeconds: 10
+    allowUiUpdates: true
+    options:
+      path: /etc/grafana/dashboards

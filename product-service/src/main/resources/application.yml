@@ -43,3 +43,19 @@ jwt:
 feign:
   order-service:
     url: http://order-service:8080
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: "prometheus,health,info"
+  endpoint:
+    health:
+      show-details: always
+  metrics:
+    distribution:
+      percentiles-histogram:
+        http.server.requests: true
+
+loki:
+  url: http://loki:3100/loki/api/v1/push

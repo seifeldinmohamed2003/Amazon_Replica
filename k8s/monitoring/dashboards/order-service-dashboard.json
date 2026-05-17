@@ -1,0 +1,120 @@
+{
+  "title": "Order Service Dashboard",
+  "uid": "order-service-dashboard",
+  "schemaVersion": 36,
+  "version": 1,
+  "tags": ["order-service", "amazon"],
+  "time": { "from": "now-1h", "to": "now" },
+  "refresh": "30s",
+  "panels": [
+    {
+      "id": 1,
+      "title": "Error Rate — Errors per Minute (LogQL)",
+      "description": "Counts ERROR-level log lines from order-service per minute. Spikes during checkout flows indicate saga rollback events, payment failures, or downstream service timeouts.",
+      "type": "timeseries",
+      "gridPos": { "x": 0, "y": 0, "w": 12, "h": 8 },
+      "datasource": "Loki",
+      "targets": [
+        {
+          "expr": "sum(count_over_time({app=\"amazon\", service=\"order-service\", level=\"ERROR\"} | json [1m]))",
+          "legendFormat": "Errors/min"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": { "unit": "short" }
+      }
+    },
+    {
+      "id": 2,
+      "title": "Saga / Event Processing Logs — Payment & Shipment Events (LogQL)",
+      "description": "Counts order-service log lines related to saga events (payment, shipment, saga) over 5 m. Distinguishes INFO (normal flow) vs WARN/ERROR (rollback or consumer lag) to detect saga fan-out issues.",
+      "type": "timeseries",
+      "gridPos": { "x": 12, "y": 0, "w": 12, "h": 8 },
+      "datasource": "Loki",
+      "targets": [
+        {
+          "expr": "sum by (level) (count_over_time({app=\"amazon\", service=\"order-service\"} | json | message=~\"(?i).*(saga|payment|shipment|event|listener).*\" [5m]))",
+          "legendFormat": "{{level}}"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "title": "Correlation ID Trace — End-to-End Order Request Chains (LogQL)",
+      "description": "Streams order-service log lines that carry a correlationId, enabling full-path tracing from order creation through payment initiation to shipment scheduling.",
+      "type": "logs",
+      "gridPos": { "x": 0, "y": 8, "w": 12, "h": 8 },
+      "datasource": "Loki",
+      "targets": [
+        {
+          "expr": "{app=\"amazon\", service=\"order-service\"} | json | correlationId != \"\"",
+          "legendFormat": ""
+        }
+      ],
+      "options": { "dedupStrategy": "none", "showLabels": true, "wrapLogMessage": true }
+    },
+    {
+      "id": 4,
+      "title": "HTTP Request Rate — Requests/s per Endpoint (PromQL)",
+      "description": "Layer 1 – Metric: http_server_requests_seconds_count | Layer 2 – Label: job=order-service | Layer 3 – Range: [5m] | Layer 4 – Function: rate → sum by uri. Shows which order-service endpoints (create, estimate, status) are under the most load during peak checkout hours.",
+      "type": "timeseries",
+      "gridPos": { "x": 12, "y": 8, "w": 12, "h": 8 },
+      "datasource": "Prometheus",
+      "targets": [
+        {
+          "expr": "sum by (uri) (rate(http_server_requests_seconds_count{job=\"order-service\"}[5m]))",
+          "legendFormat": "{{uri}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": { "unit": "reqps" }
+      }
+    },
+    {
+      "id": 5,
+      "title": "HTTP Latency Percentiles — P50 / P95 / P99 (PromQL)",
+      "description": "Layer 1 – Metric: http_server_requests_seconds_bucket | Layer 2 – Label: job=order-service | Layer 3 – Range: [5m] | Layer 4 – Function: histogram_quantile at 0.50, 0.95, 0.99. P99 spikes on POST /api/orders indicate slow saga orchestration or blocking Feign calls to product/user services.",
+      "type": "timeseries",
+      "gridPos": { "x": 0, "y": 16, "w": 12, "h": 8 },
+      "datasource": "Prometheus",
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.50, sum by (le, uri) (rate(http_server_requests_seconds_bucket{job=\"order-service\"}[5m])))",
+          "legendFormat": "P50 {{uri}}"
+        },
+        {
+          "expr": "histogram_quantile(0.95, sum by (le, uri) (rate(http_server_requests_seconds_bucket{job=\"order-service\"}[5m])))",
+          "legendFormat": "P95 {{uri}}"
+        },
+        {
+          "expr": "histogram_quantile(0.99, sum by (le, uri) (rate(http_server_requests_seconds_bucket{job=\"order-service\"}[5m])))",
+          "legendFormat": "P99 {{uri}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": { "unit": "s" }
+      }
+    },
+    {
+      "id": 6,
+      "title": "RabbitMQ Throughput — Published vs Consumed per Queue (PromQL)",
+      "description": "Layer 1 – Metrics: rabbitmq_published_total, rabbitmq_consumed_total | Layer 2 – Label: job=order-service | Layer 3 – Range: [5m] | Layer 4 – Function: rate → sum by queue. Consumer lag (published count > consumed count by > 100 on order.payment-initiated) reveals payment-service processing bottleneck.",
+      "type": "timeseries",
+      "gridPos": { "x": 12, "y": 16, "w": 12, "h": 8 },
+      "datasource": "Prometheus",
+      "targets": [
+        {
+          "expr": "sum by (queue) (rate(rabbitmq_published_total{job=\"order-service\"}[5m]))",
+          "legendFormat": "Published: {{queue}}"
+        },
+        {
+          "expr": "sum by (queue) (rate(rabbitmq_consumed_total{job=\"order-service\"}[5m]))",
+          "legendFormat": "Consumed: {{queue}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": { "unit": "mps" }
+      }
+    }
+  ]
+}
