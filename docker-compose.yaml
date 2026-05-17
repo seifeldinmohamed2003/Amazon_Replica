@@ -10,6 +10,8 @@ services:
       POSTGRES_PASSWORD: postgres
     volumes:
       - pgdata:/var/lib/postgresql/data
+    networks:
+      - amazon-net
     healthcheck:
       test: [ "CMD-SHELL", "pg_isready -U postgres -d amazondb" ]
       interval: 10s
@@ -27,6 +29,8 @@ services:
       MONGO_INITDB_DATABASE: amazonmongo
     volumes:
       - mongo-data:/data/db
+    networks:
+      - amazon-net
     healthcheck:
       test: [ "CMD", "mongosh", "--eval", "db.adminCommand('ping')" ]
       interval: 10s
@@ -39,6 +43,8 @@ services:
     ports:
       - "6379:6379"
     command: redis-server --requirepass redispass --maxmemory 256mb --maxmemory-policy allkeys-lru
+    networks:
+      - amazon-net
     healthcheck:
       test: [ "CMD", "redis-cli", "-a", "redispass", "ping" ]
       interval: 5s
@@ -56,6 +62,8 @@ services:
       - ES_JAVA_OPTS=-Xms512m -Xmx512m
     volumes:
        - es-data:/usr/share/elasticsearch/data
+    networks:
+      - amazon-net
     healthcheck:
       test: [ "CMD-SHELL", "curl -f http://localhost:9200/_cluster/health || exit 1" ]
       interval: 10s
@@ -75,6 +83,8 @@ services:
       NEO4J_server_memory_heap_initial__size: 256m
     volumes:
       - neo4j-data:/data
+    networks:
+      - amazon-net
     healthcheck:
       test: [ "CMD", "neo4j", "status" ]
       interval: 10s
@@ -95,6 +105,8 @@ services:
       HEAP_NEWSIZE: 128M
     volumes:
       - cassandra-data:/var/lib/cassandra
+    networks:
+      - amazon-net
     healthcheck:
       test: [ "CMD-SHELL", "cqlsh -e 'DESCRIBE KEYSPACES'" ]
       interval: 15s
@@ -104,6 +116,8 @@ services:
   cassandra-init:
     image: cassandra:latest
     container_name: amazon-cassandra-init
+    networks:
+      - amazon-net
     depends_on:
       cassandra:
         condition: service_healthy
@@ -120,6 +134,26 @@ services:
       echo 'Keyspace amazonks created';
       "
 
+  rabbitmq:
+    image: rabbitmq:3-management
+    container_name: amazon-rabbitmq
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    environment:
+      RABBITMQ_DEFAULT_USER: guest
+      RABBITMQ_DEFAULT_PASS: guest
+      RABBITMQ_ERLANG_COOKIE: amazon-secret-cookie
+    volumes:
+      - rabbitmq-data:/var/lib/rabbitmq
+    networks:
+      - amazon-net
+    healthcheck:
+      test: [ "CMD", "rabbitmq-diagnostics", "ping" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
   user-service:
     build: ./user-service
     ports:
@@ -128,8 +162,13 @@ services:
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/amazondb
       SPRING_DATASOURCE_USERNAME: postgres
       SPRING_DATASOURCE_PASSWORD: postgres
+    networks:
+      - amazon-net
     depends_on:
-      - postgres
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
 
   product-service:
     build: ./product-service
@@ -139,8 +178,13 @@ services:
         SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/amazondb
         SPRING_DATASOURCE_USERNAME: postgres
         SPRING_DATASOURCE_PASSWORD: postgres
+    networks:
+      - amazon-net
     depends_on:
-        - postgres
+        postgres:
+          condition: service_healthy
+        rabbitmq:
+          condition: service_healthy
 
   order-service:
     build: ./order-service
@@ -150,8 +194,29 @@ services:
         SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/amazondb
         SPRING_DATASOURCE_USERNAME: postgres
         SPRING_DATASOURCE_PASSWORD: postgres
+    networks:
+      - amazon-net
     depends_on:
-        - postgres
+        postgres:
+          condition: service_healthy
+        rabbitmq:
+          condition: service_healthy
+
+
+  rabbitmq:
+    image: rabbitmq:4-management
+    container_name: amazon-rabbitmq
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    environment:
+      RABBITMQ_DEFAULT_USER: guest
+      RABBITMQ_DEFAULT_PASS: guest
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
 
   rabbitmq:
@@ -193,9 +258,11 @@ services:
       FEIGN_SHIPPING_SERVICE_URL: http://shipping-service:8080
       JWT_SECRET: MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=
       JWT_EXPIRATION_MS: 86400000
+    networks:
+      - amazon-net
     depends_on:
-      cassandra-init:
-        condition: service_completed_successfully
+      cassandra:
+        condition: service_healthy
       postgres:
         condition: service_healthy
       rabbitmq:
@@ -210,8 +277,17 @@ services:
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/amazondb
       SPRING_DATASOURCE_USERNAME: postgres
       SPRING_DATASOURCE_PASSWORD: postgres
+    networks:
+      - amazon-net
     depends_on:
-      - postgres
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+
+networks:
+  amazon-net:
+    external: true
 
 volumes:
   pgdata:
@@ -219,3 +295,4 @@ volumes:
   es-data:
   neo4j-data:
   cassandra-data:
+  rabbitmq-data:

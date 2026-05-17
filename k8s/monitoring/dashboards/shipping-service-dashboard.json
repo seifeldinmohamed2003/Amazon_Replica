@@ -1,0 +1,191 @@
+{
+  "title": "Shipping Service Dashboard",
+  "uid": "shipping-service-dashboard",
+  "schemaVersion": 36,
+  "version": 1,
+  "tags": [
+    "shipping-service",
+    "amazon"
+  ],
+  "time": {
+    "from": "now-1h",
+    "to": "now"
+  },
+  "refresh": "30s",
+  "panels": [
+    {
+      "id": 1,
+      "title": "Error Rate \u2014 Errors per Minute (LogQL)",
+      "description": "Counts ERROR-level log lines from shipping-service per minute. Spikes indicate failed shipment creation from order-placed events, carrier API timeouts, or geo-lookup failures.",
+      "type": "timeseries",
+      "gridPos": {
+        "x": 0,
+        "y": 0,
+        "w": 12,
+        "h": 8
+      },
+      "datasource": {
+        "type": "loki",
+        "uid": "loki"
+      },
+      "targets": [
+        {
+          "expr": "sum(count_over_time({agent=\"loki4j\"} |~ \"(?i)(error|warn|exception|failed)\" [5m]))",
+          "legendFormat": "WARN+ERROR/5m"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        }
+      }
+    },
+    {
+      "id": 2,
+      "title": "Shipment Status & Tracking Event Logs (LogQL)",
+      "description": "Counts shipping-service log lines related to shipment state transitions and tracking events over 5 m, grouped by log level. WARN-level entries indicate delayed or stuck shipments requiring manual intervention.",
+      "type": "logs",
+      "gridPos": {
+        "x": 12,
+        "y": 0,
+        "w": 12,
+        "h": 8
+      },
+      "datasource": {
+        "type": "loki",
+        "uid": "loki"
+      },
+      "targets": [
+        {
+          "expr": "{agent=\"loki4j\"}",
+          "legendFormat": "{{level}}"
+        }
+      ],
+      "options": {
+        "dedupStrategy": "none",
+        "showLabels": true,
+        "wrapLogMessage": true
+      }
+    },
+    {
+      "id": 3,
+      "title": "Correlation ID Trace \u2014 Shipment Request Chains (LogQL)",
+      "description": "Streams shipping-service log lines carrying a correlationId. Enables tracing a single order-placed event through shipment creation, carrier assignment, and status update notifications.",
+      "type": "logs",
+      "gridPos": {
+        "x": 0,
+        "y": 8,
+        "w": 12,
+        "h": 8
+      },
+      "datasource": {
+        "type": "loki",
+        "uid": "loki"
+      },
+      "targets": [
+        {
+          "expr": "sum by (level) (count_over_time({agent=\"loki4j\"} |~ \"(?i)(shipment|tracking|status|carrier|dispatch)\" [5m]))",
+          "legendFormat": "{{level}}"
+        }
+      ],
+      "options": {
+        "dedupStrategy": "none",
+        "showLabels": true,
+        "wrapLogMessage": true
+      }
+    },
+    {
+      "id": 4,
+      "title": "HTTP Request Rate \u2014 Requests/s per Endpoint (PromQL)",
+      "description": "Layer 1 \u2013 Metric: http_server_requests_seconds_count | Layer 2 \u2013 Label: job=shipping-service | Layer 3 \u2013 Range: [5m] | Layer 4 \u2013 Function: rate \u2192 sum by uri. Shows which shipping endpoints (create, tracking, nearby lookup) are under the most load.",
+      "type": "timeseries",
+      "gridPos": {
+        "x": 12,
+        "y": 8,
+        "w": 12,
+        "h": 8
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "expr": "sum by (uri) (rate(http_server_requests_seconds_count{job=\"shipping-service\"}[5m]))",
+          "legendFormat": "{{uri}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps"
+        }
+      }
+    },
+    {
+      "id": 5,
+      "title": "HTTP Latency Percentiles \u2014 P50 / P95 / P99 (PromQL)",
+      "description": "Layer 1 \u2013 Metric: http_server_requests_seconds_bucket | Layer 2 \u2013 Label: job=shipping-service | Layer 3 \u2013 Range: [5m] | Layer 4 \u2013 Function: histogram_quantile at 0.50, 0.95, 0.99. High P99 on GET /api/shipments/nearby indicates slow geo-spatial queries against the location index.",
+      "type": "timeseries",
+      "gridPos": {
+        "x": 0,
+        "y": 16,
+        "w": 12,
+        "h": 8
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.50, sum by (le, uri) (rate(http_server_requests_seconds_bucket{job=\"shipping-service\"}[5m])))",
+          "legendFormat": "P50 {{uri}}"
+        },
+        {
+          "expr": "histogram_quantile(0.95, sum by (le, uri) (rate(http_server_requests_seconds_bucket{job=\"shipping-service\"}[5m])))",
+          "legendFormat": "P95 {{uri}}"
+        },
+        {
+          "expr": "histogram_quantile(0.99, sum by (le, uri) (rate(http_server_requests_seconds_bucket{job=\"shipping-service\"}[5m])))",
+          "legendFormat": "P99 {{uri}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s"
+        }
+      }
+    },
+    {
+      "id": 6,
+      "title": "RabbitMQ Throughput \u2014 Order Events Consumed per Queue (PromQL)",
+      "description": "Layer 1 \u2013 Metrics: rabbitmq_published_total, rabbitmq_consumed_total | Layer 2 \u2013 Label: job=shipping-service | Layer 3 \u2013 Range: [5m] | Layer 4 \u2013 Function: rate \u2192 sum by queue. Consumer lag on shipping.order-placed (published > consumed by > 100) means shipments are not being created fast enough \u2014 saga fan-out bottleneck.",
+      "type": "timeseries",
+      "gridPos": {
+        "x": 12,
+        "y": 16,
+        "w": 12,
+        "h": 8
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "expr": "sum by (queue) (rate(spring_rabbitmq_template_published_total{job=\"shipping-service\"}[5m]))",
+          "legendFormat": "Published: {{queue}}"
+        },
+        {
+          "expr": "sum by (queue) (rate(spring_rabbitmq_listener_seconds_count{job=\"shipping-service\"}[5m]))",
+          "legendFormat": "Consumed: {{queue}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "mps"
+        }
+      }
+    }
+  ]
+}

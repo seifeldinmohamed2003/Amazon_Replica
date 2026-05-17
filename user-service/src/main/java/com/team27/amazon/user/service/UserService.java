@@ -27,7 +27,11 @@ import org.springframework.web.server.ResponseStatusException;
 
 import com.team27.amazon.common.events.AbstractEventSubject;
 import com.team27.amazon.common.events.MongoEventLogger;
+import com.team27.amazon.contracts.dto.OrderSummaryDTO;
+import com.team27.amazon.contracts.dto.UserDTO;
 import com.team27.amazon.user.adapter.ObjectArrayDtoAdapter;
+import com.team27.amazon.user.client.BillingServiceGateway;
+import com.team27.amazon.user.client.OrderServiceGateway;
 import com.team27.amazon.user.cache.CacheConstants;
 import com.team27.amazon.user.cache.CacheInvalidationService;
 import com.team27.amazon.user.cache.CacheKeyBuilder;
@@ -43,22 +47,11 @@ import com.team27.amazon.user.model.Status;
 import com.team27.amazon.user.model.User;
 import com.team27.amazon.user.repository.ShippingAddressRepository;
 import com.team27.amazon.user.repository.UserRepository;
-import org.springframework.http.HttpStatus;
-import org.springframework.security.crypto.password.PasswordEncoder;
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
-import org.springframework.util.StringUtils;
-import org.springframework.web.server.ResponseStatusException;
-
-import java.time.LocalDate;
-import java.time.LocalDateTime;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
 
 @Service
 public class UserService extends AbstractEventSubject {
+
+    private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(UserService.class);
 
     private final UserRepository userRepository;
     private final ShippingAddressRepository shippingAddressRepository;
@@ -67,6 +60,10 @@ public class UserService extends AbstractEventSubject {
     private final ObjectArrayDtoAdapter objectArrayDtoAdapter;
     private final RedisCacheService redisCacheService;
     private final CacheInvalidationService cacheInvalidationService;
+
+    private final OrderServiceGateway orderServiceGateway;
+    private final BillingServiceGateway billingServiceGateway;
+    private final org.springframework.amqp.rabbit.core.RabbitTemplate rabbitTemplate;
 
     // S1-F12 dependencies
     private final AuthEventRepository authEventRepository;
@@ -86,7 +83,10 @@ public class UserService extends AbstractEventSubject {
                        AuthEventRepository authEventRepository,
                        ActivityCacheAdapter cacheAdapter,
                        ObjectMapper objectMapper,
-                       JwtService jwtService) {
+                       JwtService jwtService,
+                       OrderServiceGateway orderServiceGateway,
+                       BillingServiceGateway billingServiceGateway,
+                       org.springframework.amqp.rabbit.core.RabbitTemplate rabbitTemplate) {
         this.userRepository = userRepository;
         this.shippingAddressRepository = shippingAddressRepository;
         this.passwordEncoder = passwordEncoder;
@@ -98,6 +98,9 @@ public class UserService extends AbstractEventSubject {
         this.cacheAdapter = cacheAdapter;
         this.objectMapper = objectMapper;
         this.jwtService = jwtService;
+        this.orderServiceGateway = orderServiceGateway;
+        this.billingServiceGateway = billingServiceGateway;
+        this.rabbitTemplate = rabbitTemplate;
 
         register(mongoEventLogger);
     }
@@ -120,6 +123,9 @@ public class UserService extends AbstractEventSubject {
                 null,
                 null,
                 null,
+                null,
+                null,
+                null,
                 null);
     }
     // ─── User CRUD ───────────────────────────────────────────────
@@ -134,6 +140,18 @@ public class UserService extends AbstractEventSubject {
                 "status", savedUser.getStatus() == null ? null : savedUser.getStatus().name()
         )));
 
+        // S1-F10: publish user.registered
+        log.info("Publishing user.registered for userId={} email={}", savedUser.getId(), savedUser.getEmail());
+        rabbitTemplate.convertAndSend(
+                com.team27.amazon.contracts.constants.EventExchanges.USER_EVENTS,
+                com.team27.amazon.contracts.constants.EventRoutingKeys.USER_REGISTERED,
+                Map.of(
+                        "userId", savedUser.getId(),
+                        "email", savedUser.getEmail(),
+                        "role", savedUser.getRole() == null ? null : savedUser.getRole().name()
+                )
+        );
+
         cacheInvalidationService.invalidateAllUserServiceFeatureCaches();
 
         return savedUser;
@@ -147,6 +165,19 @@ public class UserService extends AbstractEventSubject {
                 User.class,
                 CacheConstants.TTL_ENTITY_DETAIL,
                 () -> getUserByIdFromDatabase(id)
+        );
+    }
+
+    public UserDTO getUserAsDTO(Long id) {
+        User user = getUserById(id);
+        return new UserDTO(
+                user.getId(),
+                user.getName(),
+                user.getEmail(),
+                user.getPhone(),
+                user.getRole() == null ? null : user.getRole().name(),
+                user.getStatus() == null ? null : user.getStatus().name(),
+                user.getPreferences()
         );
     }
 
@@ -231,11 +262,31 @@ public class UserService extends AbstractEventSubject {
                 () -> getAddressByIdFromDatabase(addressId)
         );
 
-        if (!address.getUser().getId().equals(userId)) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Address does not belong to this user");
+        if (address.getUser() == null || !address.getUser().getId().equals(userId)) {
+            throw new ResponseStatusException(
+                    HttpStatus.NOT_FOUND,
+                    "Shipping address not found for this user"
+            );
         }
 
         return address;
+    }
+
+    public com.team27.amazon.contracts.dto.ShippingAddressDTO getShippingAddressAsDTO(Long userId, Long addressId) {
+        getUserByIdFromDatabase(userId);
+        ShippingAddress address = getAddressByIdFromDatabase(addressId);
+        if (!address.getUser().getId().equals(userId)) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Address not found");
+        }
+        return new com.team27.amazon.contracts.dto.ShippingAddressDTO(
+                address.getId(),
+                userId,
+                address.getStreetAddress(),
+                address.getCity(),
+                address.getLabel(),
+                address.getZipCode(),
+                address.getCountry()
+        );
     }
 
     private ShippingAddress getAddressByIdFromDatabase(Long addressId) {
@@ -354,30 +405,26 @@ public class UserService extends AbstractEventSubject {
                 cacheKey,
                 UserOrderSummaryDTO.class,
                 CacheConstants.TTL_F3_DTO,
-                () -> getUserOrderSummaryFromDatabase(userId)
+                () -> getUserOrderSummaryFromOrderService(userId)
         );
     }
 
-    private UserOrderSummaryDTO getUserOrderSummaryFromDatabase(Long userId) {
-        getUserByIdFromDatabase(userId);
+    private UserOrderSummaryDTO getUserOrderSummaryFromOrderService(Long userId) {
+        User user = getUserByIdFromDatabase(userId);
+        OrderSummaryDTO summary = orderServiceGateway.getUserOrderSummary(userId);
+        return buildUserOrderSummaryDTO(user, summary);
+    }
 
-        Object[] row = userRepository.getUserOrderSummary(userId);
-
-        if (row == null || row.length == 0) {
-            User user = getUserByIdFromDatabase(userId);
-
-            return UserOrderSummaryDTO.builder()
-                    .userId(userId)
-                    .name(user.getName())
-                    .totalOrders(0L)
-                    .completedOrders(0L)
-                    .cancelledOrders(0L)
-                    .totalSpent(0.0)
-                    .averageOrderValue(0.0)
-                    .build();
-        }
-
-        return objectArrayDtoAdapter.adapt(row);
+    private UserOrderSummaryDTO buildUserOrderSummaryDTO(User user, OrderSummaryDTO summary) {
+        return UserOrderSummaryDTO.builder()
+                .userId(user.getId())
+                .name(user.getName())
+                .totalOrders(summary.totalOrders())
+                .completedOrders(summary.completedOrders())
+                .cancelledOrders(summary.cancelledOrders())
+                .totalSpent(summary.totalSpent())
+                .averageOrderValue(summary.averageOrderValue())
+                .build();
     }
 
     // S1-F4
@@ -385,11 +432,11 @@ public class UserService extends AbstractEventSubject {
     public User deactivateUser(Long id) {
         User user = getUserByIdFromDatabase(id);
 
-        boolean hasActiveOrders = userRepository.existsActiveOrdersByUserId(id);
-        if (hasActiveOrders) {
+        int activeOrderCount = orderServiceGateway.getActiveOrderCount(id);
+        if (activeOrderCount > 0) {
             throw new ResponseStatusException(
                     HttpStatus.BAD_REQUEST,
-                    "User has active orders and cannot be deactivated"
+                    "User has active orders"
             );
         }
         user.setStatus(Status.DEACTIVATED);
@@ -399,6 +446,13 @@ public class UserService extends AbstractEventSubject {
         notifyObservers("USER_DEACTIVATED", userEventPayload(savedUser.getId(), Map.of(
                 "status", savedUser.getStatus().name()
         )));
+
+        log.info("Publishing user.deactivated for userId={}", savedUser.getId());
+        rabbitTemplate.convertAndSend(
+                com.team27.amazon.contracts.constants.EventExchanges.USER_EVENTS,
+                com.team27.amazon.contracts.constants.EventRoutingKeys.USER_DEACTIVATED,
+                Map.of("userId", savedUser.getId())
+        );
 
         cacheInvalidationService.invalidateUserWriteCaches(savedUser.getId());
 
@@ -455,20 +509,31 @@ public class UserService extends AbstractEventSubject {
                 cacheKey,
                 new TypeReference<List<TopBuyerDTO>>() {},
                 CacheConstants.TTL_F6_REPORT,
-                () -> getTopBuyersFromDatabase(startDate, endDate, limit)
+                () -> getTopBuyersFromBillingService(startDate, endDate, limit)
         );
     }
 
-    private List<TopBuyerDTO> getTopBuyersFromDatabase(LocalDate startDate, LocalDate endDate, int limit) {
-        LocalDateTime startDateTime = startDate.atStartOfDay();
-        LocalDateTime endDateExclusive = endDate.plusDays(1).atStartOfDay();
-        List<Object[]> rows = userRepository.findTopBuyersByDateRange(startDateTime, endDateExclusive, limit);
-        List<TopBuyerDTO> result = new ArrayList<>();
-        for (Object[] row : rows) {
-            result.add(objectArrayDtoAdapter.toTopBuyerDTO(row));
-        }
+    private List<TopBuyerDTO> getTopBuyersFromBillingService(LocalDate startDate, LocalDate endDate, int limit) {
+        String start = startDate.toString();
+        String end = endDate.toString();
 
-        return result;
+        List<User> users = userRepository.findAll();
+
+        return users.stream()
+                .map(user -> {
+                    java.math.BigDecimal total = billingServiceGateway.getUserTransactionTotal(user.getId(), start, end);
+                    long count = billingServiceGateway.getUserOrderCount(user.getId(), start, end);
+                    return TopBuyerDTO.builder()
+                            .userId(user.getId())
+                            .name(user.getName())
+                            .totalSpent(total.doubleValue())
+                            .orderCount(count)
+                            .build();
+                })
+                .filter(dto -> dto.getTotalSpent() > 0)
+                .sorted((a, b) -> Double.compare(b.getTotalSpent(), a.getTotalSpent()))
+                .limit(limit)
+                .collect(java.util.stream.Collectors.toList());
     }
 
     // S1-F7
@@ -569,8 +634,15 @@ public class UserService extends AbstractEventSubject {
                 cacheKey,
                 new TypeReference<List<User>>() {},
                 CacheConstants.TTL_F9_COMBINED,
-                () -> userRepository.findByLanguageAndMinOrders(langParam, minOrders)
+                () -> findUsersByLanguageFromOrderService(langParam, minOrders)
         );
+    }
+
+    private List<User> findUsersByLanguageFromOrderService(String lang, long minOrders) {
+        List<User> candidates = userRepository.findUsersByPreference("language", lang);
+        return candidates.stream()
+                .filter(user -> orderServiceGateway.getTotalOrderCount(user.getId()) >= minOrders)
+                .collect(java.util.stream.Collectors.toList());
     }
 
     // CC-2

@@ -1,0 +1,20 @@
+{
+  "service": "user-service",
+  "owner": "S1-READ-DB",
+  "student": "Amr Negm",
+  "studentId": "55-25195",
+  "logqlPanels": [
+    {
+      "title": "User Service Error Logs Per Minute",
+      "query": "sum(count_over_time({app=\"amazon\", service=\"user-service\", level=\"ERROR\"} | json [1m]))"
+    },
+    {
+      "title": "User Service Feign Warning Logs",
+      "query": "sum(count_over_time({app=\"amazon\", service=\"user-service\", level=\"WARN\"} |= \"Feign\" | json [5m]))"
+    },
+    {
+      "title": "User Service Requests By Correlation ID",
+      "query": "count_over_time({app=\"amazon\", service=\"user-service\"} | json | correlationId != \"\" [5m])"
+    }
+  ]
+}

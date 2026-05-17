@@ -35,6 +35,19 @@ spring:
       host: redis
       port: 6379
       password: redispass
+  rabbitmq:
+    host: rabbitmq
+    port: 5672
+    username: guest
+    password: guest
+    listener:
+      simple:
+        acknowledge-mode: auto
+        default-requeue-rejected: false
+        retry:
+          enabled: true
+          initial-interval: 1000
+          max-attempts: 3
 server:
   port: 8080
 jwt:
@@ -52,7 +65,13 @@ management:
     web:
       exposure:
         include: prometheus,health,info
+  endpoint:
+    health:
+      show-details: always
   metrics:
     distribution:
       percentiles-histogram:
         http.server.requests: true
+
+loki:
+  url: http://loki:3100/loki/api/v1/push

@@ -35,6 +35,7 @@ spring:
   mongodb:
     uri: mongodb://localhost:27017/amazonmongo
 
+
 feign:
   billing-service:
     url: http://localhost:8080
@@ -47,12 +48,31 @@ feign:
   shipping-service:
     url: http://shipping-service:8080
 
+  rabbitmq:
+    host: rabbitmq
+    port: 5672
+    username: guest
+    password: guest
+    listener:
+      simple:
+        acknowledge-mode: auto
+        default-requeue-rejected: false
+        retry:
+          enabled: true
+          initial-interval: 1000
+          max-attempts: 3
 server:
   port: 8080
 
 jwt:
   secret: ${JWT_SECRET:MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=}
   expiration: ${JWT_EXPIRATION_MS:86400000}
+
+feign:
+  order-service:
+    url: http://order-service:8080
+  user-service:
+    url: http://user-service:8080
 
 management:
   endpoints:
@@ -68,3 +88,6 @@ management:
     export:
       prometheus:
         enabled: true
+
+loki:
+  url: http://loki:3100/loki/api/v1/push

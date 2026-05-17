@@ -52,6 +52,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
+import com.team27.amazon.contracts.dto.OrderSummaryDTO;
 import com.team27.amazon.order.dto.CoPurchaseRecordResponse;
 import jakarta.annotation.PostConstruct;
 
@@ -333,6 +334,17 @@ public class OrderService extends AbstractEventSubject {
         return orderRepository.findByUserId(userId);
     }
 
+    // S1-F4 - Count active orders for user
+    public int getActiveOrderCount(Long userId) {
+        return orderRepository.countByUserIdAndStatusIn(userId,
+                List.of(OrderStatus.PENDING, OrderStatus.CONFIRMED, OrderStatus.SHIPPED));
+    }
+
+    // S1-F9 - Count delivered orders for user
+    public long getTotalOrderCount(Long userId) {
+        return orderRepository.countByUserIdAndStatus(userId, OrderStatus.DELIVERED);
+    }
+
     // READ - Get orders by status
     public List<Order> getOrdersByStatus(OrderStatus status) {
         return orderRepository.findByStatus(status);
@@ -341,6 +353,29 @@ public class OrderService extends AbstractEventSubject {
     // READ - Get orders by user ID and status
     public List<Order> getOrdersByUserIdAndStatus(Long userId, OrderStatus status) {
         return orderRepository.findByUserIdAndStatus(userId, status);
+    }
+
+    public OrderSummaryDTO getUserOrderSummary(Long userId) {
+        List<Order> orders = orderRepository.findByUserId(userId);
+        long totalOrders = orders.size();
+        long completedOrders = orders.stream()
+                .filter(order -> order.getStatus() == OrderStatus.DELIVERED)
+                .count();
+        long cancelledOrders = orders.stream()
+                .filter(order -> order.getStatus() == OrderStatus.CANCELLED)
+                .count();
+        double totalSpent = orders.stream()
+                .filter(order -> order.getStatus() == OrderStatus.DELIVERED)
+                .mapToDouble(order -> order.getTotalAmount() == null ? 0.0 : order.getTotalAmount())
+                .sum();
+        double averageOrderValue = completedOrders > 0 ? totalSpent / completedOrders : 0.0;
+        return new OrderSummaryDTO(
+                totalOrders,
+                completedOrders,
+                cancelledOrders,
+                totalSpent,
+                averageOrderValue
+        );
     }
 
     // READ - Get orders by date range
