@@ -6,17 +6,27 @@ import org.junit.jupiter.api.Test;
 import org.springframework.amqp.core.Declarables;
 import org.springframework.amqp.core.Queue;
 import org.springframework.amqp.core.TopicExchange;
+import org.springframework.amqp.rabbit.connection.ConnectionFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
 import org.springframework.test.context.ContextConfiguration;
 import org.springframework.test.context.junit.jupiter.SpringJUnitConfig;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.Mockito.mock;
 
 @SpringJUnitConfig
-@ContextConfiguration(classes = RabbitTopologyConfig.class)
+@ContextConfiguration(classes = {RabbitTopologyConfig.class, RabbitTopologyConfigSpringTest.MockConfig.class})
 class RabbitTopologyConfigSpringTest {
+
+    @Configuration
+    static class MockConfig {
+        @Bean
+        ConnectionFactory connectionFactory() {
+            return mock(ConnectionFactory.class);
+        }
+    }
 
     @Autowired
     private TopicExchange userEventsExchange;
@@ -29,7 +39,6 @@ class RabbitTopologyConfigSpringTest {
         assertEquals(EventExchanges.USER_EVENTS, userEventsExchange.getName());
         assertTrue(userEventsExchange.isDurable());
         assertFalse(userEventsExchange.isAutoDelete());
-
         assertEquals(10, orderEventConsumers.getDeclarables().size());
     }
 }
@@ -39,7 +48,6 @@ class RabbitTopologyConfigTest {
     @Test
     void userEventsExchange_usesContractNameAndIsDurable() {
         TopicExchange exchange = new RabbitTopologyConfig().userEventsExchange();
-
         assertEquals(EventExchanges.USER_EVENTS, exchange.getName());
         assertTrue(exchange.isDurable());
         assertFalse(exchange.isAutoDelete());
