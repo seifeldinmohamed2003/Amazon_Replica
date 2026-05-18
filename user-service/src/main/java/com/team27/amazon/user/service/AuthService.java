@@ -11,6 +11,7 @@ import com.team27.amazon.user.model.Status;
 import com.team27.amazon.user.model.User;
 import com.team27.amazon.user.repository.UserRepository;
 import com.team27.amazon.user.security.JwtService;
+import com.team27.amazon.user.service.UserService;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -28,18 +29,21 @@ public class AuthService extends AbstractEventSubject {
     private final PasswordEncoder passwordEncoder;
     private final JwtService jwtService;
     private final MongoEventLogger mongoEventLogger;
+    private final UserService userService;
 
     public AuthService(
             UserRepository userRepository,
             PasswordEncoder passwordEncoder,
             JwtService jwtService,
-            MongoEventLogger mongoEventLogger
+            MongoEventLogger mongoEventLogger,
+            UserService userService
     ) {
         this.userRepository = userRepository;
         this.passwordEncoder = passwordEncoder;
         this.jwtService = jwtService;
         this.mongoEventLogger = mongoEventLogger;
         register(mongoEventLogger);
+        this.userService = userService;
     }
 
     @Transactional
@@ -97,7 +101,7 @@ public class AuthService extends AbstractEventSubject {
                         : new HashMap<>(request.getPreferences())
         );
 
-        User savedUser = userRepository.save(user);
+        User savedUser = userService.createUser(user);
 
         notifyObservers("REGISTERED", authEventPayload(savedUser, Map.of(
                 "email", savedUser.getEmail(),
