@@ -3,6 +3,8 @@ kind: Deployment
 metadata:
   name: shipping-service
   namespace: amazon
+  labels:
+    app: shipping-service
 spec:
   progressDeadlineSeconds: 600
   replicas: 1
@@ -17,8 +19,6 @@ spec:
     type: RollingUpdate
   template:
     metadata:
-      annotations:
-        kubectl.kubernetes.io/restartedAt: '2026-05-19T00:54:45+03:00'
       labels:
         app: shipping-service
     spec:
@@ -64,40 +64,39 @@ spec:
           value: http://order-service:8080
         - name: FEIGN_PRODUCT_SERVICE_URL
           value: http://product-service:8080
+        - name: SPRING_MAIN_ALLOW_BEAN_DEFINITION_OVERRIDING
+          value: 'true'
         envFrom:
         - configMapRef:
             name: shipping-service-config
         image: shipping-service:latest
         imagePullPolicy: IfNotPresent
         livenessProbe:
-          failureThreshold: 6
-          initialDelaySeconds: 120
-          periodSeconds: 20
-          successThreshold: 1
           tcpSocket:
             port: 8080
+          initialDelaySeconds: 240
+          periodSeconds: 30
           timeoutSeconds: 5
+          failureThreshold: 10
         name: shipping-service
         ports:
         - containerPort: 8080
           protocol: TCP
         readinessProbe:
-          failureThreshold: 20
-          initialDelaySeconds: 30
-          periodSeconds: 10
-          successThreshold: 1
           tcpSocket:
             port: 8080
+          initialDelaySeconds: 120
+          periodSeconds: 10
           timeoutSeconds: 5
+          failureThreshold: 30
         resources: {}
         startupProbe:
-          failureThreshold: 30
-          initialDelaySeconds: 30
-          periodSeconds: 10
-          successThreshold: 1
           tcpSocket:
             port: 8080
+          initialDelaySeconds: 90
+          periodSeconds: 10
           timeoutSeconds: 5
+          failureThreshold: 60
         terminationMessagePath: /dev/termination-log
         terminationMessagePolicy: File
       dnsPolicy: ClusterFirst
