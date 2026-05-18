@@ -25,6 +25,12 @@ spec:
             - secretRef:
                 name: order-postgres-secret
           env:
+            - name: SPRING_NEO4J_URI
+              value: bolt://neo4j:7687
+            - name: SPRING_NEO4J_AUTHENTICATION_USERNAME
+              value: neo4j
+            - name: SPRING_NEO4J_AUTHENTICATION_PASSWORD
+              value: neo4jpass
             - name: SPRING_DATASOURCE_PASSWORD
               valueFrom:
                 secretKeyRef:

@@ -29,8 +29,9 @@ spring:
 
   neo4j:
     uri: bolt://neo4j:7687
-    username: neo4j
-    password: neo4jpass
+    authentication:
+      username: neo4j
+      password: neo4jpass
 
   cache:
     type: redis
