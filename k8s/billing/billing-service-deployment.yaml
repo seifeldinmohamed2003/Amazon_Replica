@@ -2,7 +2,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: billing-service
-  namespace: default
+  namespace: amazon
 spec:
   replicas: 1
   selector:
