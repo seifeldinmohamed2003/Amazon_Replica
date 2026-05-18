@@ -2,7 +2,7 @@ apiVersion: v1
 kind: ConfigMap
 metadata:
   name: billing-service-config
-  namespace: default
+  namespace: amazon
 data:
   SPRING_DATASOURCE_URL: jdbc:postgresql://billing-postgres:5432/amazondb-billing
   SPRING_RABBITMQ_HOST: rabbitmq

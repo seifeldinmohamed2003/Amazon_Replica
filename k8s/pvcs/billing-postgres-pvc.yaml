@@ -2,7 +2,7 @@ apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
   name: billing-postgres-pvc
-  namespace: default
+  namespace: amazon
 spec:
   accessModes:
     - ReadWriteOnce
