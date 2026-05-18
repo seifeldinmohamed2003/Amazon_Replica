@@ -25,14 +25,6 @@ public class ProductRabbitConfig {
     public static final String PRODUCT_ORDER_DLX = "product.order.saga-listener.dlx";
 
     @Bean
-    public TopicExchange productEventsExchange() {
-        return ExchangeBuilder
-                .topicExchange(EventExchanges.PRODUCT_EVENTS)
-                .durable(true)
-                .build();
-    }
-
-    @Bean
     public TopicExchange orderEventsExchange() {
         return ExchangeBuilder
                 .topicExchange(EventExchanges.ORDER_EVENTS)

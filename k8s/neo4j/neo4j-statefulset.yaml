@@ -14,9 +14,11 @@ spec:
       labels:
         app: neo4j
     spec:
+      enableServiceLinks: false
       containers:
         - name: neo4j
           image: neo4j:latest
+          imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 7474
               name: http

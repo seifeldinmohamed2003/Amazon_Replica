@@ -6,7 +6,7 @@ import org.springframework.amqp.core.Binding;
 import org.springframework.amqp.core.BindingBuilder;
 import org.springframework.amqp.core.Queue;
 import org.springframework.amqp.core.TopicExchange;
-import org.springframework.amqp.support.converter.Jackson2JsonMessageConverter;
+import org.springframework.amqp.support.converter.JacksonJsonMessageConverter;
 import org.springframework.amqp.support.converter.MessageConverter;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -15,9 +15,8 @@ import java.util.Map;
 
 /**
  * S3-EVENTS RabbitMQ configuration for order-service.
- * 
+ *
  * Declares:
- * - order.events TopicExchange for publishing order events
  * - order.saga-feedback queue for consuming external saga events
  * - order.saga-feedback.dlq dead-letter queue
  * - Bindings from shipment.events and payment.events to order.saga-feedback
@@ -25,7 +24,7 @@ import java.util.Map;
 @Configuration
 public class OrderEventConfig {
 
-    // Order Events Publishing Exchange
+    // Order Events Publishing Exchange is declared in RabbitTopologyConfig
     public static final String ORDER_EVENTS_EXCHANGE = EventExchanges.ORDER_EVENTS;
 
     // Order Saga Feedback Queues
@@ -36,12 +35,6 @@ public class OrderEventConfig {
     // External Event Exchanges (consumed from)
     public static final String SHIPMENT_EVENTS_EXCHANGE = EventExchanges.SHIPMENT_EVENTS;
     public static final String PAYMENT_EVENTS_EXCHANGE = EventExchanges.PAYMENT_EVENTS;
-
-    // ========== ORDER EVENTS EXCHANGE (Publishing) ==========
-    @Bean
-    public TopicExchange orderEventsExchange() {
-        return new TopicExchange(ORDER_EVENTS_EXCHANGE, true, false);
-    }
 
     // ========== SAGA FEEDBACK QUEUE (Consuming) ==========
     @Bean
@@ -134,7 +127,7 @@ public class OrderEventConfig {
 
     // ========== MESSAGE CONVERTER ==========
     @Bean
-    public MessageConverter jackson2JsonMessageConverter() {
-        return new Jackson2JsonMessageConverter();
+    public MessageConverter jacksonJsonMessageConverter() {
+        return new JacksonJsonMessageConverter();
     }
 }
