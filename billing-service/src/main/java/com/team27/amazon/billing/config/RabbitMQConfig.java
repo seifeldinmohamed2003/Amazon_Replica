@@ -27,11 +27,6 @@ public class RabbitMQConfig {
         return template;
     }
 
-    // Billing declares its own exchange (producer side)
-    @Bean
-    public TopicExchange paymentEventsExchange() {
-        return new TopicExchange("payment.events");
-    }
 
     // Reference to order.events exchange (consumer side)
     @Bean
