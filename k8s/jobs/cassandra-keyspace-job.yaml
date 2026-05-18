@@ -1,0 +1,27 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: cassandra-keyspace-bootstrap
+  namespace: amazon
+spec:
+  backoffLimit: 3
+  template:
+    metadata:
+      labels:
+        app: cassandra-keyspace-bootstrap
+    spec:
+      restartPolicy: OnFailure
+      containers:
+        - name: cqlsh
+          image: cassandra:4.1
+          imagePullPolicy: IfNotPresent
+          command:
+            - /bin/bash
+            - -lc
+            - |
+              until /opt/cassandra/bin/cqlsh cassandra 9042 -e 'DESCRIBE KEYSPACES'; do
+                echo 'Waiting for Cassandra to become ready...';
+                sleep 5;
+              done
+              /opt/cassandra/bin/cqlsh cassandra 9042 -e "CREATE KEYSPACE IF NOT EXISTS amazonks WITH replication = {'class': 'SimpleStrategy', 'replication_factor': 1};"
+              echo 'Keyspace amazonks is ready.'

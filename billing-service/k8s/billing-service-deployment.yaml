@@ -2,7 +2,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: billing-service
-  namespace: default
+  namespace: amazon
 spec:
   replicas: 1
   selector:
@@ -15,8 +15,8 @@ spec:
     spec:
       containers:
         - name: billing-service
-          image: billing-service:latest
-          imagePullPolicy: Never
+          image: billing-service:run5
+          imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 8080
           envFrom:

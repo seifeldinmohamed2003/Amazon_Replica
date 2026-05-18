@@ -25,11 +25,6 @@ public class RabbitTopologyConfig {
         return args -> rabbitAdmin.initialize();
     }
 
-    @Bean
-    public TopicExchange paymentEventsExchange() {
-        return RabbitConsumerTopology.topicExchange(EventExchanges.PAYMENT_EVENTS);
-    }
-
     /** §2.9: order.completed, order.cancelled (not order.placed) */
     @Bean
     public Declarables orderEventConsumers() {

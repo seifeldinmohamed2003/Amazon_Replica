@@ -7,9 +7,11 @@ spring:
     password: postgres
   data:
     redis:
-      host: amazon-redis
+      host: redis
       port: 6379
       password: redispass
+    mongodb:
+      uri: mongodb://mongo:27017/amazonmongo?authSource=admin
   rabbitmq:
     host: rabbitmq
     port: 5672
@@ -32,8 +34,6 @@ spring:
     properties:
       hibernate:
         dialect: org.hibernate.dialect.PostgreSQLDialect
-  mongodb:
-    uri: mongodb://localhost:27017/amazonmongo
 
 
 feign:
@@ -47,20 +47,6 @@ feign:
     url: http://product-service:8080
   shipping-service:
     url: http://shipping-service:8080
-
-  rabbitmq:
-    host: rabbitmq
-    port: 5672
-    username: guest
-    password: guest
-    listener:
-      simple:
-        acknowledge-mode: auto
-        default-requeue-rejected: false
-        retry:
-          enabled: true
-          initial-interval: 1000
-          max-attempts: 3
 server:
   port: 8080
 
@@ -85,4 +71,4 @@ management:
         enabled: true
 
 loki:
-  url: http://loki:3100/loki/api/v1/push
+  url: http://loki.monitoring.svc.cluster.local:3100/loki/api/v1/push

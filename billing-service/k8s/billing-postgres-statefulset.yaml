@@ -2,7 +2,7 @@ apiVersion: apps/v1
 kind: StatefulSet
 metadata:
   name: billing-postgres
-  namespace: default
+  namespace: amazon
 spec:
   serviceName: billing-postgres
   replicas: 1

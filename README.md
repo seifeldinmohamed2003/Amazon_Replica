@@ -1,3 +1,32 @@
+## Kubernetes Runbook
+
+Apply the application namespace first, then the application manifests, then the monitoring namespace and stack:
+
+```bash
+kubectl apply -f k8s/namespaces/namespace.yaml
+kubectl apply -f k8s/secrets/
+kubectl apply -f k8s/pvcs/
+kubectl apply -f k8s/statefulsets/
+kubectl apply -f k8s/configmaps/
+kubectl apply -f k8s/deployments/
+kubectl apply -f k8s/services/
+kubectl apply -f k8s/api-gateway/
+
+kubectl apply -f k8s/namespaces/monitoring-namespace.yaml
+kubectl apply -f k8s/monitoring/loki/
+kubectl apply -f k8s/monitoring/prometheus/
+kubectl apply -f k8s/monitoring/grafana/
+```
+
+Smoke test the cluster with the exact demo commands:
+
+```bash
+kubectl get pods -n amazon
+kubectl logs <your-service-pod> -n amazon
+curl http://$(minikube ip):30080/api/<endpoint>
+```
+
+If the observability stack is part of the demo, open Grafana at `http://$(minikube ip):30030`.
 # Shipping Service — S4-READ-DB Branch
 
 ## Branch

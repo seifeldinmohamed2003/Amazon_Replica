@@ -25,11 +25,6 @@ public class RabbitTopologyConfig {
         return args -> rabbitAdmin.initialize();
     }
 
-    @Bean
-    public TopicExchange shipmentEventsExchange() {
-        return RabbitConsumerTopology.topicExchange(EventExchanges.SHIPMENT_EVENTS);
-    }
-
     /** §2.9: order.placed (slot prep), order.completed, order.cancelled */
     @Bean
     public Declarables orderEventConsumers() {

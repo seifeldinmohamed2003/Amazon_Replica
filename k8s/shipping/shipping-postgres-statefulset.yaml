@@ -2,6 +2,7 @@ apiVersion: apps/v1
 kind: StatefulSet
 metadata:
   name: shipping-postgres
+  namespace: amazon
 spec:
   serviceName: shipping-postgres
   replicas: 1

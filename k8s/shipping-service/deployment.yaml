@@ -2,6 +2,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: shipping-service
+  namespace: amazon
   labels:
     app: shipping-service
 spec:
@@ -16,7 +17,7 @@ spec:
     spec:
       containers:
         - name: shipping-service
-          image: shipping-service:latest
+          image: shipping-service:run4
           imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 8080
@@ -24,6 +25,10 @@ spec:
             - configMapRef:
                 name: shipping-service-config
           env:
+            - name: SPRING_DATASOURCE_URL
+              value: jdbc:postgresql://shipping-postgres:5432/amazondb-shipments
+            - name: SPRING_DATASOURCE_USERNAME
+              value: postgres
             - name: SPRING_DATASOURCE_PASSWORD
               value: postgres
             - name: SPRING_RABBITMQ_PASSWORD

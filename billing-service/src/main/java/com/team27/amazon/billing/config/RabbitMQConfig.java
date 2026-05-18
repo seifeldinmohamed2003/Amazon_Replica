@@ -76,21 +76,4 @@ public class RabbitMQConfig {
                 .with("order.cancelled");
     }
 
-    // Queue specifically for order.completed events
-    @Bean
-    public Queue orderCompletedQueue() {
-        return QueueBuilder.durable("billing.order-completed")
-                .withArgument("x-dead-letter-exchange", "payment.dlx")
-                .withArgument("x-dead-letter-routing-key", "payment.saga-listener.dlq")
-                .build();
-    }
-
-    // Queue specifically for order.cancelled events
-    @Bean
-    public Queue orderCancelledQueue() {
-        return QueueBuilder.durable("billing.order-cancelled")
-                .withArgument("x-dead-letter-exchange", "payment.dlx")
-                .withArgument("x-dead-letter-routing-key", "payment.saga-listener.dlq")
-                .build();
-    }
 }
