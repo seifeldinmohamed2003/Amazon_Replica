@@ -2,7 +2,7 @@ apiVersion: apps/v1
 kind: StatefulSet
 metadata:
   name: elasticsearch
-  namespace: default
+  namespace: amazon
 spec:
   serviceName: elasticsearch
   replicas: 1
@@ -16,7 +16,7 @@ spec:
     spec:
       containers:
         - name: elasticsearch
-          image: elasticsearch:8.13.0
+          image: elasticsearch:8.19.12
           ports:
             - containerPort: 9200
               name: http
