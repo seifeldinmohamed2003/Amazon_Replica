@@ -29,18 +29,23 @@ spec:
               value: "false"
             - name: ES_JAVA_OPTS
               value: "-Xms512m -Xmx512m"
+          # --- Optimized Probes to Prevent Liveness Timeouts ---
           readinessProbe:
             httpGet:
               path: /_cluster/health
               port: 9200
-            initialDelaySeconds: 30
+            initialDelaySeconds: 40
             periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 5
           livenessProbe:
             httpGet:
               path: /_cluster/health
               port: 9200
-            initialDelaySeconds: 60
+            initialDelaySeconds: 90
             periodSeconds: 15
+            timeoutSeconds: 5
+            failureThreshold: 3
           volumeMounts:
             - name: elasticsearch-storage
               mountPath: /usr/share/elasticsearch/data
