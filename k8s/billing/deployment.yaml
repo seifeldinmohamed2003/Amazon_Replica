@@ -3,6 +3,8 @@ kind: Deployment
 metadata:
   name: billing-service
   namespace: amazon
+  labels:
+    app: billing-service
 spec:
   replicas: 1
   selector:
@@ -16,29 +18,26 @@ spec:
       containers:
         - name: billing-service
           image: billing-service:latest
-          imagePullPolicy: Never
+          imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 8080
+              name: http
           envFrom:
             - configMapRef:
-                name: billing-service-config
-            - secretRef:
-                name: billing-postgres-secret
+                name: billing-service-configmap
           env:
-            - name: JWT_SECRET
+            - name: SPRING_DATASOURCE_PASSWORD
               valueFrom:
                 secretKeyRef:
                   name: billing-postgres-secret
                   key: POSTGRES_PASSWORD
-          readinessProbe:
-            httpGet:
-              path: /actuator/health
-              port: 8080
-            initialDelaySeconds: 20
-            periodSeconds: 10
-          livenessProbe:
-            httpGet:
-              path: /actuator/health
-              port: 8080
-            initialDelaySeconds: 40
-            periodSeconds: 15
+            - name: SPRING_RABBITMQ_PASSWORD
+              value: guest
+            - name: SPRING_DATA_REDIS_PASSWORD
+              value: redispass
+            - name: JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: jwt-secret
+                  key: JWT_SECRET
+                  optional: true

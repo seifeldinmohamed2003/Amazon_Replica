@@ -3,10 +3,13 @@ kind: Service
 metadata:
   name: billing-service
   namespace: amazon
+  labels:
+    app: billing-service
 spec:
+  type: ClusterIP
   selector:
     app: billing-service
   ports:
-    - port: 8080
+    - name: http
+      port: 8080
       targetPort: 8080
-  type: ClusterIP

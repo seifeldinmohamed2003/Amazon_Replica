@@ -4,11 +4,11 @@ metadata:
   name: billing-postgres
   namespace: amazon
 spec:
-  serviceName: billing-postgres
-  replicas: 1
   selector:
     matchLabels:
       app: billing-postgres
+  serviceName: billing-postgres
+  replicas: 1
   template:
     metadata:
       labels:
@@ -16,7 +16,7 @@ spec:
     spec:
       containers:
         - name: postgres
-          image: postgres:16
+          image: postgres:17
           ports:
             - containerPort: 5432
           env:
@@ -28,17 +28,21 @@ spec:
             - name: POSTGRES_USER
               valueFrom:
                 secretKeyRef:
-                  name: billing-postgres-secret
+                  name: product-postgres-secret
                   key: POSTGRES_USER
             - name: POSTGRES_PASSWORD
               valueFrom:
                 secretKeyRef:
-                  name: billing-postgres-secret
+                  name: product-postgres-secret
                   key: POSTGRES_PASSWORD
           volumeMounts:
-            - name: billing-postgres-storage
+            - name: postgres-data
               mountPath: /var/lib/postgresql/data
-      volumes:
-        - name: billing-postgres-storage
-          persistentVolumeClaim:
-            claimName: billing-postgres-pvc
+  volumeClaimTemplates:
+    - metadata:
+        name: postgres-data
+      spec:
+        accessModes: [ "ReadWriteOnce" ]
+        resources:
+          requests:
+            storage: 1Gi

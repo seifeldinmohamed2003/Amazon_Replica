@@ -48,6 +48,12 @@ feign:
   shipping-service:
     url: http://shipping-service:8080
 
+    feign:
+      order-service:
+        url: http://order-service:8080
+      user-service:
+        url: http://user-service:8080
+
   rabbitmq:
     host: rabbitmq
     port: 5672
