@@ -1,0 +1,22 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: cassandra-keyspace-init
+  namespace: amazon
+spec:
+  template:
+    spec:
+      restartPolicy: OnFailure
+      containers:
+        - name: cqlsh
+          image: cassandra:latest
+          command:
+            - sh
+            - -c
+          args:
+            - |
+              until cqlsh cassandra 9042 -e "DESCRIBE KEYSPACES;"; do
+                echo "waiting for cassandra..."
+                sleep 10
+              done
+              cqlsh cassandra 9042 -e "CREATE KEYSPACE IF NOT EXISTS amazonks WITH replication = {'class':'SimpleStrategy','replication_factor':1};"
